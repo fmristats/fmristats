@@ -46,6 +46,10 @@ def create_argument_parser():
             default='../data/ses/{2}/{0}-{1:04d}-{2}-{3}.ses',
             help='output file;' + hp.session)
 
+    parser.add_argument('--cycle',
+            type=int,
+            help="""optional. CYCLE to pick as reference""")
+
 ########################################################################
 # Output arguments
 ########################################################################
@@ -233,7 +237,9 @@ def call(args):
                 file              = r.file,
 
                 file_ses          = r.ses,
-                sgnf              = args.grubbs)
+                sgnf              = args.grubbs,
+                cycle             = args.cycle,
+                )
 
     it =  df_layout.itertuples()
 
@@ -284,7 +290,7 @@ def call(args):
 ########################################################################
 
 def wrapper(name, df, index, remove_lock, ignore_lock, force, skip,
-        verbose, file, file_ses, sgnf):
+        verbose, file, file_ses, sgnf, cycle):
 
     if isfile(file):
         instance = load_refmaps(file, name, df, index, verbose)
@@ -339,7 +345,7 @@ def wrapper(name, df, index, remove_lock, ignore_lock, force, skip,
 
         reference_maps = ReferenceMaps(name)
         reference_maps.fit(session)
-        reference_maps.reset_reference_space()
+        reference_maps.reset_reference_space(cycle=cycle)
 
         if not np.isclose(sgnf, 1):
             if verbose:

@@ -135,14 +135,22 @@ def print_info(x, f):
         print(x.describe())
 
     if type(x) is DataFrame:
+        if 'id' in x.columns:
+            del x['id']
+
+        if 'date' in x.columns:
+            del x['date']
+
         if 'cohort' in x.columns:
-            x.cohort.cat.remove_unused_categories(inplace=True)
+            del x['cohort']
+            #x.cohort.cat.remove_unused_categories(inplace=True)
             if 'valid' in x.columns:
                 if 'paradigm' in x.columns:
-                    x.paradigm.cat.remove_unused_categories(inplace=True)
-                    valid = x.groupby(['cohort','paradigm','valid']).id.agg(['count'])
+                    del x['paradigm']
+                    #x.paradigm.cat.remove_unused_categories(inplace=True)
+                    valid = x.groupby(['cohort','paradigm','valid']).epi.agg(['count'])
                 else:
-                    valid = x.groupby(['cohort','valid']).id.agg(['count'])
+                    valid = x.groupby(['cohort','valid']).epi.agg(['count'])
         else:
             valid = None
 

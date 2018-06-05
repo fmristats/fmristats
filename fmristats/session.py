@@ -77,8 +77,8 @@ class Session:
     ----------
     name : Identifier
         The name or of the FMRI experiment
-    data : array, shape (M,N,O,P)
-        The data of observations, where M is the number of scan
+    data : array, shape (t,x,y,z)
+        The data of observations, where t is the number of scan
         cycles
     epi_code : int
         Coded EPI sequence, either one of -3, -2, -1, 1, 2, 3

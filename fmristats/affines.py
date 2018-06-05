@@ -341,7 +341,7 @@ class Affines:
         affines : ndarray, shape (n,4,4)
             Affine transformations in homologous coordinates.
         """
-        # TODO: allow for higher dimesional indices: affines.shape =
+        # TODO: allow for higher dimensional indices: affines.shape =
         # (m,n,4,4)
         n, x, y = affines.shape
         assert (x,y) == (4,4), 'affines must be given in homologous coordinates'

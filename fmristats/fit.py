@@ -27,6 +27,8 @@ import statsmodels.api as sm
 
 import statsmodels.formula.api as smf
 
+from statsmodels.stats.stattools import durbin_watson
+
 import numpy as np
 
 ########################################################################
@@ -34,9 +36,10 @@ import numpy as np
 def extract_field(field, param, value, parameter_dict, value_dict):
     return field[..., value_dict[value], parameter_dict[param]]
 
-def fit_field(coordinates, mask, endog, exog, agc, scale:float,
-        radius:float, verbose=True, name=None):
+def fit_field(coordinates, mask, endog, exog, agc, dataframe, ep,
+        scale:float, radius:float, verbose=True, name=None):
 
+    assert ep in [0,1,2], 'ep must be one of 0, 1, or 2'
     assert agc.shape[0] == endog.shape[0], 'shapes do not match'
     assert agc.shape[0] == exog.shape[0], 'shapes do not match'
 
@@ -70,21 +73,36 @@ def fit_field(coordinates, mask, endog, exog, agc, scale:float,
             …coordinates in the domain not to:      {:>10,d}""".format(
                 name, points_to_estimate.shape[0], (~mask).sum()))
 
+    if ep == 2:
+        sortvar = ['time', 'k', 'i', 'j']
+    elif ep == 1:
+        sortvar = ['time', 'j', 'k', 'i']
+    elif ep == 0:
+        sortvar = ['time', 'i', 'j', 'k']
+
     for x in iter(points_to_estimate):
         distances = ((agc - x[...,0,:3])**2).sum(axis=1)
         valid = np.less(distances, radius**2)
         if valid.sum() > 120:
             try:
+                weights = np.exp(distances[valid] / double_squared_scale)
                 fit = sm.WLS(
-                    endog    = endog[valid],
-                    exog     = exog[valid],
-                    weights  = np.exp(distances[valid] / double_squared_scale),
+                    endog    = endog[valid].copy(),
+                    exog     = exog[valid].copy(),
+                    weights  = weights,
                     hasconst = True).fit()
+
+                df = dataframe[valid].copy()
+                df.reweighted_residual = weights * fit.resid
+                df.sort_values(by=sortvar, inplace=True)
+                dw = durbin_watson(df.reweighted_residual)
+
                 x[0]   = fit.params
                 x[1]   = fit.bse
                 x[2]   = fit.tvalues
                 x[3,0] = fit.mse_resid
                 x[3,1] = fit.df_resid
+                x[3,2] = durbin_watson(df.reweighted_residual)
             except Exception as e:
                 print("""{}: Exception at {}: {}""".format(
                     name, x[...,0,:3], e))
@@ -95,8 +113,17 @@ def fit_field(coordinates, mask, endog, exog, agc, scale:float,
     if partial_fit:
         result[mask] = points_to_estimate
 
-    value_dict = {'point':0, 'stderr':1, 'tstatistic':2, 'other':3}
-    parameter_dict = {'mse':0, 'df':1}
+    # first position
+    value_dict = {'point':0, 'stderr':1, 'tstatistic':2,
+            'mse':3,
+            'df':3, 'degrees_of_freedom':3,
+            'dw':3, 'durbin_watson':3}
+
+    # second position
+    parameter_dict = {
+            'mse':0,
+            'df':1, 'degrees_of_freedom':1,
+            'dw':2, 'durbin_watson':2}
 
     return result, parameter_dict, value_dict
 

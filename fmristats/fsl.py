@@ -41,7 +41,7 @@ import os
 
 from os.path import isfile, isdir, join
 
-def bet(intercept, intercept_file, mask_file, cmd, variante='R',
+def bet(intercept, intercept_file, mask_file, cmd='fsl5.0-bet', variante='R',
         verbose=0):
 
     dfile = os.path.dirname(intercept_file)
@@ -56,6 +56,7 @@ def bet(intercept, intercept_file, mask_file, cmd, variante='R',
     command.append('-{}'.format(variante))
 
     if verbose:
+        print()
         print('\n  '.join(command))
 
     command = ' '.join(command)
@@ -135,6 +136,7 @@ def fit_warpcoef(nb_file, warpcoef_file, preimage_file=None,
     command.append('--cout={}'.format(warpcoef_file))
 
     if verbose:
+        print()
         print('\n  '.join(command))
 
     command = ' '.join(command)
@@ -167,9 +169,9 @@ def warpcoef2pmap(warpcoef_file, vb_file, vb_name, nb_file, nb_name,
         be used as reference for the image space (nb) of the
         diffeomorphism.
     vb_name :
-        name or identifyer for the domain (vb).
+        name or identifier for the domain (vb).
     nb_name :
-        name or identifyer for the image (nb).
+        name or identifier for the image (nb).
     warpcoef_file : str
         File name of the warp coefficient file.
     cmd : str

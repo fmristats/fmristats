@@ -10,7 +10,7 @@ with open(path.join(here, 'README.rst'), encoding='utf-8') as f:
 
 setup(
     name='fmristats',
-    version='0.0.2',
+    version='0.0.3',
     description='Rigorous statistical estimation of FMRI models',
     long_description=long_description,
     url='https://fmristats.github.io/',
@@ -33,12 +33,13 @@ setup(
             # general api
             'fmriassessment  = fmristats.cmd.api.fmriassessment:cmd',
             'fmriati         = fmristats.cmd.api.fmriati:cmd',
+            'fmridf          = fmristats.cmd.api.fmridf:cmd',
             'fmrifit         = fmristats.cmd.api.fmrifit:cmd',
             'fmriirritation  = fmristats.cmd.api.fmriirritation:cmd',
             'fmririgid       = fmristats.cmd.api.fmririgid:cmd',
-            'fmrisample      = fmristats.cmd.api.fmrisample:cmd',
             'fmripop         = fmristats.cmd.api.fmripop:cmd',
             'fmriprune       = fmristats.cmd.api.fmriprune:cmd',
+            'fmrisample      = fmristats.cmd.api.fmrisample:cmd',
 
             # wrapper
             'fsl4prune = fmristats.cmd.wrp.fsl4prune:cmd',
@@ -64,6 +65,7 @@ setup(
 
             # export to third party formats
             'fit2nii = fmristats.cmd.exp.fit2nii:cmd',
+            'ses2nii = fmristats.cmd.exp.ses2nii:cmd',
 
         ],
     },

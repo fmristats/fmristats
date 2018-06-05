@@ -19,7 +19,7 @@
 
 """
 
-Export file containing a model fit to Nifti1
+Export session file to Nifti1
 
 """
 
@@ -42,41 +42,21 @@ def create_argument_parser():
 # Input arguments
 ########################################################################
 
-    parser.add_argument('--fit',
-            default='../data/fit/{2}/{4}/{5}/{0}-{1:04d}-{2}-{3}-{4}-{5}.fit',
-            help='input file;' + hp.sfit)
+    parser.add_argument('--session',
+            default='../data/ses/{2}/{0}-{1:04d}-{2}-{3}.ses',
+            help='input file;' + hp.session)
 
 ########################################################################
 # Output arguments
 ########################################################################
 
     parser.add_argument('--nii',
-            default='../results/nii/{2}/{0}-{1:04d}-{2}-{3}-{4}-{5}-{{}}-{{}}.nii.gz',
+            default='../results/nii/{2}/{0}-{1:04d}-{2}-{3}-{{:d}}.nii.gz',
             help="""output file""")
 
     parser.add_argument('-o', '--protocol-log',
-            default='logs/{}-fit2nii.pkl',
+            default='logs/{}-ses2nii.pkl',
             help=hp.protocol_log)
-
-########################################################################
-# Arguments specific for the RSM Signal Model: where to
-########################################################################
-
-    where_to_fit = parser.add_argument_group(
-            """where to""",
-            """By default, fit2nii will respect the brain mask which is
-            saved in the population map. This default behaviour can, of
-            course, be changed.""")
-
-    where_to_fit.add_argument('--ignore-mask',
-            action='store_true',
-            help="""Ignore any brain masks saved in the respective
-            population map.""")
-
-    # TODO: mask: not implemented yet
-    #where_to_fit.add_argument('--mask',
-    #        action='store_true',
-    #        help=hp.population_mask)
 
 ########################################################################
 # Arguments specific for using the protocol API
@@ -109,56 +89,14 @@ def create_argument_parser():
             default='%Y-%m-%d-%H%M',
             help=hp.strftime)
 
-    which_to_process = parser.add_argument_group(
-            """specifying fit and population space""",
-            """If in-  and output files are specified as templates, set
-            some of the fixed terms in the template.""")
-
-    which_to_process.add_argument('--scale-type',
-            default='max',
-            choices=['diagonal','max','min'],
-            help=hp.scale_type)
-
-    which_to_process.add_argument('--population-space',
-            default='reference',
-            help=hp.population_space)
-
 ########################################################################
 # Arguments which field to extract
 ########################################################################
 
-    parser.add_argument('--parameter',
-            type=str,
+    parser.add_argument('--cycle',
+            type=int,
             nargs='+',
-            default=['intercept', 'activation'],
-            help="""which parameter field or which parameter fields to
-            plot.  Available options are `intercept`, `activation`, or
-            `time`. If you want to plot more than one parameter field,
-            then separate these by a space.""")
-
-    parser.add_argument('--value',
-            type=str,
-            nargs='+',
-            default=['point', 'tstatistic'],
-            #default=['point', 'stderr', 'tstatistic'],
-            help="""which summary statistic to choose for the parameters
-            in PARAMETER. Available options are `point` (the point
-            estimate), `stderr` (standard deviation of the point
-            estimator), or `tstatistic` (the t-test statistic testing
-            whether the respected parameter is non zero). If you want to
-            plot more than one parameter field, then separate these by a
-            space.""")
-
-########################################################################
-# Arguments specific for the application of masks
-########################################################################
-
-    parser.add_argument('--round-to-integer',
-            action='store_true',
-            help="""if this flag is set and the output field is the
-            intercept of a fit, then round the grey scales of the
-            intercept field to the next nearest integer, and cast the
-            array to integer data type.""")
+            help="""which cycle or cycles to extract.""")
 
 ########################################################################
 # Miscellaneous
@@ -191,13 +129,13 @@ from ..df import get_df
 
 from ...lock import Lock
 
-from ...load import load_result
+from ...load import load_session
 
 from ...name import Identifier
 
 from ...protocol import layout_dummy, layout_sdummy
 
-from ...smodel import Result
+from ...diffeomorphisms import Image
 
 from ...nifti import image2nii
 
@@ -228,7 +166,7 @@ def call(args):
     # Parse protocol
     ####################################################################
 
-    df = get_df(args, fall_back=args.fit)
+    df = get_df(args, fall_back=args.session)
 
     if df is None:
         sys.exit()
@@ -239,28 +177,15 @@ def call(args):
 
     df_layout = df.copy()
 
-    layout_sdummy(df_layout, 'nii',
+    layout_dummy(df_layout, 'nii',
             template=args.nii,
-            urname=args.population_space,
-            scale_type=args.scale_type,
             strftime=args.strftime
             )
 
-    layout_sdummy(df_layout, 'file',
-            template=args.fit,
-            urname=args.population_space,
-            scale_type=args.scale_type,
+    layout_dummy(df_layout, 'filename',
+            template=args.session,
             strftime=args.strftime
             )
-
-    ####################################################################
-    # Respect the mask mask
-    ####################################################################
-
-    mask = True
-
-    if args.ignore_mask:
-        mask = False
 
     ####################################################################
     # Apply wrapper
@@ -272,14 +197,11 @@ def call(args):
         wrapper(name                  = name,
                 df                    = df,
                 index                 = r.Index,
-                filename              = r.file,
+                filename              = r.filename,
                 template              = r.nii,
                 verbose               = args.verbose,
-                vb                    = args.population_space,
-                params                = args.parameter,
-                values                = args.value,
-                mask                  = mask,
-                round_to_integer      = args.round_to_integer)
+                cycle                 = args.cycle,
+                )
 
     it =  df_layout.itertuples()
 
@@ -302,36 +224,32 @@ def call(args):
 ########################################################################
 
 def wrapper(name, df, index, filename, template, verbose,
-        vb, params, values, mask, round_to_integer):
+        cycle):
 
     ####################################################################
     # Load fit from disk
     ####################################################################
 
-    result = load_result(filename, name, df, index, vb, verbose)
+    session = load_session(filename, name, df, index, verbose)
     if df.ix[index,'valid'] == False:
         return
 
     if verbose > 1:
-        print('{}: Description of the fit:'.format(result.name.name()))
-        print(result.describe())
+        print('{}: Description of the session:'.format(session.name.name()))
+        print(session.describe())
 
-    result.mask(mask, verbose)
+    for c in cycle:
+        fname = template.format(c)
+        dfile = os.path.dirname(fname)
+        if dfile and not isdir(dfile):
+           os.makedirs(dfile)
 
-    for param in params:
-        if param in result.parameter_dict.keys():
-            for value in values:
+        field = Image(
+                reference=session.reference,
+                data=session.raw[c],
+                name=session.name.name()+'-{:d}'.format(c))
 
-                fname = template.format(param, value)
-                dfile = os.path.dirname(fname)
-                if dfile and not isdir(dfile):
-                   os.makedirs(dfile)
-                field = result.get_field(param=param, value=value)
-
-                if value == 'intercept' and round_to_integer:
-                    field = field.round()
-
-                if verbose:
-                    print('{}: Save ({}) to {}'.format(
-                        name.name(), field.name, fname))
-                ni.save(image2nii(field), fname)
+        if verbose:
+            print('{}: Save: {} to: {}'.format(
+                name.name(), field.name, fname))
+        ni.save(image2nii(field), fname)

@@ -83,12 +83,12 @@ def create_argument_parser():
 # Additional input arguments when warp coefficient files provided
 ########################################################################
 
-    parser.add_argument('--nb-nii',
-            default='warping/{0}-{1:04d}-{2}-{3}-{4}-{5}-intercept.nii.gz',
+    parser.add_argument('--reference-space',
+            default='warping/{0}-{1:04d}-{2}-{3}-reference-space.nii.gz',
             help='reference image used for the subject.')
 
     parser.add_argument('--warpcoef',
-            default='warping/{0}-{1:04d}-{2}-{3}-{4}-{5}-intercept_warpcoef.nii.gz',
+            default='warping/{0}-{1:04d}-{2}-{3}-warpcoef.nii.gz',
             help='warp coefficient file created by fnirt.')
 
     parser.add_argument('--ignore-existing-warpcoef',
@@ -103,12 +103,20 @@ def create_argument_parser():
 # Additional input arguments when no warp coefficient files provided
 ########################################################################
 
-    parser.add_argument('--nb-fit',
-            default='../data/fit/{2}/{4}/{5}/{0}-{1:04d}-{2}-{3}-{4}-{5}.fit',
-            help="""input file; if warp coefficient files are provided
-            you don't need this""" + hp.sfit)
+    parser.add_argument('--session',
+            default='../data/ses/{2}/{0}-{1:04d}-{2}-{3}.ses',
+            help=hp.session)
 
-    parser.add_argument('--nb-scale-type',
+    parser.add_argument('--cycle',
+            type=int,
+            help="""cycle to pick as reference""")
+
+    parser.add_argument('--fit',
+            default='../data/fit/{2}/{4}/{5}/{0}-{1:04d}-{2}-{3}-{4}-{5}.fit',
+            help="""if warp coefficient files are provided or orking
+            with session files, you don't need this""" + hp.sfit)
+
+    parser.add_argument('--scale-type',
             default='max',
             choices=['diagonal','max','min'],
             help="""only needed if part of the template for --nb-fit""" + hp.scale_type)
@@ -134,6 +142,14 @@ def create_argument_parser():
             default='fsl5.0-std2imgcoord',
             help="""FSL std2imgcoord command. Must be in your path.""")
 
+    parser.add_argument('--cmd-bet',
+            default='fsl5.0-bet',
+            help="""FSL bet command. Must be in your path.""")
+
+    parser.add_argument('--variante',
+            default='R',
+            help="""FSL bet command. Must be in your path.""")
+
     # parser.add_argument('--provide-fnirt-with-templates',
     #         action='store_true',
     #         help="""by default FNIRT will use the reference in
@@ -145,16 +161,21 @@ def create_argument_parser():
 ########################################################################
 
     parser.add_argument('--preimage',
-            default='warping/{0}-{1:04d}-{2}-{3}-{4}-{5}-preimage.nii.gz',
+            default='warping/{0}-{1:04d}-{2}-{3}-preimage.nii.gz',
             help='warped INTERCEPT image estimated by fnirt.')
 
+    parser.add_argument('--ccycle',
+            default='warping/{0}-{1:04d}-{2}-{3}-cycle.nii.gz',
+            help="""coordinates of the template's image grid in
+            population space""")
+
     parser.add_argument('--cpopulation',
-            default='warping/{0}-{1:04d}-{2}-{3}-{4}-{5}-cpopulation.txt',
+            default='warping/{0}-{1:04d}-{2}-{3}-cpopulation.txt',
             help="""coordinates of the template's image grid in
             population space""")
 
     parser.add_argument('--csubject',
-            default='warping/{0}-{1:04d}-{2}-{3}-{4}-{5}-csubject.txt',
+            default='warping/{0}-{1:04d}-{2}-{3}-csubject.txt',
             help="""coordinates of the template's image grid in subject
             space""")
 
@@ -245,15 +266,17 @@ from ..df import get_df
 
 from ...lock import Lock
 
-from ...load import load_result, load_population_map
+from ...load import load_session, load_result, load_population_map
 
 from ...name import Identifier
 
-from ...protocol import layout_sdummy
+from ...protocol import layout_sdummy, layout_dummy
+
+from ...diffeomorphisms import Image
 
 from ...nifti import image2nii, nii2image
 
-from ...fsl import fit_warpcoef, warpcoef2pmap
+from ...fsl import fit_warpcoef, warpcoef2pmap, bet
 
 import pandas as pd
 
@@ -315,7 +338,7 @@ def call(args):
     # Parse protocol
     ####################################################################
 
-    df = get_df(args, fall_back=args.nb_fit)
+    df = get_df(args, fall_back=[args.session, args.fit])
 
     if df is None:
         sys.exit()
@@ -326,49 +349,49 @@ def call(args):
 
     df_layout = df.copy()
 
+    layout_dummy(df_layout, 'ses',
+            template=args.session,
+            strftime=args.strftime
+            )
+
     layout_sdummy(df_layout, 'fit',
-            template=args.nb_fit,
+            template=args.fit,
             urname=args.nb,
-            scale_type=args.nb_scale_type,
+            scale_type=args.scale_type,
             strftime=args.strftime
             )
 
-    layout_sdummy(df_layout, 'warpcoef',
+    layout_dummy(df_layout, 'warpcoef',
             template=args.warpcoef,
-            urname=args.nb,
-            scale_type=args.nb_scale_type,
             strftime=args.strftime
             )
 
-    layout_sdummy(df_layout, 'intercept',
-            template=args.nb_nii,
-            urname=args.nb,
-            scale_type=args.nb_scale_type,
+    layout_dummy(df_layout, 'intercept',
+            template=args.reference_space,
             strftime=args.strftime
             )
 
-    layout_sdummy(df_layout, 'preimage',
+    layout_dummy(df_layout, 'preimage',
             template=args.preimage,
-            urname=args.nb,
-            scale_type=args.nb_scale_type,
             strftime=args.strftime
             )
 
-    layout_sdummy(df_layout, 'cpopulation',
+    layout_dummy(df_layout, 'ccycle',
+            template=args.ccycle,
+            strftime=args.strftime
+            )
+
+    layout_dummy(df_layout, 'cpopulation',
             template=args.cpopulation,
-            urname=args.nb,
-            scale_type=args.nb_scale_type,
             strftime=args.strftime
             )
 
-    layout_sdummy(df_layout, 'csubject',
+    layout_dummy(df_layout, 'csubject',
             template=args.csubject,
-            urname=args.nb,
-            scale_type=args.nb_scale_type,
             strftime=args.strftime
             )
 
-    layout_sdummy(df_layout, 'file',
+    layout_sdummy(df_layout, 'filename',
             template=args.population_map,
             urname=args.population_space,
             scale_type=None,
@@ -385,7 +408,7 @@ def call(args):
         name = Identifier(cohort=r.cohort, j=r.id, datetime=r.date, paradigm=r.paradigm)
 
         try:
-            dfile = os.path.dirname(r.file)
+            dfile = os.path.dirname(r.filename)
             if dfile and not isdir(dfile):
                 os.makedirs(dfile)
         except Exception as e:
@@ -413,6 +436,13 @@ def call(args):
             print('{}: {}'.format(name.name(), e))
 
         try:
+            dfile = os.path.dirname(r.ccycle)
+            if dfile and not isdir(dfile):
+                os.makedirs(dfile)
+        except Exception as e:
+            print('{}: {}'.format(name.name(), e))
+
+        try:
             dfile = os.path.dirname(r.cpopulation)
             if dfile and not isdir(dfile):
                 os.makedirs(dfile)
@@ -434,13 +464,15 @@ def call(args):
                 force             = args.force,
                 skip              = args.skip,
                 verbose           = args.verbose,
-                file              = r.file,
+                file              = r.filename,
 
                 file_res          = r.fit,
+                file_ses          = r.ses,
 
                 warpcoef_file     = r.warpcoef,
                 intercept_file    = r.intercept,
                 preimage_file     = r.preimage,
+                ccycle            = r.ccycle,
                 cpopulation       = r.cpopulation,
                 csubject          = r.csubject,
 
@@ -451,12 +483,15 @@ def call(args):
                 template          = template,
                 template_mask     = template_mask,
 
+                cycle             = args.cycle,
                 ignore_existing_warpcoef = args.ignore_existing_warpcoef,
                 #provide_fnirt_with_templates = args.provide_fnirt_with_templates,
 
                 cmd_fnirt        = args.cmd_fnirt,
                 cmd_config       = args.cmd_config,
                 cmd_std2imgcoord = args.cmd_std2imgcoord,
+                cmd_bet          = args.cmd_bet,
+                variante         = args.variante
                 )
 
     it =  df_layout.itertuples()
@@ -473,7 +508,7 @@ def call(args):
             print('Pool execution has been terminated')
             print(e)
         finally:
-            files = df_layout.ix[df.locked, 'file'].values
+            files = df_layout.ix[df.locked, 'filename'].values
             if len(files) > 0:
                 for f in files:
                     print('Unlock: {}'.format(f))
@@ -485,7 +520,7 @@ def call(args):
             for r in it:
                 wm(r)
         finally:
-            files = df_layout.ix[df.locked, 'file'].values
+            files = df_layout.ix[df.locked, 'filename'].values
             if len(files) > 0:
                 for f in files:
                     print('Unlock: {}'.format(f))
@@ -508,11 +543,11 @@ def call(args):
 ########################################################################
 
 def wrapper(name, df, index, remove_lock, ignore_lock, force, skip,
-        verbose, file, file_res, warpcoef_file, intercept_file,
-        preimage_file, cpopulation, csubject, vb, nb,
-        vb_file, vb_mask_file, template, template_mask,
+        verbose, file, file_res, file_ses, warpcoef_file, intercept_file,
+        preimage_file, ccycle, cpopulation, csubject, vb, nb,
+        vb_file, vb_mask_file, template, template_mask, cycle,
         ignore_existing_warpcoef, cmd_fnirt, cmd_config,
-        cmd_std2imgcoord):
+        cmd_std2imgcoord, cmd_bet, variante):
 
     if isfile(file):
         instance = load_population_map(file, name, df, index, vb, verbose)
@@ -555,26 +590,46 @@ def wrapper(name, df, index, remove_lock, ignore_lock, force, skip,
 
     if not isfile(warpcoef_file) or ignore_existing_warpcoef:
 
-        result = load_result(file_res, name, df, index, nb, verbose)
-        if lock.conditional_unlock(df, index, verbose):
-            return
+        if cycle is None:
+            result = load_result(file_res, name, df, index, nb, verbose)
+            if lock.conditional_unlock(df, index, verbose):
+                return
 
-        if verbose:
-            print('{}: Intercept: {}'.format(name.name(), intercept_file))
+            result.mask()
+            reference_space = result.get_field('intercept', 'point').round()
+            intercept = image2nii(reference_space)
 
-        result.mask()
-        intercept = image2nii(result.get_field('intercept', 'point').round())
+            try:
+                intercept.to_filename(intercept_file)
+            except Exception as e:
+                df.ix[index,'valid'] = False
+                print('{}: Unable to write: {}'.format(name.name(), intercept_file))
+                print('{}: Exception: {}'.format(name.name(), e))
+                lock.conditional_unlock(df, index, verbose, True)
 
-        try:
-            intercept.to_filename(intercept_file)
-        except Exception as e:
-            df.ix[index,'valid'] = False
-            print('{}: Unable to write: {}'.format(name.name(), intercept_file))
-            print('{}: Exception: {}'.format(name.name(), e))
-            lock.conditional_unlock(df, index, verbose, True)
+        else:
+            session = load_session(file_ses, name, df, index, verbose)
+            if lock.conditional_unlock(df, index, verbose):
+                return
 
-        if verbose:
-            print('{}: Fit warp coefficients via'.format(name.name()))
+            reference_space = Image(
+                reference=session.reference,
+                data=session.raw[cycle],
+                name=session.name.name()+'-{:d}'.format(cycle))
+
+            reference_space = bet(
+                    intercept = reference_space,
+                    intercept_file = ccycle,
+                    mask_file = intercept_file,
+                    cmd = cmd_bet,
+                    variante = variante,
+                    verbose = verbose)
+
+            if reference_space is None:
+                df.ix[index,'valid'] = False
+                print('{}: Unable to bet'.format(name.name()))
+                lock.conditional_unlock(df, index, verbose, True)
+                return
 
         #if provide_fnirt_with_templates:
         #    if verbose:
@@ -586,6 +641,11 @@ def wrapper(name, df, index, remove_lock, ignore_lock, force, skip,
         #            name.name(), cmd_config))
         #    vb_file = None
         #    vb_mask = None
+
+        if verbose:
+            print('{}: Reference space: {}'.format(name.name(), reference_space.name))
+            print('{}: {}'.format(name.name(), intercept_file))
+            print('{}: Fit warp coefficients...'.format(name.name()))
 
         status = fit_warpcoef(
                     nb_file        = intercept_file,

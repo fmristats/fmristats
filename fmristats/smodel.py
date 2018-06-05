@@ -85,7 +85,8 @@ class SignalModel:
 
         self.name = self.session.name
         self.epi_code = self.session.epi_code
-        self.ep = abs(self.epi_code) - 1
+        self.ep = abs(self.epi_code) - 1 # ep in [0,1,2]
+        assert self.ep in [0,1,2], 'ep is not in [0,1,2]'
 
         # Affine maps from the index space of the Session to
         # the reference space of the ReferenceMaps.
@@ -205,7 +206,7 @@ class SignalModel:
                 slice_timing=self.slice_timing_design, **kwargs)
         return self.irritation_design
 
-    def observations(self):
+    def observations(self, include_background=False):
         """
         Create observation matrix
 
@@ -226,7 +227,11 @@ class SignalModel:
 
         observations = np.zeros((n,x,y,z,9))
         observations[...,:3] = self.coordinates()
-        observations[..., 3] = self.session.data
+
+        if include_background:
+            observations[..., 3] = self.session.raw
+        else:
+            observations[..., 3] = self.session.data
 
         tmp = np.moveaxis(observations, self.ep+1, 1)
         tmp[...,4]  = self.slice_timing_design[...,None,None]
@@ -238,7 +243,7 @@ class SignalModel:
 
         return observations
 
-    def create_data_matrix(self, burn_in=None, verbose=True):
+    def create_data_matrix(self, burn_in=None, verbose=True, **kwargs):
         """
         Create the data matrix
 
@@ -258,7 +263,7 @@ class SignalModel:
         """
         self.burn_in = burn_in
 
-        observations = self.observations()
+        observations = self.observations(**kwargs)
 
         # remove outlying scans due to severe movements of the subject
         # in the scanner
@@ -465,7 +470,9 @@ class SignalModel:
         Parameters
         ----------
         mask : None or bool or str or ndarray, dtype: bool
-            string can be one of 'template', 'template_mask', or 'target'
+            string can be one of 'template_mask', 'template',
+            'foreground', or 'target'. None defaults to 'data'. True will
+            take precendence:  'template_mask'> 'template'> 'foreground'.
         verbose : bool
             increase output verbosity
 
@@ -475,9 +482,9 @@ class SignalModel:
         """
         coordinates = self.population_map.diffeomorphism.coordinates()
 
-        if (mask is False) or (mask is None):
+        if (mask is None) or (mask is False):
             mask = None
-
+            maskname = 'no mask being applied '
         elif mask is True:
             if hasattr(self.population_map, 'template_mask'):
                 mask = self.population_map.template_mask.get_mask()
@@ -486,9 +493,8 @@ class SignalModel:
                 mask = self.population_map.template.get_mask()
                 maskname = 'template'
             else:
-                mask = None
-                maskname = 'data mask'
-
+                mask = 'foreground'
+                maskname = 'data mask (foreground/background)'
         elif type(mask) is str:
             if mask == 'template_mask':
                 mask = self.population_map.template_mask.get_mask()
@@ -500,9 +506,8 @@ class SignalModel:
                 mask = self.population_map.target.get_mask()
                 masskname = 'target'
             else:
-                mask = None
-                maskname = 'data mask'
-
+                mask = self.get_data_mask()
+                maskname = 'data mask (foreground/background)'
         else:
             maskname = 'user defined'
 
@@ -511,8 +516,6 @@ class SignalModel:
             assert mask.dtype == bool, 'mask must be of dtype bool'
             assert mask.shape == coordinates.shape[:-1], 'mask shape must match image shape'
             mask = mask & self.get_data_mask()
-        else:
-            mask = self.get_data_mask()
 
         if verbose:
             print('{}: Fit is restricted to: {}'.format(self.name.name(), maskname))
@@ -547,12 +550,17 @@ class SignalModel:
         old_settings = np.seterr(divide='raise', invalid='raise')
         time0 = time.time()
 
+        dataframe = self.data_matrix[['time', 'i', 'j', 'k']].copy()
+        dataframe['reweighted_residual'] = 0.
+
         statistics, parameter_dict, value_dict = fit_field(
-                coordinates = coordinates,
+                coordinates = coordinates.copy(),
                 mask        = mask,
-                endog       = self.data_matrix.y.values,
-                exog        = self.exog,
-                agc         = self.data_matrix[['i','j','k']].values,
+                endog       = self.data_matrix.y.values.copy(),
+                exog        = self.exog.copy(),
+                agc         = self.data_matrix[['i','j','k']].values.copy(),
+                dataframe   = dataframe,
+                ep          = self.ep,
                 scale       = self.scale,
                 radius      = self.radius,
                 verbose     = verbose,
@@ -611,7 +619,7 @@ class SignalModel:
 
         if not hasattr(self, 'data_matrix'):
             if verbose:
-                print('{}! Set data matrix to default (no burn in)'.format(self.name.name()))
+                print('{}! Set data matrix to default (and with no burn-in)'.format(self.name.name()))
             self.create_data_matrix()
 
         if not hasattr(self, 'exog'):
@@ -729,7 +737,7 @@ class Result:
     # Extract summary statistics
     ####################################################################
 
-    def get_field(self, param, value='other'):
+    def get_field(self, param, value=None):
         """
         Extract scalar field
 
@@ -755,30 +763,8 @@ class Result:
         combine other with mse (an estimate of sigma-squared) or df
         (residual degrees of freedom)
         """
-        #if value == 'tstatistic':
-        #    pfield = extract_field(
-        #            field=self.statistics,
-        #            param=param,
-        #            value='point',
-        #            parameter_dict=self.parameter_dict,
-        #            value_dict=self.value_dict)
-
-        #    sfield = extract_field(
-        #            field=self.statistics,
-        #            param=param,
-        #            value='stderr',
-        #            parameter_dict=self.parameter_dict,
-        #            value_dict=self.value_dict)
-
-        #    field = pfield / sfield
-
-        #else:
-        #    field = extract_field(
-        #            field=self.statistics,
-        #            param=param,
-        #            value=value,
-        #            parameter_dict=self.parameter_dict,
-        #            value_dict=self.value_dict)
+        if value is None:
+            value = param
 
         field = extract_field(
                 field=self.statistics,

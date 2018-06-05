@@ -19,7 +19,8 @@
 
 """
 
-Prune
+Extract summary field statistics of the effect field of a fitted
+Signal Model and save the statistics as a DataFrame.
 
 """
 
@@ -38,6 +39,9 @@ def create_argument_parser():
             description=__doc__,
             epilog=hp.epilog)
 
+    parser.add_argument('df',
+            help="""output file""")
+
 ########################################################################
 # Input arguments
 ########################################################################
@@ -50,12 +54,8 @@ def create_argument_parser():
 # Output arguments
 ########################################################################
 
-    parser.add_argument('--pruned',
-            default='../data/fit/{2}/{4}/{5}/{0}-{1:04d}-{2}-{3}-{4}-{5}.fit',
-            help='input file;' + hp.sfit)
-
     parser.add_argument('-o', '--protocol-log',
-            default='logs/{}-fsl4prune.pkl',
+            default='logs/{}-fit2df.pkl',
             help=hp.protocol_log)
 
 ########################################################################
@@ -93,43 +93,16 @@ def create_argument_parser():
             help=hp.scale_type)
 
 ########################################################################
-# Arguments specific for the application of masks
-########################################################################
-
-    handling_df_cutoff = parser.add_mutually_exclusive_group()
-
-    handling_df_cutoff.add_argument('-p', '--proportion',
-            type=float,
-            help="""estimates which degrees of freedom are below the
-            proportional threshold of the degrees of freedom in the
-            effect field estimate are set to null.""")
-
-    handling_df_cutoff.add_argument('-t', '--threshold',
-            type=int,
-            help="""estimates which degrees of freedom are below the
-            threshold of the degrees of freedom in the effect field
-            estimate are set to null.""")
-
-########################################################################
 # Miscellaneous
 ########################################################################
 
     parser.add_argument('-f', '--force',
             action='store_true',
-            help="""Overwrite mask if it already exits""")
+            help=hp.force.format('result'))
 
     parser.add_argument('-v', '--verbose',
-            action='count',
-            default=0,
+            action='store_true',
             help=hp.verbose)
-
-########################################################################
-# Multiprocessing
-########################################################################
-
-    parser.add_argument('-j', '--cores',
-            type=int,
-            help=hp.cores)
 
     return parser
 
@@ -148,6 +121,8 @@ cmd.__doc__ = __doc__
 
 from ..df import get_df
 
+from ...lock import Lock
+
 from ...load import load_result
 
 from ...name import Identifier
@@ -158,6 +133,8 @@ from ...smodel import Result
 
 import pandas as pd
 
+from pandas import DataFrame
+
 import datetime
 
 import sys
@@ -166,15 +143,15 @@ import os
 
 from os.path import isfile, isdir, join
 
-from multiprocessing.dummy import Pool as ThreadPool
-
 import numpy as np
-
-import nibabel as ni
 
 ########################################################################
 
 def call(args):
+    if isfile(args.df) and not args.force:
+        print('File {} already exists, use -f/--force to overwrite'.format(args.df))
+        sys.exit()
+
     output = args.protocol_log.format(
             datetime.datetime.now().strftime('%Y-%m-%d-%H%M'))
 
@@ -196,7 +173,7 @@ def call(args):
 
     df_layout = df.copy()
 
-    layout_sdummy(df_layout, 'filename',
+    layout_sdummy(df_layout, 'file',
             template=args.fit,
             urname=args.population_space,
             scale_type=args.scale_type,
@@ -207,42 +184,43 @@ def call(args):
     # Apply wrapper
     ####################################################################
 
-    def wm(r):
+    summary = []
+
+    if args.verbose:
+        print('Extract statistics'.format(output))
+
+    for r in df_layout.itertuples():
         name = Identifier(cohort=r.cohort, j=r.id, datetime=r.date, paradigm=r.paradigm)
 
-        wrapper(name                  = name,
-                df                    = df,
-                index                 = r.Index,
-                filename              = r.filename,
-                verbose               = args.verbose,
-                force                 = args.force,
-                vb                    = args.population_space,
-                threshold_df          = args.threshold,
-                proportion_df         = args.proportion,
+        tmp_summary = wrapper(
+                name     = name,
+                df       = df,
+                index    = r.Index,
+                filename = r.file,
+                verbose  = args.verbose,
+                vb       = args.population_space,
                 )
 
-    it =  df_layout.itertuples()
+        if tmp_summary is not None:
+            summary += [tmp_summary]
 
-    if len(df_layout) > 1 and ((args.cores is None) or (args.cores > 1)):
-        try:
-            pool = ThreadPool(args.cores)
-            results = pool.map(wm, it)
-            pool.close()
-            pool.join()
-        except Exception as e:
-            pool.close()
-            pool.terminate()
-            print('Pool execution has been terminated')
-            print(e)
-        finally:
-            pass
-    else:
-        try:
-            print('Process protocol entries sequentially')
-            for r in it:
-                wm(r)
-        finally:
-            pass
+    ####################################################################
+    # Write summaries
+    ####################################################################
+
+    if args.verbose:
+        print('Concatenate statistics'.format(args.df))
+
+    summary = pd.concat(summary, ignore_index=True)
+
+    if args.verbose:
+        print('Save: {}'.format(args.df))
+
+    dfile = os.path.dirname(args.df)
+    if dfile and not isdir(dfile):
+       os.makedirs(dfile)
+
+    summary.to_pickle(args.df)
 
     ####################################################################
     # Write protocol
@@ -259,7 +237,11 @@ def call(args):
 
 ########################################################################
 
-def wrapper(name, df, index, filename, verbose, force, vb, threshold_df, proportion_df):
+def wrapper(name, df, index, filename, verbose, vb):
+
+    ####################################################################
+    # Load fit from disk
+    ####################################################################
 
     result = load_result(filename, name, df, index, vb, verbose)
     if df.ix[index,'valid'] == False:
@@ -269,29 +251,19 @@ def wrapper(name, df, index, filename, verbose, force, vb, threshold_df, proport
         print('{}: Description of the fit:'.format(result.name.name()))
         print(result.describe())
 
-    if hasattr(result.population_map, 'template_mask') and \
-        (result.population_map.template_mask is not None) and not force:
-        if verbose:
-            print('{}: Template mask already exits. Use -f/--force to overwrite'.format(name.name()))
-        return
+    result.mask(True, verbose)
 
-    gf = result.get_field('degrees_of_freedom')
+    tsimg = result.get_field('task', 'tstatistic')
+    dwimg = result.get_field('durbin_watson')
 
-    if proportion_df:
-        threshold_df = int(proportion_df * np.nanmax(gf.data))
+    df = DataFrame({
+        'cohort'   : result.name.cohort,
+        'id'       : result.name.j,
+        'date'     : result.name.datetime,
+        'paradigm' : result.name.paradigm,
+        'name'     : result.name.name(),
+        't'        : tsimg.data[dwimg.get_mask()],
+        'dw'       : dwimg.data[dwimg.get_mask()]
+        })
 
-    if verbose:
-        print('{}: Lower df threshold: {:d}'.format(name.name(), threshold_df))
-
-    result.population_map.set_template_mask(gf.data >= threshold_df)
-
-    if verbose:
-        print('{}: Save: {}'.format(name.name(), filename))
-
-    try:
-        result.save(filename)
-        df.ix[index,'locked'] = False
-    except Exception as e:
-        df.ix[index,'valid'] = False
-        print('{}: Unable to write: {}'.format(name.name(), filename))
-        print('{}: Exception: {}'.format(name.name(), e))
+    return df

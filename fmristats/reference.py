@@ -117,24 +117,25 @@ class ReferenceMaps:
         their respected inverses.  In fact, the reference space is
         solely defined through these affine transformations.  A scan
         reference is a rigid body transformation that maps a point in
-        the reference space `R` of a rigid body to the position of this
-        point in the scanner `V` during the respected scan, in signs:
+        the reference space :math:`R` to the coordinates of this point
+        in in scanner space :math:`V` during the respected scan, in
+        signs:
 
-        :math:` R \to V`
+        :math:`ρ_t: R \to V`
 
-        Note that the map goes from *reference* to *specific*, or from
-        *the* scan to *some* scan, or from *fixed* to *moving*.
+        Note that the map goes from *reference* to *specific* (from
+        *the* scan to *some* scan or from *fixed* to *moving*).
 
         The reference space is typically set by a function that fits
         head movements to observed intensities at a fixed (say, scanner
-        specific) grid, e.g., `fit_head_movements`.
+        specific) grid, e.g., `fit`.
         """
         if type(scan_references) is Affines:
             self.scan_references = scan_references
         else:
             self.scan_references = Affines(scan_references)
 
-    def reset_reference_space(self, x=None):
+    def reset_reference_space(self, x=None, cycle=None):
         """
         This will reset the reference space
 
@@ -142,6 +143,8 @@ class ReferenceMaps:
         ----------
         x : None or Affine or ndarray, shape (4,4), dtype: float
             an affine transformation or None (default)
+        cycle : int
+            index of a scan cycle or None
 
         Notes
         -----
@@ -150,32 +153,34 @@ class ReferenceMaps:
         transformation x.  The affine transformation goes **from this**
         reference space **to the new** reference. If the affine
         transformation has the form Ax+b, then b is the new origin and A
-        defines the new orienation.
+        defines the new orientation.
 
         If x=None, then x will be set to the mean of the scan
         references.
 
-        As scan references :math:`ρ_t` go from scanner space to
-        reference space, the new scan reference are
+        Scan references are the maps :math:`ρ_t` which go from scanner
+        space to reference space. If the new reference space is
+        :math:`R':=x[R]`, then the new scan references are
 
         .. math::
 
-            ρ_t ∘ x^{-1}
+            ρ'_t = x ∘ ρ_t
 
         A warning: this makes all population maps which have been
-        defined for this session obsolete. You should run this
-        function before setting any population maps!
+        defined for this reference space obsolete.
         """
         if x is None:
-            x = self.scan_references.mean_rigid()
+            if cycle is None:
+                x = self.scan_references.mean_rigid().inv()
+            else:
+                x = Affine(self.scan_references.affines[cycle]).inv()
 
         if type(x) is not Affine:
             x = Affine(x)
 
         assert type(x) is Affine, 'x must be Affine'
 
-        self.reference_affine = x
-        scan_references  = x.inv().dot(self.scan_references)
+        scan_references  = x.dot(self.scan_references)
         self.set_scan_references(scan_references=scan_references)
 
     ####################################################################

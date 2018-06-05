@@ -98,7 +98,7 @@ def cmap_shifted (dat, orig_cmap=cm.bwr):
     return(cmap_new)
 
 def picture(self, epi_code, nx, ny, slices=None, cmap=None,
-        interpolation='none', background=None, mark_peak=False):
+        interpolation=None, background=None, mark_peak=False):
 
     if abs(epi_code) == 3:
         origin = 'lower'
@@ -130,20 +130,17 @@ def picture(self, epi_code, nx, ny, slices=None, cmap=None,
         bmatrix, _, _, _ = background.flatten(epi_code,nx,ny,slices=slices)
         pt.imshow(bmatrix,interpolation=interpolation,cmap='Greys',origin=origin,aspect=aspect)
 
-    im = pt.imshow(imatrix,interpolation=interpolation,cmap=cmap,origin=origin,aspect=aspect)
-    #pt.colorbar()
-    pt.box(on='off')
-    pt.tick_params('off')
-    pt.xlabel(xlabel)
-    pt.ylabel(ylabel)
+    p = pt.imshow(imatrix,interpolation=interpolation,cmap=cmap,origin=origin,aspect=aspect)
 
-    ax = pt.axes()
-    pt.setp(ax.get_yticklines(),visible=False)
-    pt.setp(ax.get_xticklines(),visible=False)
-    pt.setp(ax.get_xticklabels(),visible=False)
-    pt.setp(ax.get_yticklabels(),visible=False)
-    #ax.set_xticks(ixticks, minor=False)
-    #ax.set_yticks(iyticks, minor=False)
+    #pt.xlabel(xlabel)
+    #pt.ylabel(ylabel)
+
+    pt.box(False)
+    pt.tick_params(False)
+    pt.setp(p.axes.get_yticklines(),visible=False)
+    pt.setp(p.axes.get_xticklines(),visible=False)
+    pt.setp(p.axes.get_xticklabels(),visible=False)
+    pt.setp(p.axes.get_yticklabels(),visible=False)
 
     if mark_peak:
         peak  = np.nanargmax(imatrix)
@@ -151,10 +148,10 @@ def picture(self, epi_code, nx, ny, slices=None, cmap=None,
         pt.axvline(index[1], c='k', linewidth=.8)
         pt.axhline(index[0], c='k', linewidth=.8)
 
-    return im, slices, imatrix
+    return p, slices, imatrix
 
 def contour(self, epi_code, nx, ny, slices=None, cmap=None,
-        interpolation='none', background=None, mark_peak=False, **kwargs):
+        interpolation=None, background=None, mark_peak=False, **kwargs):
 
     if abs(epi_code) == 3:
         origin = 'lower'
@@ -186,20 +183,17 @@ def contour(self, epi_code, nx, ny, slices=None, cmap=None,
         bmatrix, _, _, _ = background.flatten(epi_code,nx,ny,slices=slices)
         pt.imshow(bmatrix,interpolation=interpolation,cmap='Greys',origin=origin,aspect=aspect)
 
-    cs=pt.contour(imatrix, **kwargs)
-    pt.box(on='off')
-    pt.tick_params('off')
-    pt.xlabel(xlabel)
-    pt.ylabel(ylabel)
+    p=pt.contour(imatrix, **kwargs)
 
-    ax = pt.axes()
-    pt.setp(ax.get_yticklines(),visible=False)
-    pt.setp(ax.get_xticklines(),visible=False)
-    pt.setp(ax.get_xticklabels(),visible=False)
-    pt.setp(ax.get_yticklabels(),visible=False)
-    #ax.set_xticks(ixticks, minor=False)
-    #ax.set_yticks(iyticks, minor=False)
-    #pt.colorbar()
+    #pt.xlabel(xlabel)
+    #pt.ylabel(ylabel)
+
+    pt.box(False)
+    pt.tick_params(False)
+    pt.setp(p.ax.get_yticklines(),visible=False)
+    pt.setp(p.ax.get_xticklines(),visible=False)
+    pt.setp(p.ax.get_xticklabels(),visible=False)
+    pt.setp(p.ax.get_yticklabels(),visible=False)
 
     if mark_peak:
         peak  = np.nanargmax(imatrix)
@@ -207,4 +201,4 @@ def contour(self, epi_code, nx, ny, slices=None, cmap=None,
         pt.axvline(index[1], c='k', linewidth=.8)
         pt.axhline(index[0], c='k', linewidth=.8)
 
-    return cs, slices, imatrix
+    return p, slices, imatrix

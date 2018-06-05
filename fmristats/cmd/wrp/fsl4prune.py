@@ -223,7 +223,7 @@ def wrapper(name, df, index, filename, verbose, force, vb, threshold_df,
             print('{}: Template mask already exits. Use -f/--force to overwrite'.format(name.name()))
         return
 
-    gf = result.get_field('df', 'other')
+    gf = result.get_field('degrees_of_freedom')
 
     if proportion_df:
         threshold_df = int(proportion_df * np.nanmax(gf.data))
