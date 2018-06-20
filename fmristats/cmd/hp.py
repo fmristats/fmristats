@@ -31,12 +31,34 @@ sfit = """path to a result file or a template which defines the path
 where to find or save the respected result files when using a protocol
 file."""
 
-population_space = """name of a population space."""
+vb = """name of a population space."""
 
-population_space_name = """name of a population space."""
+vb_nii = """name of a population space."""
+
+vb_name = """name of a population space."""
+
+vb_path = """name of a population space."""
+
+vb_background = """name of a population space."""
+
+vb_background_nii = """name of a population space."""
+
+vb_background_name = """name of a population space."""
+
+vb_background_path = """name of a population space."""
+
+nb = """name of a population space."""
+
+nb_nii = """name of a population space."""
+
+nb_name = """name of a population space."""
+
+nb_path = """name of a population space."""
 
 population_space_directory = """directory in which to save the
 population space."""
+
+population_space = vb
 
 population_map = """instance of a population map."""
 

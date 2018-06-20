@@ -288,14 +288,14 @@ class Affine:
 
     def describe(self):
         description = """
-        Resolution (left to right):         {:.2f} mm
-        Resolution (posterior to anterior): {:.2f} mm
-        Resolution (inferior to superior):  {:.2f} mm
-        Diagonal:      {:9,.2f}
-        Volume:        {:9,.2f}
-        Aspect 0 on 1: {:9,.2f}
-        Aspect 0 on 2: {:9,.2f}
-        Aspect 1 on 2: {:9,.2f}
+        Resolution (left to right):         {:>3.2f} mm
+        Resolution (posterior to anterior): {:>3.2f} mm
+        Resolution (inferior to superior):  {:>3.2f} mm
+        Diagonal of one voxel:              {:>3.2f} mm
+        Volume of one voxel:                {:>3.2f} mm^3
+        Aspect 0 on 1:                      {:>3.2f}
+        Aspect 0 on 2:                      {:>3.2f}
+        Aspect 1 on 2:                      {:>3.2f}
         Rigid transformation: {}"""
         resolution = self.resolution()
         return description.format(

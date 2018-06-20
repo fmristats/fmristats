@@ -64,7 +64,7 @@ def create_argument_parser():
 ########################################################################
 
     parser.add_argument('--population-space',
-            default='MNI152_T1_2mm',
+            default='fnirt',
             help='output name;' + hp.population_space_name)
 
     parser.add_argument('--image',
@@ -579,7 +579,7 @@ def wrapper(name, df, index, remove_lock, ignore_lock, force, skip,
     if verbose:
         print('{}: Lock: {}'.format(name.name(), file))
 
-    lock = Lock(name, 'fmrifit', file)
+    lock = Lock(name, 'fsl4pop', file)
     df.ix[index, 'locked'] = True
     lock.save(file)
     df.ix[index,'valid'] = True
@@ -680,6 +680,8 @@ def wrapper(name, df, index, remove_lock, ignore_lock, force, skip,
                 nb_file          = intercept_file,
                 vb_name          = vb,
                 nb_name          = name,
+                name             = 'fnirt',  # TODO: should be user choice
+                vb               = 'mni152', # TODO: should be user choice
                 cpopulation_file = cpopulation,
                 csubject_file    = csubject,
                 cmd              = cmd_std2imgcoord)

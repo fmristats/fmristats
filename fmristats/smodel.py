@@ -465,6 +465,9 @@ class SignalModel:
 
         return mask
 
+
+    # TODO: update description!
+
     def create_estimation_matrix(self, mask=True, verbose=True):
         """
         Parameters
@@ -482,31 +485,30 @@ class SignalModel:
         """
         coordinates = self.population_map.diffeomorphism.coordinates()
 
+        datamask = self.get_data_mask()
+
         if (mask is None) or (mask is False):
             mask = None
             maskname = 'no mask being applied '
         elif mask is True:
-            if hasattr(self.population_map, 'template_mask'):
-                mask = self.population_map.template_mask.get_mask()
-                maskname = 'template mask'
-            elif hasattr(self.population_map, 'template'):
-                mask = self.population_map.template.get_mask()
-                maskname = 'template'
+            if hasattr(self.population_map.vb, 'vb'):
+                mask = self.population_map.vb.get_mask()
+                maskname = 'template (vb)'
             else:
-                mask = 'foreground'
-                maskname = 'data mask (foreground/background)'
+                mask = datamask
+                maskname = 'data driven (foreground/background)'
         elif type(mask) is str:
-            if mask == 'template_mask':
-                mask = self.population_map.template_mask.get_mask()
-                massname = 'template mask'
-            elif mask == 'template':
-                mask = self.population_map.template.get_mask()
-                maskname = 'template'
-            elif mask == 'target':
-                mask = self.population_map.target.get_mask()
-                masskname = 'target'
+            if mask == 'vb':
+                mask = self.population_map.vb.get_mask()
+                massname = 'template (vb)'
+            elif mask == 'vb_background':
+                mask = self.population_map.vb_background.get_mask()
+                maskname = 'template background (vb_background)'
+            elif mask == 'vb_estimate':
+                mask = self.population_map.vb_estimate.get_mask()
+                maskname = 'template estimate (vb_estimate)'
             else:
-                mask = self.get_data_mask()
+                mask = datamask
                 maskname = 'data mask (foreground/background)'
         else:
             maskname = 'user defined'
@@ -515,7 +517,7 @@ class SignalModel:
             assert type(mask) is np.ndarray, 'mask must be an ndarray'
             assert mask.dtype == bool, 'mask must be of dtype bool'
             assert mask.shape == coordinates.shape[:-1], 'mask shape must match image shape'
-            mask = mask & self.get_data_mask()
+            mask = mask & datamask
 
         if verbose:
             print('{}: Fit is restricted to: {}'.format(self.name.name(), maskname))
@@ -652,10 +654,12 @@ class SignalModel:
 
     def describe(self):
         description = """
-        Hyperparameters were set to:
-            Scale type:   {:s}
-            Scale:        {:.2f} mm
-            Factor:       {:.2f}
+        Hyperparameters
+        ---------------
+        Scale type:   {:s}
+        Scale:        {:.2f} mm
+        Factor:       {:.2f}
+
         Resulting in:
             Mass:         {:3>,.5f}
             FWHM:         {:3>,.2f} mm
@@ -775,8 +779,8 @@ class Result:
 
         return Image(
                 reference=self.population_map.diffeomorphism.reference,
-                data=field,
-                name='-'.join((param,value)))
+                data=field, name=self.name)
+                #name='-'.join((param,value)))
 
     def volume(self):
         return np.isfinite(self.statistics).sum() * \
@@ -877,18 +881,22 @@ class Result:
         Cohort:   {}
         Subject:  {}
         Paradigm: {}
-        Hyperparameters were set to:
-            Scale type:      {:s}
-            Factor:          {:.2f}
+
+        Hyperparameter has been set to
+        ------------------------------
+            Scale type:      {:>6s}
+            Factor:          {:>6.2f}
         Resulting in:
-            Scale:           {:.2f} mm
-            Mass:            {:.5f}
-            FWHM:            {:.2f} mm
-            Radius:          {:.2f} mm
-            Diagonal:        {:.2f} mm
-        Shape:               {}
-        Volume:              {:.2f} mm^3
-        """
+            Mass:            {:>5.4f}
+            Scale:           {:>6.2f} mm
+            FWHM:            {:>6.2f} mm
+            Radius:          {:>6.2f} mm
+            Diagonal:        {:>6.2f} mm
+
+        Fitted parameter field has
+        --------------------------
+        Shape:   {}
+        Volume:  {:.2f} mm^3"""
         return description.format(
                 self.population_map.diffeomorphism.nb.cohort,
                 self.population_map.diffeomorphism.nb.j,
@@ -897,8 +905,8 @@ class Result:
                 self.hyperparameters['scale_type'],
                 self.hyperparameters['factor'],
 
-                self.hyperparameters['scale'],
                 self.hyperparameters['mass'],
+                self.hyperparameters['scale'],
                 2*np.sqrt(2*np.log(2)) * self.hyperparameters['scale'],
                 self.hyperparameters['radius'],
                 2*self.hyperparameters['radius'],

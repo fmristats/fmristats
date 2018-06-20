@@ -152,7 +152,8 @@ def fit_warpcoef(nb_file, warpcoef_file, preimage_file=None,
         return False
 
 def warpcoef2pmap(warpcoef_file, vb_file, vb_name, nb_file, nb_name,
-        cpopulation_file, csubject_file, cmd='fsl5.0-std2imgcoord'):
+        vb=None, name='fnirt', cpopulation_file, csubject_file,
+        cmd='fsl5.0-std2imgcoord'):
     """
     Run FSL's img2stdcoord to turn the warp coefficient file produced by
     FNIRT into a fmristats' diffeomorphism intance.
@@ -186,10 +187,10 @@ def warpcoef2pmap(warpcoef_file, vb_file, vb_name, nb_file, nb_name,
     ndarray, shape template.shape
         The coordinates.
     """
-    template = nii2image(ni.load(vb_file))
-    template_grid = template.coordinates()
-    template_grid = template_grid.reshape(-1,3)
-    np.savetxt(cpopulation_file, X=template_grid, delimiter=' ', fmt='%i')
+    vb_image = nii2image(ni.load(vb_file), name=vb_name)
+    vb_grid = vb_image.coordinates()
+    vb_grid = vb_grid.reshape(-1,3)
+    np.savetxt(cpopulation_file, X=vb_grid, delimiter=' ', fmt='%.2f')
 
     command = '{} -std {} -img {} -warp {} -mm {} > {}'.format(
             cmd, vb_file, nb_file, warpcoef_file,
@@ -209,18 +210,25 @@ def warpcoef2pmap(warpcoef_file, vb_file, vb_name, nb_file, nb_name,
         print('Failed with: {}'.format(e))
         return
 
-    coordinates = coordinates.reshape(template.shape+(3,))
+    coordinates = coordinates.reshape(vb_image.shape+(3,))
+
+    nb_image = nii2image(ni.load(nb_file), name=nb_name)
 
     diffeomorphism = Warp(
-            reference=template.reference,
+            reference=vb_image.reference,
             warp=coordinates,
-            vb=vb_name,
-            nb=nb_name,
+            vb=vb_image.name,
+            nb=nb_image.name,
+            name=name,
             metadata={
-                'vb_file':vb_file,
-                'nb_file':nb_file,
+                'vb_file': vb_file,
+                'nb_file': nb_file,
                 'warpcoef':warpcoef_file,
                 }
             )
 
-    return PopulationMap(diffeomorphism, template=template)
+    return PopulationMap(diffeomorphism,
+            vb=vb_image,
+            nb=nb_image,
+            name=vb,
+            )

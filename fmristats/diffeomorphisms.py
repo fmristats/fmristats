@@ -66,12 +66,15 @@ class Diffeomorphism:
     A reasonable subclass of Diffeomorphism must define the attributes
     :func:`apply_to_index`, :func:`apply_to_indices`, and :func:`apply`.
     """
-    def __init__(self, reference, shape, vb=None, nb=None, metadata=None):
+    def __init__(self, reference, shape, vb=None, nb=None, name=None, metadata=None):
         self.reference = reference
         self.shape = shape
         self.vb = vb
         self.nb = nb
-        self.metadata = metadata
+        self.name = name
+
+        if metadata is not None:
+            self.metadata = metadata
 
     def apply_to_index(self, index):
         """
@@ -146,45 +149,35 @@ class Diffeomorphism:
 
     def describe(self):
         if type(self.nb) is Identifier:
-            description = """
-            Population space
-            ----------------
-            Name:  {}
-            Shape: {}
-            Volume of a voxel: {:.2f}
-
-            Subject reference space
-            ----------------
-            Cohort:   {}
-            Subject:  {}
-            Paradigm: {}
-            """
-            return description.format(
-                    self.vb,
-                    self.shape,
-                    self.reference.volume(),
-                    self.nb.cohort,
-                    self.nb.j,
-                    self.nb.paradigm,
-                    )
+            describe_subject_space = """
+        Subject reference space
+        -----------------------
+        Cohort:   {}
+        Subject:  {}
+        Paradigm: {}""".format(
+                self.nb.cohort,
+                self.nb.j,
+                self.nb.paradigm,
+                )
         else:
-            description = """
-            Population space
-            ----------------
-            Name:  {}
-            Shape: {}
-            Volume of a voxel: {:.2f}
+            describe_subject_space = """
+        Subject reference space
+        -----------------------
+        Name:   {}""".format(self.nb)
 
-            Subject reference space
-            ----------------
-            name:   {}
-            """
-            return description.format(
-                    self.vb,
-                    self.shape,
-                    self.reference.volume(),
-                    self.nb
-                    )
+        description = """
+        Population space
+        ----------------
+        Name:  {}
+        Shape: {}
+        {:s}
+        {:s}"""
+
+        return description.format(
+                self.vb,
+                self.shape,
+                self.reference.describe(),
+                describe_subject_space)
 
     def save(self, file, **kwargs):
         """
@@ -202,11 +195,12 @@ class Identity(Diffeomorphism):
     """
     The identity diffeomorphism ψ.
     """
-    def __init__(self, reference, shape, vb=None, nb=None):
+    def __init__(self, reference, shape, vb=None, nb=None, name=None):
         self.reference = reference
         self.shape = shape
         self.vb = vb
         self.nb = nb
+        self.name = name
 
     def apply_to_index(self, index):
         """
@@ -329,7 +323,7 @@ class Image(Identity):
         yticks = [i*data.shape[1] for i in range(ypic)]
         return imatrix, xticks, yticks, slices
 
-    def mask(self, mask):
+    def mask(self, mask=None, inplace=True):
         """
         Mask the data array by mask
 
@@ -344,8 +338,16 @@ class Image(Identity):
             The same image but with data set to nan outside the mask
         """
         data = self.data.astype(float)
+
+        if mask is None:
+            mask = self.get_mask()
+
         data [~mask] = np.nan
-        return Image(reference=self.reference, data=data, name=self.name)
+
+        if inplace:
+            self.data = data
+        else:
+            return Image(reference=self.reference, data=data, name=self.name)
 
     def get_mask(self, **kwargs):
         """
@@ -457,7 +459,7 @@ class AffineTransformation(Diffeomorphism):
         An affine transformation
     """
 
-    def __init__(self, reference, affine, shape, vb=None, nb=None):
+    def __init__(self, reference, affine, shape, vb=None, nb=None, name=None):
         if type(reference) is Affine:
             self.reference = reference
         else:
@@ -471,6 +473,7 @@ class AffineTransformation(Diffeomorphism):
         self.shape = shape
         self.vb = vb
         self.nb = nb
+        self.name = name
 
     def apply_to_index(self, index):
         return self.affine.dot(self.reference).apply_to_index(index)
@@ -533,7 +536,7 @@ class Warp(Diffeomorphism):
         path/which/defined/the/domain, 'nb_file':
         path/which/defined/the/image,}``.
     """
-    def __init__(self, reference, warp, vb=None, nb=None, metadata=None):
+    def __init__(self, reference, warp, vb=None, nb=None, name=None, metadata=None):
         assert type(warp) is np.ndarray, 'warp must be numpy.ndarray'
         assert 3 == warp.shape[-1], 'last dimension of warp must be 3'
 
@@ -546,6 +549,7 @@ class Warp(Diffeomorphism):
         self.shape = self.warp.shape[:-1]
         self.vb = vb
         self.nb = nb
+        self.name = name
 
         if metadata is not None:
             self.metadata = metadata
@@ -579,67 +583,6 @@ class Warp(Diffeomorphism):
         newy = map_coordinates(self.warp[...,1], indices.T.reshape(3,-1))
         newz = map_coordinates(self.warp[...,2], indices.T.reshape(3,-1))
         return np.vstack((newx, newy, newz)).T
-
-    def describe(self):
-        if hasattr(self, 'metadata'):
-            description = """
-            Population space
-            ----------------
-            Name:  {}
-            Shape: {}
-            Volume of a voxel: {:.2f}
-
-            Subject reference space
-            ----------------
-            Cohort:   {}
-            Subject:  {}
-            Paradigm: {}
-
-            Meta data of the fit:
-            ---------------------
-            vb_file : {}
-            vb_mask : {}
-            nb_file : {}
-            """
-
-            try:
-                vb_mask=self.metadata['vb_mask']
-            except:
-                vb_mask=None
-
-            return description.format(
-                    self.vb,
-                    self.shape,
-                    self.reference.volume(),
-                    self.nb.cohort,
-                    self.nb.j,
-                    self.nb.paradigm,
-                    self.metadata['vb_file'],
-                    vb_mask,
-                    self.metadata['nb_file'],
-                    )
-        else:
-            description = """
-            Population space
-            ----------------
-            Name:  {}
-            Shape: {}
-            Volume of a voxel: {:.2f}
-
-            Subject reference space
-            ----------------
-            Cohort:   {}
-            Subject:  {}
-            Paradigm: {}
-            """
-            return description.format(
-                    self.vb,
-                    self.shape,
-                    self.reference.volume(),
-                    self.nb.cohort,
-                    self.nb.j,
-                    self.nb.paradigm,
-                    )
 
 class Displacement(Diffeomorphism):
     """
@@ -679,7 +622,7 @@ class Displacement(Diffeomorphism):
         path/which/defined/the/image,}``.
     """
 
-    def __init__(self, reference, displacement, vb=None, nb=None):
+    def __init__(self, reference, displacement, vb=None, nb=None, name=None):
         assert type(displacement) is np.ndarray, 'displacement must be numpy.ndarray'
         assert 3 == displacement.shape[-1], 'last dimension of displacement must be 3'
 
@@ -692,6 +635,7 @@ class Displacement(Diffeomorphism):
         self.shape = self.displacement.shape[:-1]
         self.vb = vb
         self.nb = nb
+        self.name = name
 
         if metadata is not None:
             self.metadata = metadata
@@ -702,7 +646,7 @@ class Displacement(Diffeomorphism):
     def apply_to_indices(self, indices):
         return self.reference.apply_to_indices(indices) + self.displacement[indices]
 
-    # TODO: test
+    # TODO: test this function
     def apply(self, coordinates):
         """
         Apply diffeomorphism to the point at given coordinate
@@ -726,64 +670,3 @@ class Displacement(Diffeomorphism):
         newy = map_coordinates(self.displacement[...,1], indices.T.reshape(3,-1))
         newz = map_coordinates(self.displacement[...,2], indices.T.reshape(3,-1))
         return coordinates + np.vstack((newx, newy, newz)).T
-
-    def describe(self):
-        if hasattr(self, 'metadata'):
-            description = """
-            Population space
-            ----------------
-            Name:  {}
-            Shape: {}
-            Volume of a voxel: {:.2f}
-
-            Subject reference space
-            ----------------
-            Cohort:   {}
-            Subject:  {}
-            Paradigm: {}
-
-            Meta data of the fit:
-            ---------------------
-            vb_file : {}
-            vb_mask : {}
-            nb_file : {}
-            """
-
-            try:
-                vb_mask=self.metadata['vb_mask']
-            except:
-                vb_mask=None
-
-            return description.format(
-                    self.vb,
-                    self.shape,
-                    self.reference.volume(),
-                    self.nb.cohort,
-                    self.nb.j,
-                    self.nb.paradigm,
-                    self.metadata['vb_file'],
-                    vb_mask,
-                    self.metadata['nb_file'],
-                    )
-        else:
-            description = """
-            Population space
-            ----------------
-            Name:  {}
-            Shape: {}
-            Volume of a voxel: {:.2f}
-
-            Subject reference space
-            ----------------
-            Cohort:   {}
-            Subject:  {}
-            Paradigm: {}
-            """
-            return description.format(
-                    self.vb,
-                    self.shape,
-                    self.reference.volume(),
-                    self.nb.cohort,
-                    self.nb.j,
-                    self.nb.paradigm,
-                    )

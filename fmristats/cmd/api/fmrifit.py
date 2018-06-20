@@ -53,17 +53,24 @@ def create_argument_parser():
     # TODO: also give the option --reference-maps None or none,
     # which will assume no movement. This is useful for analysing
     # phantom data.
+
     input_files.add_argument('--reference-maps',
             default='../data/ref/{2}/{0}-{1:04d}-{2}-{3}.ref',
             help='input file;' + hp.reference_maps)
 
+########################################################################
+
     input_files.add_argument('--population-map',
-            default='../data/pop/{2}/{4}/{0}-{1:04d}-{2}-{3}-{4}.pop',
+            default='../data/pop/{2}/{4}/{5}/{0}-{1:04d}-{2}-{3}-{4}.pop',
             help='input file;' + hp.population_map)
 
-    input_files.add_argument('--population-space',
-            default='reference',
+    input_files.add_argument('--vb',
+            default='self',
             help=hp.population_space)
+
+    parser.add_argument('--diffeomorphism',
+            default='identity',
+            help="""Name of the diffeomorphisms to use.""")
 
 ########################################################################
 # Output arguments
@@ -168,6 +175,9 @@ def create_argument_parser():
             saved in the population map, and it will fit the model at
             all points within this mask. This default behaviour can, of
             course, be changed.""")
+
+    where_to_fit.add_argument('--mask',
+            help="""mask to use""")
 
     where_to_fit.add_argument('--ignore-mask',
             action='store_true',
@@ -306,8 +316,6 @@ from ...reference import ReferenceMaps
 
 from ...smodel import SignalModel, Result
 
-from ...pmap import PopulationMap, pmap_scanner, pmap_reference
-
 import pandas as pd
 
 import datetime
@@ -358,14 +366,14 @@ def call(args):
 
     layout_sdummy(df_layout, 'pop',
             template=args.population_map,
-            urname=args.population_space,
-            scale_type=args.scale_type,
+            urname=args.vb,
+            scale_type=args.diffeomorphism,
             strftime=args.strftime
             )
 
     layout_sdummy(df_layout, 'file',
             template=args.fit,
-            urname=args.population_space,
+            urname=args.diffeomorphism,
             scale_type=args.scale_type,
             strftime=args.strftime
             )
@@ -374,10 +382,14 @@ def call(args):
     # Respect the mask mask
     ####################################################################
 
-    mask = True
-
     if args.ignore_mask:
         mask = False
+    elif args.mask:
+        mask = args.mask
+    else:
+        mask = True
+
+    print('Mask: {}'.format(mask))
 
     ####################################################################
     # Fit at slice
@@ -422,7 +434,7 @@ def call(args):
                 file_ref = r.ref,
                 file_pop = r.pop,
 
-                vb                   = args.population_space,
+                vb                   = args.vb,
                 stimulus_block       = args.stimulus_block,
                 control_block        = args.control_block,
                 scale_type           = args.scale_type,
@@ -564,13 +576,13 @@ def wrapper(name, df, index, remove_lock, ignore_lock, force, skip,
     # Load or created population map from disk (as needed)
     ####################################################################
 
-    population_map = load_population_map(file_pop, name, df, index, vb, verbose)
+    population_map = load_population_map(file_pop, name, df, index, None, verbose)
     if lock.conditional_unlock(df, index, verbose):
         return
 
     if verbose:
-        print('{}: Population space is: {}'.format(name.name(),
-            population_map.diffeomorphism.vb))
+        print('{}: Diffeomorphism has been fitted via {}'.format(name.name(),
+            population_map.diffeomorphism.name))
 
     ########################################################################
     # Create signal model instance

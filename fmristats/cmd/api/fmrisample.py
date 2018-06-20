@@ -42,21 +42,28 @@ def create_argument_parser():
 # Input arguments
 ########################################################################
 
-# TODO: make population space optional, save ati in Sample and also the
-# cfactor field!!
+# TODO: make population space optional, save ati in Sample and also
+# save the cfactor field!!
 
     parser.add_argument('sample',
             help="""path where to save the sample""")
 
-    parser.add_argument('population_space',
-            help="""path to a population space""")
+    parser.add_argument('vb',
+            help="""path to an image in population space""")
 
-    parser.add_argument('population_ati',
-            help="""path to a population ATI reference""")
+    parser.add_argument('vb-background',
+            help="""path to a background image in population space""")
+
+    parser.add_argument('vb-ati',
+            help="""path to an ATI reference field in population space""")
 
     parser.add_argument('--fit',
             default='../data/fit/{2}/{4}/{5}/{0}-{1:04d}-{2}-{3}-{4}-{5}.fit',
             help='output file;' + hp.sfit)
+
+    parser.add_argument('--diffeomorphism',
+            default='ants',
+            help="""Name of the fitted diffeomorphisms.""")
 
     parser.add_argument('--scale-type',
             default='max',

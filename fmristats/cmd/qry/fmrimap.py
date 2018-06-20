@@ -80,6 +80,8 @@ from ...load import load
 
 from ...pmap import PopulationMap
 
+from ...smodel import Result
+
 from ...diffeomorphisms import Warp, Displacement
 
 import sys
@@ -107,6 +109,9 @@ def call(args):
     if type(x) is PopulationMap:
         x = x.diffeomorphism
 
+    if type(x) is Result:
+        x = x.population_map.diffeomorphism
+
     if args.index:
         index = tuple(np.array((
             args.first,
@@ -115,7 +120,7 @@ def call(args):
 
         if args.verbose:
             print(
-"""index: {}
+"""index (in RAS+): {}
 has coordinates in the domain: {}
 and coordinates in the image:  {}""".format(
                 index,
@@ -138,7 +143,7 @@ and coordinates in the image:  {}""".format(
                 domain_coordinate = x.reference.apply_to_index(domain_index)
             if args.verbose:
                 print(
-"""index: {}
+"""index (in RAS+): {}
 has coordinates in the domain: {}
 and coordinates in the image:  {}""".format(
                     domain_index,
@@ -150,7 +155,7 @@ and coordinates in the image:  {}""".format(
         else:
             if args.verbose:
                 print(
-"""index: {}
+"""index (in RAS+): {}
 has coordinates in the domain: {}
 and coordinates in the image:  {}""".format(
                     x.reference.inv().apply(coordinate),

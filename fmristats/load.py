@@ -83,7 +83,6 @@ def load_block_irritation(file, name, df, index, verbose=True):
             print('{}: Read: {}'.format(name.name(), file))
     except Exception as e:
         print('{}: Unable to read: {}'.format(name.name(), file))
-        #print('{}: Exception: {}'.format(name.name(), e))
         df.ix[index,'valid'] = False
         return
 
@@ -128,7 +127,6 @@ def load_session(file, name, df, index, verbose=True):
             print('{}: Read: {}'.format(name.name(), file))
     except Exception as e:
         print('{}: Unable to read: {}'.format(name.name(), file))
-        #print('{}: Exception: {}'.format(name.name(), e))
         df.ix[index,'valid'] = False
         return
 
@@ -174,7 +172,6 @@ def load_refmaps(file, name, df, index, verbose=True):
             print('{}: Read: {}'.format(name.name(), file))
     except Exception as e:
         print('{}: Unable to read: {}'.format(name.name(), file))
-        #print('{}: Exception: {}'.format(name.name(), e))
         df.ix[index,'valid'] = False
         return
 
@@ -220,11 +217,10 @@ def load_result(file, name, df, index, vb, verbose=True):
             print('{}: Read: {}'.format(name.name(), file))
     except Exception as e:
         print('{}: Unable to read: {}'.format(name.name(), file))
-        #print('{}: Exception: {}'.format(name.name(), e))
         df.ix[index,'valid'] = False
         return
 
-    if type(result) is Result and name.is_equal(result.population_map.name):
+    if type(result) is Result and name.is_equal(result.population_map.nb.name):
         if vb is None:
             if np.isnan(result.statistics).all():
                 df.ix[index,'valid'] = False
@@ -241,21 +237,24 @@ def load_result(file, name, df, index, vb, verbose=True):
                 else:
                     return result
             else:
-                df.ix[index,'valid'] = False
-                print("""{}: Result does not match:
-                Expected: {}
-                Found:    {}""".format(name.name(), vb, population_map.diffeomorphism.vb))
+                #df.ix[index,'valid'] = False
+                print("""{}: Warning: Name of population space in Result does not match expected:
+                    Expected: {}
+                    Found:    {}""".format(
+                        name.name(), vb, result.population_map.diffeomorphism.vb))
                 return result
     elif type(result) is Lock:
         df.ix[index,'valid'] = False
-        print('{}: Result is currently locked'.format(name.name()))
+        print('{}: Result file is locked'.format(name.name()))
         return result
     else:
         df.ix[index,'valid'] = False
-        print("""{}: Result does not match:
+        print("""{}: Name of the subject space does not match expected:
         Expected: {}
         Found:    {}""".format(name.name(), name.name(True), result.name.name(True)))
         return result
+
+# TODO: name checks in load_population_map for vb, nb, and name need update!
 
 def load_population_map(file, name, df, index, vb, verbose=True):
     """
@@ -286,7 +285,6 @@ def load_population_map(file, name, df, index, vb, verbose=True):
             print('{}: Read: {}'.format(name.name(), file))
     except Exception as e:
         print('{}: Unable to read: {}'.format(name.name(), file))
-        #print('{}: Exception: {}'.format(name.name(), e))
         df.ix[index,'valid'] = False
         return
 

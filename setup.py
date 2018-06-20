@@ -44,6 +44,7 @@ setup(
             # wrapper
             'fsl4prune = fmristats.cmd.wrp.fsl4prune:cmd',
             'fsl4pop   = fmristats.cmd.wrp.fsl4pop:cmd',
+            'ants4pop   = fmristats.cmd.wrp.ants4pop:cmd',
 
             # import from third party formats
             'mat2irr = fmristats.cmd.imp.mat2irr:cmd',

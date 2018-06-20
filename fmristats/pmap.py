@@ -48,34 +48,54 @@ class PopulationMap:
     Parameters
     ----------
     diffeomorphism : subclass of Diffeomorphism
-        The diffeomorphism ψ that maps from each point in the data field
-        of the template brain to the subject reference space of an FMRI
-        session.
-    template : None, Image or ndarray
-        A template image in population space.
-    template_mask : None, Image or ndarray
-        A template mask image in population space. By default the
-        template mask image will be used in many operations. The idea:
-        You provide a detailed image, say also containing skull, in
-        template but only the brain as in the template mask image.
-    target : None, Image or ndarray
-        A target image in population space.
+        The diffeomorphism ψ that maps from vb (the population space) to
+        nb (the subject space).
+    vb : None, Image or ndarray
+        An image in population space.
+    nb : None, Image or ndarray
+        An image in subject space.
+    vb_background : None, Image or ndarray
+        An image in population space.
+    nb_background : None, Image or ndarray
+        An image in subject space.
+    vb_estimate : None, Image or ndarray
+        An image in population space.
+    nb_estimate : None, Image or ndarray
+        An image in subject space.
 
     Notes
     -----
-    If template is an Image, it will be checked whether its reference
-    agrees with the reference of the diffeomorphism.  If template is an
-    ndarray, it must be equal to the shape stored with the
-    diffeomorphism, as it will then be assumed that they share the same
-    reference: the template's reference will be set identical to the
-    reference of the diffeomorphism.
+    If vb (or any of the other arguments) is an Image, it will be
+    checked whether its *reference affine* agrees with the reference
+    affine of the diffeomorphism ψ.  If vb is an ndarray, its shape must
+    be equal to the shape of the diffeomorphism, as it will then be
+    assumed that they share the same reference affine: the vb's
+    reference will be set identical to the reference of the
+    diffeomorphism.
 
     If the software which has been used to fit the diffeomorphism
-    creates a warped image of its input, it may be stored in `target`.
+    creates a warped images of its inputs, they can be stored in
+    `vb_estimate` and `nb_estimate` respectively.
+
+    Naming convetions for images in `vb` and `nb` seem to be
+    non-existant, ranging from `input`, `target`, `template`,
+    `reference`, `moving`, `fixed`, and more: Although the induitive
+    meaning of what these images shall represent is typically clear from
+    teh context, the question which of these images live in `vb` or `nb`
+    is not clear and ambigious at best. When fitting a diffeomorphism
+    providing the algorithm with the arguments `reference` and `input`
+    (FNIRT) or `fixed` and `moving` (ANTS): does the diffeomorphism go
+    from `reference` to `input` or vice versa?
     """
 
-    def __init__(self, diffeomorphism, template=None,
-            template_mask=None, target=None, metadata=None):
+    def __init__(self, diffeomorphism,
+            vb=None,
+            nb=None,
+            vb_background=None,
+            nb_background=None,
+            vb_estimate=None,
+            nb_estimate=None,
+            name=None):
 
         assert issubclass(type(diffeomorphism), Diffeomorphism), \
                 'diffeomorphism must be a subclass of Diffeomorphism'
@@ -83,127 +103,190 @@ class PopulationMap:
                 'nb of diffeomorphism must be Identifier'
 
         self.diffeomorphism = diffeomorphism
-        self.name = self.diffeomorphism.nb
+        self.name = name
 
-        if template:
-            self.set_template(template=template)
+        if vb:
+            self.set_vb(image=vb)
 
-        if template_mask:
-            self.set_template_mask(template_mask=template_mask)
+        if vb_background:
+            self.set_vb_background(image=vb_background)
 
-        if target:
-            self.set_target(target=target)
+        if vb_estimate:
+            self.set_vb_estimate(image=vb_estimate)
 
-        self.metadata = metadata
+        if nb:
+            self.set_nb(image=nb)
 
-    def set_template(self, template):
+        if nb_background:
+            self.set_nb_background(image=nb_background)
+
+        if nb_estimate:
+            self.set_nb_estimate(image=nb_estimate)
+
+    def set_vb(self, image):
         """
-        Set or reset template image
+        Set or reset the image in vb
 
         Parameters
         ----------
-        template : Image or ndarray
-            The data array.
+        image : Image or ndarray
+            The image or data array.
 
         Notes
         -----
-        If template is an Image, it will be checked whether its
-        reference agrees with the reference of the diffeomorphism.  If
-        template is an ndarray, it must be equal to the shape stored
-        with the diffeomorphism, as it will then be assumed that they
-        share the same reference: the template's reference will be set
-        identical to the reference of the diffeomorphism.
+        If image is an Image, it will be checked whether its reference
+        agrees with the reference of the diffeomorphism.  If image is an
+        ndarray, it must be equal to the shape stored with the
+        diffeomorphism, as it will then be assumed that they share the
+        same reference: the image's reference will be set identical to
+        the reference of the diffeomorphism.
         """
-        assert template.shape == self.diffeomorphism.shape, \
-                'shapes of template and diffeomorphism must match'
+        assert image.shape == self.diffeomorphism.shape, \
+                'shapes of image and diffeomorphism must match'
 
-        if type(template) is Image:
-            assert isclose(template.reference, self.diffeomorphism.reference), \
-                    'references of template and diffeomorphism must match'
-            template.reference = self.diffeomorphism.reference
-            self.template = template
+        if type(image) is Image:
+            assert isclose(image.reference, self.diffeomorphism.reference), \
+                    'references of image and diffeomorphism must match'
+            image.reference = self.diffeomorphism.reference
+            self.vb = image
         else:
-            self.template = Image(
+            self.vb = Image(
                     reference=self.diffeomorphism.reference,
-                    data=template,
+                    data=image,
                     name=self.diffeomorphism.vb)
 
-    def set_template_mask(self, template_mask):
+    def set_vb_background(self, image):
         """
-        Set or reset template mask image
+        Set or reset the background image in vb
 
         Parameters
         ----------
-        template_mask : Image or ndarray
-            The data array.
+        image : Image or ndarray
+            The image or data array.
 
         Notes
         -----
-        If template_mask is an Image, it will be checked whether its
-        reference agrees with the reference of the diffeomorphism.  If
-        template_mask is an ndarray, it must be equal to the shape
-        stored with the diffeomorphism, as it will then be assumed that
-        they share the same reference: the template_mask's reference
-        will be set identical to the reference of the diffeomorphism.
+        If image is an Image, it will be checked whether its reference
+        agrees with the reference of the diffeomorphism.  If image is an
+        ndarray, it must be equal to the shape stored with the
+        diffeomorphism, as it will then be assumed that they share the
+        same reference: the image's reference will be set identical to
+        the reference of the diffeomorphism.
         """
-        assert template_mask.shape == self.diffeomorphism.shape, \
-                'shapes of template_mask and diffeomorphism must match'
+        assert image.shape == self.diffeomorphism.shape, \
+                'shapes of image and diffeomorphism must match'
 
-        if type(template_mask) is Image:
-            assert isclose(template_mask.reference, self.diffeomorphism.reference), \
-                    'references of template_mask and diffeomorphism must match'
-            template_mask.reference = self.diffeomorphism.reference
-            self.template_mask = template_mask
+        if type(image) is Image:
+            assert isclose(image.reference, self.diffeomorphism.reference), \
+                    'references of image and diffeomorphism must match'
+            image.reference = self.diffeomorphism.reference
+            self.vb_background = image
         else:
-            self.template_mask = Image(
+            self.vb_background = Image(
                     reference=self.diffeomorphism.reference,
-                    data=template_mask,
+                    data=image,
                     name=self.diffeomorphism.vb)
 
-    def set_target(self, target):
+    def set_vb_estimate(self, image):
         """
-        Set or reset target image
+        Set or reset the estimate for the image in vb
 
         Parameters
         ----------
-        target : Image or ndarray, shape (x,y,z)
-            The data array.
+        image : Image or ndarray
+            The image or data array.
 
         Notes
         -----
-        If target is an Image, it will be checked whether its
-        reference agrees with the reference of the diffeomorphism.  If
-        target is an ndarray, it must be equal to the shape stored
-        with the diffeomorphism, as it will then be assumed that they
-        share the same reference: the target's reference will be set
-        identical to the reference of the diffeomorphism.
+        If image is an Image, it will be checked whether its reference
+        agrees with the reference of the diffeomorphism.  If image is an
+        ndarray, it must be equal to the shape stored with the
+        diffeomorphism, as it will then be assumed that they share the
+        same reference: the image's reference will be set identical to
+        the reference of the diffeomorphism.
         """
-        assert target.shape == self.diffeomorphism.shape, \
-                'shapes of target and diffeomorphism must match'
+        assert image.shape == self.diffeomorphism.shape, \
+                'shapes of image and diffeomorphism must match'
 
-        if type(target) is Image:
-            assert isclose(target.reference, self.diffeomorphism.reference), \
-                    'references of target and diffeomorphism must match'
-            target.reference = self.diffeomorphism.reference
-            self.target = target
+        if type(image) is Image:
+            assert isclose(image.reference, self.diffeomorphism.reference), \
+                    'references of image and diffeomorphism must match'
+            image.reference = self.diffeomorphism.reference
+            self.vb_estimate = image
         else:
-            self.target = Image(
+            self.vb_estimate = Image(
                     reference=self.diffeomorphism.reference,
-                    data=target,
+                    data=image,
                     name=self.diffeomorphism.vb)
+
+    def set_nb(self, image):
+        """
+        Set or reset the image in nb
+
+        Parameters
+        ----------
+        image : Image or ndarray
+            The image or data array.
+        """
+        assert type(image) is Image, 'image must by an Image'
+        self.nb = image
+
+    def set_nb_background(self, image):
+        """
+        Set or reset the background image in nb
+
+        Parameters
+        ----------
+        image : Image or ndarray
+            The image or data array.
+        """
+        assert type(image) is Image, 'image must by an Image'
+        self.nb_background = image
+
+    def set_nb_estimate(self, image):
+        """
+        Set or reset the estimate of the image in nb
+
+        Parameters
+        ----------
+        image : Image or ndarray
+            The image or data array.
+        """
+        assert type(image) is Image, 'image must by an Image'
+        self.nb_estimate = image
 
     def describe(self):
         description = """
-            Available images in population space
-            ------------------------------------
-            Template:      {}
-            Template mask: {}
-            Target:        {}
-        """
+        Population map
+        --------------
+        name:          {:s}
+        vb:            {:s}
+        nb:            {:s}
+        vb_background: {:s}
+        nb_background: {:s}
+        vb_estimate:   {:s}
+        nb_estimate:   {:s}"""
+        if hasattr(self, 'vb'):
+            vb = self.vb.name
+        else: vb = '--'
+        if hasattr(self, 'nb'):
+            nb = self.nb.name.name()
+        else: vb = '--'
+        if hasattr(self, 'vb_background'):
+            vb_background = self.vb_background.name
+        else: vb_background = '--'
+        if hasattr(self, 'nb_background'):
+            nb_background = self.nb_background.name
+        else: nb_background = '--'
+        if hasattr(self, 'vb_estimate'):
+            vb_estimate = self.vb_estimate.name
+        else: vb_estimate = '--'
+        if hasattr(self, 'nb_estimate'):
+            nb_estimate = self.nb_estimate.name
+        else: nb_estimate = '--'
         return description.format(
-                hasattr(self, 'template'),
-                hasattr(self, 'template_mask'),
-                hasattr(self, 'target'),
+                self.name,
+                vb, nb, vb_background, nb_background, vb_estimate, nb_estimate,
                 )
 
     def save(self, file, **kwargs):
@@ -265,10 +348,11 @@ def pmap_scanner(session):
     diffeomorphism = Identity(
             reference=session.reference,
             shape=session.shape,
-            vb='scanner',
-            nb=session.name)
+            vb=session.name.name(),
+            nb=session.name,
+            name='scanner')
 
-    return PopulationMap(diffeomorphism)
+    return PopulationMap(diffeomorphism, name='self')
 
 def pmap_reference(session, resolution=2.):
     """
@@ -299,7 +383,7 @@ def pmap_reference(session, resolution=2.):
 
     It only makes sense, though, to set the population space equal to
     the coordinate system of the FMRI session, if this space is indeed
-    *close* to the subject reference space of the FMRI session This may
+    *close* to the subject reference space of the FMRI session. This may
     be archived by calling the :func:`reset_reference_space` attribute
     of the session first. .
 
@@ -318,10 +402,11 @@ def pmap_reference(session, resolution=2.):
     diffeomorphism = Identity(
             reference=reference,
             shape=shape,
-            vb='reference',
-            nb=session.name)
+            vb=session.name.name(),
+            nb=session.name,
+            name='identity')
 
-    return PopulationMap(diffeomorphism)
+    return PopulationMap(diffeomorphism, name='self')
 
 def pmap_scan(session, scan_cycle):
     """
@@ -358,7 +443,8 @@ def pmap_scan(session, scan_cycle):
             reference=session.reference,
             affine=session.scan_inverses[scan_cycle],
             shape=session.shape,
-            vb='reference',
-            nb=session.name)
+            vb=session.name.name(),
+            nb=session.name,
+            name='cycle{:d}'.format(scan_cycle))
 
-    return PopulationMap(diffeomorphism)
+    return PopulationMap(diffeomorphism, name='self')
