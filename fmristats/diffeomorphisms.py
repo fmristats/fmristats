@@ -191,6 +191,9 @@ class Diffeomorphism:
         with open(file, 'wb') as output:
             pickle.dump(self, output, **kwargs)
 
+    def __str__(self):
+        return self.describe()
+
 class Identity(Diffeomorphism):
     """
     The identity diffeomorphism ψ.
@@ -410,11 +413,13 @@ class Image(Identity):
         str
         """
         description = """
+        Name: {}
         Shape: {}
         Volume of one pixel: {:.2f}
         Volume of image: {:.2f}
         """
         return description.format(
+                self.name,
                 self.shape,
                 self.reference.volume(),
                 self.volume())

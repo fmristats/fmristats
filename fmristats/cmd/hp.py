@@ -92,8 +92,22 @@ verbose = """increase output verbosity."""
 
 quite = """do not be verbose."""
 
+skip = """do not create or fit anything"""
+
 force = """by default {} files will not be overwritten but parsed
-instead.  This will force to re-create any of these files."""
+instead.  This will force to recreate any files."""
+
+ignore_lock = """ignore whether a file has been locked by a different
+program. Only use this if orphans exists, and you now for sure no other
+program is running that may have looked the respected files. Together
+with --skip this may be used to delete orphan lock files. Short -is"""
+
+remove_lock = """removes the lock."""
+
+# are these old?
+
+delete_invalid = """delete all {} files which entries in the protocol
+which are marked as invalid."""
 
 conditional_force = """by default {} files will not be overwritten but
 parsed instead.  This will force to re-create any of files on which
@@ -105,22 +119,6 @@ instead.  This will force to re-create any of these files."""
 remove = """by default {} files will not be overwritten but parsed
 instead.  This will force to re-create any of these files."""
 
-skip = """do not create or fit anything"""
-
-ignore_lock = """You can either ignore the lock, remove the lock, or
-respect the lock.  Respect the lock: skip protocol entry. Remove the
-lock, removes the lock and skips the protocol entry.
-
-
-ignore whether a file has been locked by a different
-program. Only use this if orphans exists, and you now for sure no other
-program is running that may have looked the respected files. Together
-with --skip this may be used to delete orphan lock files. Short -is"""
-
-delete_invalid = """delete all {} files which entries in the protocol
-which are marked as invalid"""
-
-remove_lock = """remove lock"""
 
 ########################################################################
 # Arguments specific for using the protocol API

@@ -86,7 +86,9 @@ from ... import load
 
 from ...diffeomorphisms import Image
 
-from ...fit import fit_field, extract_field
+from ...ati import fit_field, extract_field
+
+import pandas as pd
 
 import numpy as np
 
@@ -99,7 +101,7 @@ def call(args):
     assert type(img) is Image
 
     if args.verbose > 1:
-        print(img.describe())
+        print(img)
 
     if args.name:
         name = args.name
@@ -107,7 +109,7 @@ def call(args):
         name = img.name
 
     if not args.ignore_mask:
-        img = img.mask(img.get_mask())
+        img.mask()
 
     coordinates = img.coordinates()
     coordinates.shape
@@ -154,6 +156,3 @@ def call(args):
             result.name, time_spend / 60))
         print('{}: Time needed for the fit: {:.2f} h'  .format(
             result.name, time_spend / 60**2))
-
-    # TODO: test result.mask(img.to_mask()) should have no effect
-    # mytest = np.isfinite(result.statistics).all(axis=(-1,-2))

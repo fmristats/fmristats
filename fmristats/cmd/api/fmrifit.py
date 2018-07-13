@@ -230,7 +230,11 @@ def create_argument_parser():
 ########################################################################
 
     handling = parser.add_argument_group(
-            """file handling""")
+            """file handling""",
+            """You can either ignore the lock, remove the lock, or
+            respect the lock of a file. If you choose to respect the
+            lock (default), then protocol entries that are locked will
+            be skipped.""")
 
     lock_handling = handling.add_mutually_exclusive_group()
 
