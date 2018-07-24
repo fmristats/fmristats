@@ -51,11 +51,14 @@ def create_argument_parser():
     parser.add_argument('vb',
             help="""path to an image in population space""")
 
-    parser.add_argument('vb-background',
+    parser.add_argument('vb_background',
             help="""path to a background image in population space""")
 
-    parser.add_argument('vb-ati',
+    parser.add_argument('vb_ati',
             help="""path to an ATI reference field in population space""")
+
+    parser.add_argument('--vb-name',
+            help="""name if different to the name saved in vb""")
 
     parser.add_argument('--fit',
             default='../data/fit/{2}/{4}/{5}/{0}-{1:04d}-{2}-{3}-{4}-{5}.fit',
@@ -158,18 +161,30 @@ from os.path import isfile, isdir, join
 def call(args):
 
     try:
-        population_space = load(args.population_space)
+        vb = load(args.vb)
     except Exception as e:
-        print('Unable to read: {}'.format(args.population_space))
+        print('Unable to read: {}'.format(args.vb))
         print('Exception: {}'.format(e))
         exit()
 
     try:
-        population_ati = load(args.population_ati)
+        vb_background = load(args.vb_background)
     except Exception as e:
-        print('Unable to read: {}'.format(args.population_space))
+        print('Unable to read: {}'.format(args.vb_background))
         print('Exception: {}'.format(e))
         exit()
+
+    try:
+        vb_ati = load(args.vb_ati)
+    except Exception as e:
+        print('Unable to read: {}'.format(args.vb_ati))
+        print('Exception: {}'.format(e))
+        exit()
+
+    if args.vb_name is None:
+        vb_name = vb.name
+    else:
+        vb_name = args.vb_name
 
     ####################################################################
 
@@ -198,7 +213,8 @@ def call(args):
 
     layout_sdummy(df_layout, 'file',
             template=args.fit,
-            urname=population_space.name,
+            #urname=vb_name,
+            urname=args.diffeomorphism,
             scale_type=args.scale_type,
             strftime=args.strftime
             )
@@ -211,7 +227,7 @@ def call(args):
         if args.verbose:
             print('Create population sample…'.format(args.sample))
 
-        statistics = np.empty(population_space.shape + (2,len(df),))
+        statistics = np.empty(vb.shape + (3,len(df),))
         statistics [ ... ] = np.nan
 
         for r in df_layout.itertuples():
@@ -222,16 +238,19 @@ def call(args):
                     df               = df,
                     index            = r.Index,
                     file             = r.file,
-                    population_space = population_space,
-                    population_ati   = population_ati,
+                    vb               = vb,
+                    vb_ati           = vb_ati,
+                    vb_name          = vb_name,
                     statistics       = statistics,
                     verbose          = args.verbose,
                     )
 
         sample = Sample(
-                population_space = population_space,
-                covariates = df,
-                statistics = statistics)
+                vb            = vb,
+                vb_background = vb_background,
+                vb_ati        = vb_ati,
+                covariates    = df,
+                statistics    = statistics)
 
         sample = sample.filter()
 
@@ -247,7 +266,7 @@ def call(args):
 
     if args.verbose:
         print('Description of the population space:')
-        print(sample.population_space.describe())
+        print(sample.vb.describe())
         print('Description of the sample:')
         print(sample.describe())
 
@@ -266,21 +285,20 @@ def call(args):
 
 ########################################################################
 
-def wrapper(name, df, index, file, population_space, population_ati,
+def wrapper(name, df, index, file, vb, vb_ati, vb_name,
         statistics, verbose):
 
-    result = load_result(file, name, df, index, population_space.name, verbose)
+    result = load_result(file, name, df, index, vb_name, verbose)
 
     if not df.ix[index,'valid']:
         return
 
     intercept = result.get_field('intercept','point')
-    c = population_ati.data / intercept.data
+    c = vb_ati.data / intercept.data
 
     beta = result.get_field('task','point')
     beta_stderr = result.get_field('task','stderr')
 
     statistics[...,0,index] = c*beta.data
-    statistics[...,1,index] = (c*beta_stderr.data)**2
-
-    #statistics[...,2,index] = c
+    statistics[...,1,index] = c*beta_stderr.data
+    statistics[...,2,index] = c

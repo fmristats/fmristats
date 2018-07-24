@@ -37,22 +37,30 @@ class Sample:
     """
     Sampled activation fields of a FMRI study
     """
-    def __init__(self, population_space, covariates, statistics):
+    def __init__(self, vb, vb_background, vb_ati, covariates, statistics):
         """
         Parameters
         ----------
-        population_space : Image
+        vb : Image
+        vb_background : Image
+        vb_ati : Image
         covariates : DataFrame
         statistics : ndarray, shape (…,3)
         """
-        assert type(population_space) is Image, 'population_space must be of type Image'
-        self.population_space = population_space
+        assert type(vb) is Image, 'vb must be of type Image'
+        self.vb = vb
+
+        assert type(vb_background) is Image, 'vb_background must be of type Image'
+        self.vb_background = vb_background
+
+        assert type(vb_ati) is Image, 'vb_ati must be of type Image'
+        self.vb_ati = vb_ati
 
         assert type(covariates) is DataFrame
         covariates.reset_index(inplace=True, drop=True)
         self.covariates = covariates
 
-        assert statistics.shape == population_space.shape + (2,len(covariates))
+        assert statistics.shape == vb.shape + (3,len(covariates))
         self.statistics = statistics
 
     def filter(self, b=None):
@@ -72,9 +80,18 @@ class Sample:
             covariates = self.covariates.iloc[b]
 
         return Sample(
-                population_space = self.population_space,
+                vb               = self.vb,
+                vb_background    = self.vb_background,
+                vb_ati           = self.vb_ati,
                 covariates       = covariates.ix[b],
                 statistics       = self.statistics[...,b])
+
+    def at_index(self, index):
+
+        df = self.covariates.copy()
+        df['task'] = self.statistics[index[0],index[1],index[2],0]
+        df['stderr'] = self.statistics[index[0],index[1],index[2],1]
+        return df
 
     ###################################################################
     # Description
@@ -107,3 +124,6 @@ No. of samples: {:d}
         """
         with open(file, 'wb') as output:
             pickle.dump(self, output, **kwargs)
+
+    def __str__(self):
+        return self.describe()

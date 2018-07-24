@@ -114,6 +114,10 @@ def meta_analysis(y, d):
         Knapp-Hartung adjusted t-test statistic
     λ : float
         The heterogeneity.
+    adj_stderr : float
+        The adjusted standard error of the location estimator
+    rdf : int
+        Residual degrees of freedom
 
     Notes
     -----
@@ -130,8 +134,9 @@ def meta_analysis(y, d):
     b   = (w * y).sum() / w.sum()
     rdf = len(y) - 1
     adj = _qprofile_analysis(h=h,y=y,d=d) / rdf
-    t = b / np.sqrt(v * adj)
-    return b, t, h, rdf
+    adj_stderr = np.sqrt(v * adj)
+    t = b / adj_stderr
+    return b, t, h, adj_stderr, rdf
 
 def meta_regression(y, d, x):
     """
@@ -157,6 +162,10 @@ def meta_regression(y, d, x):
         Knapp-Hartung adjusted t-test statistic
     λ : float
         The heterogeneity.
+    adj_stderr : float
+        The adjusted standard error of the location estimator
+    rdf : int
+        Residual degrees of freedom
     """
     h   = hedge_type_estimator(y,d,x)
     fit = sm.WLS(y, x, weights=1/(h+d)).fit()
@@ -164,8 +173,9 @@ def meta_regression(y, d, x):
     b   = fit.params
     rdf = fit.df_resid
     adj = _qprofile_regression(h=h,y=y,d=d,x=x) / rdf
-    t   = b / (v * np.sqrt(adj))
-    return b, t, h, rdf
+    adj_stderr = v * np.sqrt(adj)
+    t   = b / adj_stderr
+    return b, t, h, adj_stderr, rdf
 
 def fit_field(obs, design=None, mask=None):
     """
@@ -176,7 +186,7 @@ def fit_field(obs, design=None, mask=None):
 
     Parameters
     ----------
-    obs : ndarray, shape 5D-image
+    obs : ndarray, shape (x,y,z,3,n)
         The observations.
     mask : ndarray, shape 3D-image
         A mask where to fit the field
@@ -190,9 +200,11 @@ def fit_field(obs, design=None, mask=None):
     if design is None:
         df = obs.shape[-1] - 1
         p  = 1
+        parameter_names = ['intercept']
     else:
         df = -np.diff(design.shape)
         p  = design.shape[1]
+        parameter_names = ['intercept']
 
     assert obs.shape[-1] > p+1, 'model not identifiable, too many parameters to fit'
     assert obs.shape[-1] > df, 'model not identifiable, too many parameters to fit'
@@ -233,19 +245,23 @@ def fit_field(obs, design=None, mask=None):
         if design is None:
             print("  … a meta analysis will be performed")
             for v in it:
-                b, t, h, r = meta_analysis(y=v[0], d=v[1])
+                b, t, h, adj_stderr, r = meta_analysis(y=v[0], d=v[1]**2)
                 v[0,0] = b
-                v[1,0] = t
+                v[1,0] = adj_stderr
+                v[2,0] = t
                 v[0,1] = h
                 v[1,1] = r
+                v[2,1] = np.nan
         else:
             print("  … a meta regression will be performed")
             for v in it:
-                b, t, h, r = meta_regression(y=v[0], d=v[1], x=design)
+                b, t, h, adj_stderr, r = meta_regression(y=v[0], d=v[1]**2, x=design)
                 v[0,:p] = b
-                v[1,:p] = t
-                v[0,p] = h
-                v[1,p] = r
+                v[1,:p] = adj_stderr
+                v[2,:p] = t
+                v[0,p]  = h
+                v[1,p]  = r
+                v[2,p]  = np.nan
     else:
         if design is None:
             print("  … a meta analysis will be performed")
@@ -256,11 +272,13 @@ def fit_field(obs, design=None, mask=None):
                 d=v[1,sampled]
 
                 if (sampled).sum() > max(p+1,df):
-                    b, t, h, r = meta_analysis(y=v[0], d=v[1])
+                    b, t, h, adj_stderr, r = meta_analysis(y=v[0], d=v[1]**2)
                     v[0,0] = b
-                    v[1,0] = t
+                    v[1,0] = adj_stderr
+                    v[2,0] = t
                     v[0,1] = h
                     v[1,1] = r
+                    v[2,1] = np.nan
                 else:
                     v[...] = np.nan
         else:
@@ -273,16 +291,18 @@ def fit_field(obs, design=None, mask=None):
                 x=design[sampled]
 
                 if (sampled).sum() > max(p+1,df):
-                    b, t, h, r = meta_regression(y=v[0], d=v[1], x=x)
+                    b, t, h, adj_stderr, r = meta_regression(y=v[0], d=v[1]**2, x=x)
                     v[0,:p] = b
-                    v[1,:p] = t
-                    v[0,p] = h
-                    v[1,p] = r
+                    v[1,:p] = adj_stderr
+                    v[2,:p] = t
+                    v[0,p]  = h
+                    v[1,p]  = r
+                    v[2,p]  = np.nan
                 else:
                     v[...] = np.nan
 
-    result = np.zeros(mask.shape + (2,p+1,))
+    result = np.zeros(mask.shape + (3,p+1,))
     result[...] = np.nan
     result[mask] = res[...,:p+1]
 
-    return result
+    return result, p, parameter_names

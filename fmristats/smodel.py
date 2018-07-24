@@ -466,16 +466,15 @@ class SignalModel:
         return mask
 
 
-    # TODO: update description!
-
     def create_estimation_matrix(self, mask=True, verbose=True):
         """
         Parameters
         ----------
         mask : None or bool or str or ndarray, dtype: bool
-            string can be one of 'template_mask', 'template',
-            'foreground', or 'target'. None defaults to 'data'. True will
-            take precendence:  'template_mask'> 'template'> 'foreground'.
+            string can be one of 'vb', 'vb_background',
+            'foreground', or 'vb_estimate'. None defaults to 'data'. True will
+            take precendence:
+                'vb'> 'vb_background'> 'vb_estimate' > 'foreground'.
         verbose : bool
             increase output verbosity
 

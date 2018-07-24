@@ -27,9 +27,15 @@ from .sample import Sample
 
 from .meta import fit_field
 
+from .diffeomorphisms import Image
+
 from patsy import dmatrix
 
 import numpy as np
+
+from scipy.stats.distributions import t
+
+import pandas as pd
 
 import pickle
 
@@ -45,7 +51,7 @@ class PopulationModel:
     exog : ndarray
         If None, will be created from formula_like
         Directly specifying a design matrix, i.e., providing exog
-        will take presendence from the formula interface.
+        will take precedence from the formula interface.
     mask : None, bool, ndarray, or str
         If False or None, the population model will be fitted only
         at points, at which the population model is identifiable.
@@ -60,25 +66,41 @@ class PopulationModel:
     def __init__(self, sample, formula_like=None, exog=None, mask=True):
         assert type(sample) is Sample, 'sample must be of type Sample'
 
+        self.sample     = sample
         self.covariates = sample.covariates
         self.statistics = sample.statistics
-        self.population_space = sample.population_space
 
         if (formula_like is not None) and (exog is None):
             exog = np.asarray(dmatrix(
                 formula_like=formula_like,
                 data=self.covariates))
 
+        datamask = np.isfinite(self.statistics).all(axis=(-1,-2))
+
         if mask is True:
-            mask = 'template'
+            mask = 'vb'
 
         if type(mask) is str:
-            if mask == 'template':
-                mask = self.population_space.get_mask()
-            elif mask == 'sample':
-                mask = np.isfinite(self.statistics).all(axis=(-1,-2))
+            if mask == 'vb':
+                mask = self.sample.vb.get_mask()
+                massname = 'template (vb)'
+            elif mask == 'vb_background':
+                mask = self.sample.vb_background.get_mask()
+                maskname = 'template background (vb_background)'
+            elif mask == 'vb_estimate':
+                mask = self.sample.vb_estimate.get_mask()
+                maskname = 'template estimate (vb_estimate)'
+            else:
+                mask = datamask
+                maskname = 'data mask (foreground/background)'
 
-        assert mask.any(), 'mask is empty, i.e., there exists no valid pixels in this mask'
+        assert mask.any(), 'mask is empty, i.e., there exist no valid pixels in this mask'
+
+        if mask is not None:
+            assert type(mask) is np.ndarray, 'mask must be an ndarray'
+            assert mask.dtype == bool, 'mask must be of dtype bool'
+            assert mask.shape == datamask.shape, 'shape of mask and image must match'
+            mask = mask & datamask
 
         self.formula_like = formula_like
         self.exog = exog
@@ -88,16 +110,13 @@ class PopulationModel:
         """
         Fit the population model to data
         """
-        statistics = fit_field(
+        statistics, p, parameter_names = fit_field(
                 obs=self.statistics,
                 design=self.exog,
                 mask=self.mask)
 
-        return MetaResult(
-                statistics=statistics,
-                formula_like=self.formula_like,
-                exog=self.exog,
-                population_space=self.population_space)
+        return MetaResult(statistics=statistics, model=self, p=p,
+                parameter_names=parameter_names)
 
     ####################################################################
     # Save instance to and from disk
@@ -118,24 +137,46 @@ class PopulationModel:
             pickle.dump(self, output, **kwargs)
 
 class MetaResult:
-    def __init__(self, statistics, formula_like, exog, population_space):
+
+    def __init__(self, statistics, model, p, parameter_names):
         self.statistics = statistics
-        self.formula = formula_like
-        self.exog = exog
-        self.population_space = population_space
-        self.reference = population_space.reference
+        self.model      = model
+        self.p          = p
+        self.parameter_names = parameter_names
 
-    def get_activation_patterns(self):
-        return np.moveaxis(self.statistics[...,0,:-1], -1, 0)
+    def get_parameter(self):
+        f = np.moveaxis(self.statistics[...,0,:-1], -1, 0)
+        return Image(data=f[p], reference=self.model.sample.vb.reference)
 
-    def get_tvalues(self):
-        return np.moveaxis(self.statistics[...,1,:-1], -1, 0)
+    def get_tstatistic(self, p=0):
+        f = np.moveaxis(self.statistics[...,2,:-1], -1, 0)
+        return Image(data=f[p], reference=self.model.sample.vb.reference)
 
-    def get_heterogeneities(self):
-        return self.statistics[...,0,-1]
+    def get_heterogeneity(self):
+        f = self.statistics[...,0,-1]
+        return Image(data=f, reference=self.model.sample.vb.reference)
 
-    def get_degrees_of_freedom(self):
-        return self.statistics[...,1,-1]
+    def get_degree_of_freedom(self):
+        f = self.statistics[...,1,-1]
+        return Image(data=f, reference=self.model.sample.vb.reference)
+
+    def at_index(self, index):
+        # TODO: also add a stderr to the h-estimate (Knapp-Hartung!)
+
+        x  = self.statistics[index]
+        tstatistics = x[2,:self.p]
+        df = x[1,-1]
+        pvalues = 1 - t.cdf(tstatistics, df=df)
+
+        df = pd.DataFrame({
+            'parameter' : self.parameter_names + ['heterogeneity'],
+            'point'     : x[0],
+            'stderr'    : np.hstack((x[1,:self.p], np.nan)),
+            'tstatistic': np.hstack((tstatistics, np.nan)),
+            'df'        : df,
+            'pvalue'    : np.hstack((pvalues,np.nan))})
+
+        return df
 
     ####################################################################
     # Save instance to and from disk
