@@ -152,7 +152,7 @@ def fit_warpcoef(nb_file, warpcoef_file, preimage_file=None,
         return False
 
 def warpcoef2pmap(warpcoef_file, vb_file, vb_name, nb_file, nb_name,
-        vb=None, name='fnirt', cpopulation_file, csubject_file,
+        cpopulation_file, csubject_file, vb=None, name='fnirt',
         cmd='fsl5.0-std2imgcoord'):
     """
     Run FSL's img2stdcoord to turn the warp coefficient file produced by

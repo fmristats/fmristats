@@ -65,7 +65,7 @@ def create_argument_parser():
 
     parser.add_argument('--population-space',
             default='fnirt',
-            help='output name;' + hp.population_space_name)
+            help='output name;' + hp.vb_name)
 
     parser.add_argument('--image',
             default='../data/vbs/{}.image',

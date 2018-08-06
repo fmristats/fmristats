@@ -473,8 +473,8 @@ class SignalModel:
         mask : None or bool or str or ndarray, dtype: bool
             string can be one of 'vb', 'vb_background',
             'foreground', or 'vb_estimate'. None defaults to 'data'. True will
-            take precendence:
-                'vb'> 'vb_background'> 'vb_estimate' > 'foreground'.
+            take precendence: 'vb'> 'vb_background'> 'vb_estimate' >
+            'foreground'.
         verbose : bool
             increase output verbosity
 
