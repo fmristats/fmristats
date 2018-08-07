@@ -88,6 +88,8 @@ class ReferenceMaps:
                     data=session.data,
                     reference=session.reference)
 
+        self.reference = session.reference
+
         self.semi_axis_norms = w
 
         self.set_scan_references(scan_references=scan_references)
@@ -137,7 +139,7 @@ class ReferenceMaps:
 
     def reset_reference_space(self, x=None, cycle=None):
         """
-        This will reset the reference space
+        This will reset the coordinates system of the reference space
 
         Parameters
         ----------
@@ -148,12 +150,12 @@ class ReferenceMaps:
 
         Notes
         -----
-        This will reset the reference space by moving origin and base
-        vectors to the new position specified by the affine
-        transformation x.  The affine transformation goes **from this**
-        reference space **to the new** reference. If the affine
-        transformation has the form Ax+b, then b is the new origin and A
-        defines the new orientation.
+        This will reset the coordinates system of the reference space by
+        moving origin and base vectors to the new position specified by
+        the affine transformation x.  The affine transformation goes
+        **from this** reference space **to the new** reference. If the
+        affine transformation has the form Ax+b, then b is the new
+        origin and A defines the new orientation.
 
         If x=None, then x will be set to the mean of the scan
         references.
@@ -166,8 +168,9 @@ class ReferenceMaps:
 
             ρ'_t = x ∘ ρ_t
 
-        A warning: this makes all population maps which have been
-        defined for this reference space obsolete.
+        **Warning**: this makes all population maps which have been
+        defined for this reference space obsolete. You should thus
+        perform this operation prior to fitting any population maps.
         """
         if x is None:
             if cycle is None:

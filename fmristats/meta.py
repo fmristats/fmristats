@@ -198,108 +198,74 @@ def fit_field(obs, design=None, mask=None):
     Results will be written into obs
     """
     if design is None:
-        df = obs.shape[-1] - 1
         p  = 1
         parameter_names = ['intercept']
     else:
-        df = -np.diff(design.shape)
         p  = design.shape[1]
         parameter_names = ['intercept']
 
     assert obs.shape[-1] > p+1, 'model not identifiable, too many parameters to fit'
-    assert obs.shape[-1] > df, 'model not identifiable, too many parameters to fit'
+
+    sample_size = np.isfinite(obs).all(axis=-2).sum(axis=-1)
+
+    # pixels are 'valid' if there exists enough data such that the meta
+    # regression / analysis model is identifiable.
+    valid = sample_size > p+1
 
     # pixels are 'fully valid' if there are no missing values along the
     # subject axis, i.e, for all subjects in the sample there is an
     # estimate available for this pixel.
     fully_valid = np.isfinite(obs).all(axis=(-1,-2))
-
-    # pixels are 'valid' if there exists enough data such that the meta
-    # regression / analysis model is identifiable.
-    valid = np.isfinite(obs).all(axis=-2).sum(axis=-1)
-    valid = valid > max(p+1,df)
+    fully_valid = fully_valid & valid
 
     if mask is None:
         mask = valid
+        print("  … setting the mask to default.")
     else:
         assert mask.dtype is np.dtype(bool), 'mask must be of dtype bool or None'
         assert mask.shape == valid.shape, 'shape of mask does not fit'
+
+        if (~mask | valid).all():
+            print('  … all voxels in the mask are identifiable.')
+        else:
+            print('  … not all voxels in the mask are identifiable!')
+
+        if (~mask | fully_valid).all():
+            print('  … there exist no voxels with missing data along the subject dimension.')
+        else:
+            print('  … some voxel have missing data along the subject dimension.')
+
         mask = mask & valid
 
     print("  … mask has shape: {}".format(mask.shape))
 
-    assert mask.any(), 'mask is empty, i.e., there exists no valid pixels in this mask'
-
-    # if the statement 'if valid, then fully_valid' holds, the following
-    # loop don't need checks.  This is identical to 'not valid or
-    # fully_valid'.
-    skip_checks = (~mask | fully_valid).all()
+    assert mask.any(), 'model not identifiable, there are no identifiable pixels in this mask'
 
     res = obs[mask]
     print("  … number of pixels to be fitted: {}".format(len(res)))
 
     it = iter(res)
 
-    if skip_checks:
-        print("  … all pixels in the mask are fully valid")
-        if design is None:
-            print("  … a meta analysis will be performed")
-            for v in it:
-                b, t, h, adj_stderr, r = meta_analysis(y=v[0], d=v[1]**2)
-                v[0,0] = b
-                v[1,0] = adj_stderr
-                v[2,0] = t
-                v[0,1] = h
-                v[1,1] = r
-                v[2,1] = np.nan
-        else:
-            print("  … a meta regression will be performed")
-            for v in it:
-                b, t, h, adj_stderr, r = meta_regression(y=v[0], d=v[1]**2, x=design)
-                v[0,:p] = b
-                v[1,:p] = adj_stderr
-                v[2,:p] = t
-                v[0,p]  = h
-                v[1,p]  = r
-                v[2,p]  = np.nan
+    if design is None:
+        print("  … a meta analysis will be performed")
+        for v in it:
+            b, t, h, adj_stderr, r = meta_analysis(y=v[0], d=v[1]**2)
+            v[0,0] = b
+            v[1,0] = adj_stderr
+            v[2,0] = t
+            v[0,1] = h
+            v[1,1] = r
+            v[2,1] = np.nan
     else:
-        if design is None:
-            print("  … a meta analysis will be performed")
-            for v in it:
-                sampled = ~np.isnan(v).any(axis=0)
-
-                y=v[0,sampled]
-                d=v[1,sampled]
-
-                if (sampled).sum() > max(p+1,df):
-                    b, t, h, adj_stderr, r = meta_analysis(y=v[0], d=v[1]**2)
-                    v[0,0] = b
-                    v[1,0] = adj_stderr
-                    v[2,0] = t
-                    v[0,1] = h
-                    v[1,1] = r
-                    v[2,1] = np.nan
-                else:
-                    v[...] = np.nan
-        else:
-            print("  … a meta regression will be performed")
-            for v in it:
-                sampled = ~np.isnan(v).any(axis=0)
-
-                y=v[0,sampled]
-                d=v[1,sampled]
-                x=design[sampled]
-
-                if (sampled).sum() > max(p+1,df):
-                    b, t, h, adj_stderr, r = meta_regression(y=v[0], d=v[1]**2, x=x)
-                    v[0,:p] = b
-                    v[1,:p] = adj_stderr
-                    v[2,:p] = t
-                    v[0,p]  = h
-                    v[1,p]  = r
-                    v[2,p]  = np.nan
-                else:
-                    v[...] = np.nan
+        print("  … a meta regression will be performed")
+        for v in it:
+            b, t, h, adj_stderr, r = meta_regression(y=v[0], d=v[1]**2, x=design)
+            v[0,:p] = b
+            v[1,:p] = adj_stderr
+            v[2,:p] = t
+            v[0,p]  = h
+            v[1,p]  = r
+            v[2,p]  = np.nan
 
     result = np.zeros(mask.shape + (3,p+1,))
     result[...] = np.nan

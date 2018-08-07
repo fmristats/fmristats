@@ -19,7 +19,7 @@
 
 """
 
-Fit a signal model to FMRI data
+Define a subject-specific standard space for, well, a subject.
 
 """
 
@@ -42,28 +42,46 @@ def create_argument_parser():
 # Input arguments
 ########################################################################
 
+    parser.add_argument('--vb-name',
+            default='reference',
+            choices=['reference', 'scanner'],
+            #choices=['reference', 'scan', 'scanner'],
+            help=hp.vb_name)
+
+########################################################################
+# Input arguments when a provided with reference maps
+########################################################################
+
     parser.add_argument('--session',
             default='../data/ses/{2}/{0}-{1:04d}-{2}-{3}.ses',
             help="""only needed if no fit is provided; """ + hp.session)
 
+    #parser.add_argument('--cycle',
+    #        type=int,
+    #        help="""cycle to pick as reference""")
+
 ########################################################################
-# Additional input arguments when a previous fit can be provided
+# Input arguments when provided with a previous fit
 ########################################################################
 
-    parser.add_argument('--nb-fit',
+    parser.add_argument('--fit',
             default='../data/fit/{2}/{4}/{5}/{0}-{1:04d}-{2}-{3}-{4}-{5}.fit',
-            help="""input file; if warp coefficient files are provided
-            you don't need this""" + hp.sfit)
+            help="""if working with session files, you don't need this""" + hp.sfit)
 
-    parser.add_argument('--nb-scale-type',
+    parser.add_argument('--scale-type',
             default='max',
             choices=['diagonal','max','min'],
-            help="""only needed if part of the template for --nb-fit""" + hp.scale_type)
+            help="""only needed if part of the template for --fit""" + hp.scale_type)
+
+    parser.add_argument('--nb-name',
+            default='self',
+            help="""name of the population space that was originally
+            used for the fit"""  + hp.nb_name)
 
     parser.add_argument('--nb',
-            default='reference',
+            default='self',
             help="""name of the population space that was originally
-            used for the fit"""  + hp.population_space)
+            used for the fit"""  + hp.nb)
 
     parser.add_argument('--ignore-fit',
             action='store_true',
@@ -72,10 +90,6 @@ def create_argument_parser():
 ########################################################################
 # Output arguments
 ########################################################################
-
-    parser.add_argument('--population-space',
-            default='reference',
-            help='output name;' + hp.population_space_name)
 
     parser.add_argument('--population-map',
             default='../data/pop/{2}/{4}/{0}-{1:04d}-{2}-{3}-{4}.pop',
@@ -188,7 +202,7 @@ from ...reference import ReferenceMaps
 
 from ...smodel import SignalModel, Result
 
-from ...pmap import PopulationMap, pmap_scanner, pmap_reference
+from ...pmap import PopulationMap, pmap_scanner, pmap_reference, pmap_scan
 
 import pandas as pd
 
@@ -217,7 +231,7 @@ def call(args):
     # Parse protocol
     ####################################################################
 
-    df = get_df(args, fall_back=[args.nb_fit, args.session])
+    df = get_df(args, fall_back=[args.fit, args.session])
 
     if df is None:
         sys.exit()
@@ -234,15 +248,15 @@ def call(args):
             )
 
     layout_sdummy(df_layout, 'fit',
-            template=args.nb_fit,
-            urname=args.nb,
-            scale_type=args.nb_scale_type,
+            template=args.fit,
+            urname=args.nb_name,
+            scale_type=args.scale_type,
             strftime=args.strftime
             )
 
     layout_sdummy(df_layout, 'file',
             template=args.population_map,
-            urname=args.population_space,
+            urname=args.vb_name,
             scale_type=None,
             strftime=args.strftime
             )
@@ -275,8 +289,9 @@ def call(args):
 
                 file_fit          = r.fit,
                 file_ses          = r.ses,
-                vb                = args.population_space,
+                vb                = args.vb_name,
                 resolution        = args.resolution,
+                #scan_cycle        = args.cycle,
                 ignore_fit        = args.ignore_fit,
                 )
 
@@ -389,8 +404,20 @@ def wrapper(name, df, index, remove_lock, ignore_lock, force, skip,
 
         if vb == 'scanner':
             population_map = pmap_scanner(session=session)
+            if verbose:
+                print('{}: Population space is equal to scanner space (with native resolution)'.format(
+                    name.name()))
         if vb == 'reference':
             population_map = pmap_reference(session=session, resolution=resolution)
+            if verbose:
+                print('{}: Population space is equal to scanner space (with resolution {})'.format(
+                    name.name(), resolution))
+
+        # if vb == 'scan':
+        #     population_map = pmap_scan(session=session, scan_cycle=scan_cycle)
+        #     if verbose:
+        #         print('{}: Population space has been set to: {}, cycle: {:d}'.format(
+        #             name.name(), vb, cycle))
 
     if verbose:
         print('{}: Save: {}'.format(name.name(), file))

@@ -335,10 +335,13 @@ def pmap_scanner(session):
     the signal model is estimated in *native* resolution).
 
     It only makes sense, though, to set the population space equal to
-    the coordinate system of the FMRI session, if this space is indeed
-    *close* to the subject reference space of the FMRI session This may
-    be archived by calling the :func:`reset_reference_space` attribute
-    of the session first. .
+    the coordinate system of the FMRI session, if this space is *close*
+    to the subject reference space of the FMRI session. This may be
+    archived by calling :func:`reset_reference_space` of
+    the reference_maps: This will have the effect that the population
+    space is then equal to the mean location of the subject in the
+    scanner.
+
 
     See also
     --------
@@ -382,10 +385,12 @@ def pmap_reference(session, resolution=2.):
     will do the former and sets the resolution to the given value.
 
     It only makes sense, though, to set the population space equal to
-    the coordinate system of the FMRI session, if this space is indeed
-    *close* to the subject reference space of the FMRI session. This may
-    be archived by calling the :func:`reset_reference_space` attribute
-    of the session first. .
+    the coordinate system of the FMRI session, if this space is *close*
+    to the subject reference space of the FMRI session. This may be
+    archived by calling :func:`reset_reference_space` of
+    the reference maps. This will have the effect that the population
+    space is then equal to the mean location of the subject in the
+    scanner.
 
     See also
     --------
@@ -404,11 +409,11 @@ def pmap_reference(session, resolution=2.):
             shape=shape,
             vb=session.name.name(),
             nb=session.name,
-            name='identity')
+            name='reference')
 
     return PopulationMap(diffeomorphism, name='self')
 
-def pmap_scan(session, scan_cycle):
+def pmap_scan(session, reference_maps, scan_cycle):
     """
     Pick a scan reference as the population map
 
@@ -416,6 +421,8 @@ def pmap_scan(session, scan_cycle):
     ----------
     session : Session
         Session instance
+    reference_maps : ReferenceMaps
+        Reference Maps
     scan_cycle : int
         Reference scan cycle.
 
@@ -441,7 +448,7 @@ def pmap_scan(session, scan_cycle):
     """
     diffeomorphism = AffineTransformation(
             reference=session.reference,
-            affine=session.scan_inverses[scan_cycle],
+            affine=reference_maps.scan_inverses[scan_cycle],
             shape=session.shape,
             vb=session.name.name(),
             nb=session.name,

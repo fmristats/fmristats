@@ -473,7 +473,7 @@ class SignalModel:
         mask : None or bool or str or ndarray, dtype: bool
             string can be one of 'vb', 'vb_background',
             'foreground', or 'vb_estimate'. None defaults to 'data'. True will
-            take precendence: 'vb'> 'vb_background'> 'vb_estimate' >
+            take precedence: 'vb'> 'vb_background'> 'vb_estimate' >
             'foreground'.
         verbose : bool
             increase output verbosity
@@ -490,10 +490,10 @@ class SignalModel:
             mask = None
             maskname = 'no mask being applied '
         elif mask is True:
-            if hasattr(self.population_map.vb, 'vb'):
+            try:
                 mask = self.population_map.vb.get_mask()
                 maskname = 'template (vb)'
-            else:
+            except AttributeError:
                 mask = datamask
                 maskname = 'data driven (foreground/background)'
         elif type(mask) is str:

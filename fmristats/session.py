@@ -51,6 +51,7 @@ import pickle
 
 def fmrisetup(session, irritation):
     """
+
     If a session instance was created using the basic information in a
     Nifti1 file, this will complete the set-up of the session by
     providing the rest of the necessary FMRI session information:
@@ -58,7 +59,8 @@ def fmrisetup(session, irritation):
 
     Parameters
     ----------
-    reset_reference_space : bool, default True
+    session : Session
+    irritation : Irritation
     """
     session.set_slice_time()
     session.set_irritation(irritation)

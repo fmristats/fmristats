@@ -75,7 +75,13 @@ class PopulationModel:
                 formula_like=formula_like,
                 data=self.covariates))
 
-        datamask = np.isfinite(self.statistics).all(axis=(-1,-2))
+        datamask = Image(
+            self.sample.vb.reference,
+            np.isfinite(self.sample.statistics).all(axis=-2).sum(axis=-1))
+
+        datamask.mask()
+
+        datamask = datamask.get_mask()
 
         if mask is True:
             mask = 'vb'

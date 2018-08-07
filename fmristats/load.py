@@ -270,6 +270,9 @@ def load_population_map(file, name, df, index, vb, verbose=True):
     name : Identifier
     df : DataFrame
     index : int
+    vb : str
+        Name of the population (standard) space. Not the name of the
+        diffeomorphism.
     verbose : bool
 
     Returns
@@ -288,17 +291,19 @@ def load_population_map(file, name, df, index, vb, verbose=True):
         df.ix[index,'valid'] = False
         return
 
-    if type(population_map) is PopulationMap and name.is_equal(population_map.diffeomorphism.nb):
+    if type(population_map) is PopulationMap and name.is_equal(
+            population_map.diffeomorphism.nb):
         if vb is None:
             return population_map
         else:
-            if vb == population_map.diffeomorphism.vb:
+            if vb == population_map.diffeomorphism.name:
                 return population_map
             else:
                 df.ix[index,'valid'] = False
                 print("""{}: PopulationMap does not match:
                 Expected: {}
-                Found:    {}""".format(name.name(), vb, population_map.diffeomorphism.vb))
+                Found:    {}""".format(name.name(), vb,
+                    population_map.diffeomorphism.name))
                 return population_map
     elif type(population_map) is Lock:
         df.ix[index,'valid'] = False
@@ -306,7 +311,8 @@ def load_population_map(file, name, df, index, vb, verbose=True):
         return population_map
     else:
         df.ix[index,'valid'] = False
-        print("""{}: PopulationMap does not match:
+        print("""{}: NB (image) space of the PopulationMap does not match:
         Expected: {}
-        Found:    {}""".format(name.name(), name.name(True), population_map.name.name(True)))
+        Found:    {}""".format(name.name(), name.name(True),
+            population_map.diffeomorphism.nb.name()))
         return population_map
