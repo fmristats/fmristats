@@ -70,3 +70,17 @@ def layout_sdummy(df, key, template, urname, scale_type,
                     scale_type)
                     for r in df.itertuples()],
                 index = df.index)
+
+def layout_fdummy(df, key, template, vb, diffeo, scale_type,
+        strftime='%Y-%m-%d-%H%M'):
+        df[key] = Series(
+                data = [template.format(
+                    r.cohort,
+                    r.id,
+                    r.paradigm,
+                    r.date.strftime(strftime),
+                    vb,
+                    diffeo,
+                    scale_type)
+                    for r in df.itertuples()],
+                index = df.index)

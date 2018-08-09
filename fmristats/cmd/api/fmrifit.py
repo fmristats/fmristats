@@ -44,7 +44,7 @@ def create_argument_parser():
 
     input_files = parser.add_argument_group(
             """input files""",
-            """Paths or templates for the paths to input fiels.""")
+            """Paths or templates for the paths to input files.""")
 
     input_files.add_argument('--session',
             default='../data/ses/{2}/{0}-{1:04d}-{2}-{3}.ses',
@@ -58,19 +58,17 @@ def create_argument_parser():
             default='../data/ref/{2}/{0}-{1:04d}-{2}-{3}.ref',
             help='input file;' + hp.reference_maps)
 
-########################################################################
-
     input_files.add_argument('--population-map',
             default='../data/pop/{2}/{4}/{5}/{0}-{1:04d}-{2}-{3}-{4}.pop',
-            help='input file;' + hp.population_map)
+            help=hp.population_map)
 
     input_files.add_argument('--vb',
             default='self',
-            help=hp.population_space)
+            help=hp.vb)
 
     parser.add_argument('--diffeomorphism',
-            default='identity',
-            help="""Name of the diffeomorphisms to use.""")
+            default='reference',
+            help="""Name of the diffeomorphism.""")
 
 ########################################################################
 # Output arguments
@@ -81,8 +79,12 @@ def create_argument_parser():
             """Paths or templates for the paths to output field.""")
 
     output_files.add_argument('--fit',
-            default='../data/fit/{2}/{4}/{5}/{0}-{1:04d}-{2}-{3}-{4}-{5}.fit',
-            help='output file;' + hp.sfit)
+            default='../data/fit/{2}/{4}/{5}/{6}/{0}-{1:04d}-{2}-{3}-{4}.fit',
+            help=hp.sfit)
+
+########################################################################
+# Log file
+########################################################################
 
     output_files.add_argument('-o', '--protocol-log',
             default='logs/{}-fmrifit.pkl',
@@ -184,15 +186,14 @@ def create_argument_parser():
             help="""Ignore any brain masks saved in the respective
             population map.""")
 
-    # TODO: mask: not implemented yet
-    #where_to_fit.add_argument('--mask',
-    #        action='store_true',
-    #        help=hp.population_mask)
-
     where_to_fit.add_argument('--at-slice',
             type=int,
             nargs='+',
             help="""only fit the model at a slice of the index lattice""")
+
+    # TODO: mask: not implemented yet
+    #where_to_fit.add_argument('--mask',
+    #        help="""an image file""")
 
 ########################################################################
 # Arguments specific for using the protocol API
@@ -375,9 +376,10 @@ def call(args):
             strftime=args.strftime
             )
 
-    layout_sdummy(df_layout, 'file',
+    layout_fdummy(df_layout, 'file',
             template=args.fit,
-            urname=args.diffeomorphism,
+            vb=args.vb,
+            diffeo=args.diffeomorphism,
             scale_type=args.scale_type,
             strftime=args.strftime
             )
@@ -585,7 +587,9 @@ def wrapper(name, df, index, remove_lock, ignore_lock, force, skip,
         return
 
     if verbose:
-        print('{}: Diffeomorphism has been fitted via {}'.format(name.name(),
+        print('{}: Standard space is: {}'.format(name.name(),
+            population_map.name))
+        print('{}: Diffeomorphism is: {}'.format(name.name(),
             population_map.diffeomorphism.name))
 
     ########################################################################
@@ -625,9 +629,13 @@ def wrapper(name, df, index, remove_lock, ignore_lock, force, skip,
             parameter=parameter,
             verbose=verbose)
 
+    ########################################################################
+    # Create signal model instance
+    ########################################################################
+
     if fit_at_slice:
         if verbose:
-            print('{}: Start fit at {}'.format(name.name(), slice_object))
+            print('{}: Fit at {}'.format(name.name(), slice_object))
 
         coordinates = smodel.population_map.diffeomorphism.coordinates()
         coordinates = coordinates[slice_object]
@@ -635,21 +643,27 @@ def wrapper(name, df, index, remove_lock, ignore_lock, force, skip,
         result = smodel.fit_at_subject_coordinates(coordinates,
                 mask=mask, verbose=verbose)
 
+        if verbose:
+            print('{}: Done fitting'.format(name.name()))
+
     else:
         result = smodel.fit(mask=mask, verbose=verbose)
 
-    if verbose:
-        print('{}: Save: {}'.format(name.name(), file))
+        if verbose:
+            print('{}: Done fitting'.format(name.name()))
 
     try:
+        if verbose:
+            print('{}: Save: {}'.format(name.name(), file))
+
         result.save(file)
         df.ix[index,'locked'] = False
+
     except Exception as e:
         df.ix[index,'valid'] = False
-        print('{}: Unable to write: {}'.format(name.name(), file))
+        print('{}: Unable to create: {}'.format(name.name(), file))
         print('{}: Exception: {}'.format(name.name(), e))
         lock.conditional_unlock(df, index, verbose, True)
+        return
 
-    if verbose > 1:
-        print('{}: Description'.format(name.name()))
-        print(result.describe())
+    return

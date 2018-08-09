@@ -347,3 +347,5 @@ def wrapper(name, df, index, remove_lock, ignore_lock, force, skip,
         print('{}: Exception: {}'.format(name.name(), e))
         lock.conditional_unlock(df, index, verbose, True)
         return
+
+    return

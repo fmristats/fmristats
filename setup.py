@@ -37,7 +37,7 @@ setup(
             'fmrifit         = fmristats.cmd.api.fmrifit:cmd',
             'fmriirritation  = fmristats.cmd.api.fmriirritation:cmd',
             'fmririgid       = fmristats.cmd.api.fmririgid:cmd',
-            'fmripop         = fmristats.cmd.api.fmripop:cmd',
+            'fmripmap        = fmristats.cmd.api.fmripop:cmd',
             'fmriprune       = fmristats.cmd.api.fmriprune:cmd',
             'fmrisample      = fmristats.cmd.api.fmrisample:cmd',
 
@@ -47,9 +47,9 @@ setup(
             'ants4pop   = fmristats.cmd.wrp.ants4pop:cmd',
 
             # import from third party formats
-            'mat2irr = fmristats.cmd.imp.mat2irr:cmd',
-            'nii2img = fmristats.cmd.imp.nii2img:cmd',
-            'nii2ses = fmristats.cmd.imp.nii2ses:cmd',
+            'mat2irritation = fmristats.cmd.imp.mat2irr:cmd',
+            'nii2image = fmristats.cmd.imp.nii2img:cmd',
+            'nii2session = fmristats.cmd.imp.nii2ses:cmd',
             'csv2protocol = fmristats.cmd.imp.csv2protocol:cmd_pkl',
             'csv2covariate = fmristats.cmd.imp.csv2protocol:cmd_cov',
 
@@ -66,7 +66,7 @@ setup(
 
             # export to third party formats
             'fit2nii = fmristats.cmd.exp.fit2nii:cmd',
-            'ses2nii = fmristats.cmd.exp.ses2nii:cmd',
+            'session2nii = fmristats.cmd.exp.ses2nii:cmd',
 
         ],
     },

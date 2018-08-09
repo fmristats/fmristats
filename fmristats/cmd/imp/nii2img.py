@@ -41,7 +41,7 @@ def create_argument_parser():
     parser.add_argument('input',
             help='input file')
 
-    parser.add_argument('-o', '--output',
+    parser.add_argument('output',
             help='output file')
 
     parser.add_argument('-n', '--name',

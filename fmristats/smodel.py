@@ -913,6 +913,9 @@ class Result:
                 self.statistics.shape,
                 self.volume())
 
+    def __str__(self):
+        return self.describe()
+
     #######################################################################
     # Save instance to disk
     #######################################################################

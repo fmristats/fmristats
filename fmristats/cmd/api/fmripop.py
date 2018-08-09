@@ -42,9 +42,9 @@ def create_argument_parser():
 # Input arguments
 ########################################################################
 
-    parser.add_argument('--vb-name',
+    parser.add_argument('--vb-type',
             default='reference',
-            choices=['reference', 'scanner'],
+            choices=['reference', 'scanner', 'scan', 'fit'],
             #choices=['reference', 'scan', 'scanner'],
             help=hp.vb_name)
 
@@ -54,46 +54,58 @@ def create_argument_parser():
 
     parser.add_argument('--session',
             default='../data/ses/{2}/{0}-{1:04d}-{2}-{3}.ses',
-            help="""only needed if no fit is provided; """ + hp.session)
+            help="""needed if --vb-name is set to reference or scanner.""")
 
-    #parser.add_argument('--cycle',
-    #        type=int,
-    #        help="""cycle to pick as reference""")
+########################################################################
+# Input arguments when a provided with reference maps
+########################################################################
+
+    parser.add_argument('--reference-maps',
+            default='../data/ref/{2}/{0}-{1:04d}-{2}-{3}.ref',
+            help="""needed if --vb-name is set to scan.""")
+
+    parser.add_argument('--cycle',
+            type=int,
+            help="""cycle to pick as reference. Needed if --vb-name is
+            set to scan""")
 
 ########################################################################
 # Input arguments when provided with a previous fit
 ########################################################################
 
     parser.add_argument('--fit',
-            default='../data/fit/{2}/{4}/{5}/{0}-{1:04d}-{2}-{3}-{4}-{5}.fit',
-            help="""if working with session files, you don't need this""" + hp.sfit)
+            default='../data/fit/{2}/{4}/{5}/{6}/{0}-{1:04d}-{2}-{3}-{4}.fit',
+            help="""needed if --vb-name is set to fit.""" + hp.sfit)
 
     parser.add_argument('--scale-type',
             default='max',
             choices=['diagonal','max','min'],
-            help="""only needed if part of the template for --fit""" + hp.scale_type)
+            help="""only needed as part of the template for --fit.""" + hp.scale_type)
 
     parser.add_argument('--nb-name',
             default='self',
             help="""name of the population space that was originally
-            used for the fit"""  + hp.nb_name)
-
-    parser.add_argument('--nb',
-            default='self',
-            help="""name of the population space that was originally
-            used for the fit"""  + hp.nb)
-
-    parser.add_argument('--ignore-fit',
-            action='store_true',
-            help="""ignore fit""")
+            used for the fit. Only needed as part of the template for
+            --fit."""  + hp.nb_name)
 
 ########################################################################
 # Output arguments
 ########################################################################
 
     parser.add_argument('--population-map',
-            default='../data/pop/{2}/{4}/{0}-{1:04d}-{2}-{3}-{4}.pop',
-            help='output file;' + hp.population_map)
+            default='../data/pop/{2}/{4}/{5}/{0}-{1:04d}-{2}-{3}-{4}.pop',
+            help=hp.population_map)
+
+    parser.add_argument('--vb',
+            default='self',
+            help=hp.vb)
+
+    parser.add_argument('--diffeomorphism',
+            help="""Name of the diffeomorphism. Default is VB_TYPE.""")
+
+########################################################################
+# Log file
+########################################################################
 
     parser.add_argument('-o', '--protocol-log',
             default='logs/{}-fmripop.pkl',
@@ -190,11 +202,11 @@ from ..df import get_df
 
 from ...lock import Lock
 
-from ...load import load_result, load_session, load_population_map
+from ...load import load_result, load_session, load_refmaps, load_population_map
 
 from ...name import Identifier
 
-from ...protocol import layout_dummy, layout_sdummy
+from ...protocol import layout_dummy, layout_sdummy, layout_fdummy
 
 from ...session import Session
 
@@ -240,6 +252,9 @@ def call(args):
     # Add file layout
     ####################################################################
 
+    if args.diffeomorphism is None:
+        args.diffeomorphism = args.vb_type
+
     df_layout = df.copy()
 
     layout_dummy(df_layout, 'ses',
@@ -247,17 +262,23 @@ def call(args):
             strftime=args.strftime
             )
 
-    layout_sdummy(df_layout, 'fit',
+    layout_dummy(df_layout, 'ref',
+            template=args.reference_maps,
+            strftime=args.strftime
+            )
+
+    layout_fdummy(df_layout, 'fit',
             template=args.fit,
-            urname=args.nb_name,
+            vb=args.nb_name,
+            diffeo=args.diffeomorphism,
             scale_type=args.scale_type,
             strftime=args.strftime
             )
 
     layout_sdummy(df_layout, 'file',
             template=args.population_map,
-            urname=args.vb_name,
-            scale_type=None,
+            urname=args.vb,
+            scale_type=args.diffeomorphism,
             strftime=args.strftime
             )
 
@@ -287,12 +308,14 @@ def call(args):
                 verbose           = args.verbose,
                 file              = r.file,
 
-                file_fit          = r.fit,
                 file_ses          = r.ses,
-                vb                = args.vb_name,
+                file_ref          = r.ref,
+                file_fit          = r.fit,
+
+                vb_type           = args.vb_type,
+                vb                = args.vb,
                 resolution        = args.resolution,
-                #scan_cycle        = args.cycle,
-                ignore_fit        = args.ignore_fit,
+                scan_cycle        = args.cycle,
                 )
 
     it =  df_layout.itertuples()
@@ -344,10 +367,11 @@ def call(args):
 #######################################################################
 
 def wrapper(name, df, index, remove_lock, ignore_lock, force, skip,
-        verbose, file, file_fit, file_ses, vb, resolution, ignore_fit):
+        verbose, file, file_ses, file_ref, file_fit, vb_type, vb,
+        scan_cycle, resolution):
 
     if isfile(file):
-        instance = load_population_map(file, name, df, index, vb, verbose)
+        instance = load_population_map(file, name, df, index, vb, vb_type, verbose)
         if type(instance) is Lock:
             if remove_lock or ignore_lock:
                 if verbose:
@@ -385,52 +409,67 @@ def wrapper(name, df, index, remove_lock, ignore_lock, force, skip,
     # Load fit from disk
     ####################################################################
 
-    if isfile(file_fit) and not ignore_fit:
-        result = load_result(file_fit, name, df, index, vb, verbose)
-        if lock.conditional_unlock(df, index, verbose):
-            return
+    if (vb_type == 'scanner') or (vb_type == 'reference'):
 
-        if verbose > 1:
-            print('{}: Description of the fit:'.format(result.name.name()))
-            print(result.describe())
-
-        population_map = result.population_map
-        population_map.set_template(template=result.get_field('intercept', 'point'))
-
-    else:
         session = load_session(file_ses, name, df, index, verbose)
         if lock.conditional_unlock(df, index, verbose):
             return
 
-        if vb == 'scanner':
+        if vb_type == 'scanner':
             population_map = pmap_scanner(session=session)
             if verbose:
-                print('{}: Population space is equal to scanner space (with native resolution)'.format(
+                print('{}: Population space equals to scanner space (with native resolution)'.format(
                     name.name()))
-        if vb == 'reference':
+
+        if vb_type == 'reference':
             population_map = pmap_reference(session=session, resolution=resolution)
             if verbose:
-                print('{}: Population space is equal to scanner space (with resolution {})'.format(
+                print('{}: Population space equals scanner space (with resolution ({} mm)**3)'.format(
                     name.name(), resolution))
 
-        # if vb == 'scan':
-        #     population_map = pmap_scan(session=session, scan_cycle=scan_cycle)
-        #     if verbose:
-        #         print('{}: Population space has been set to: {}, cycle: {:d}'.format(
-        #             name.name(), vb, cycle))
+    if (vb_type == 'scan'):
 
-    if verbose:
-        print('{}: Save: {}'.format(name.name(), file))
+        session = load_session(file_ses, name, df, index, verbose)
+        if lock.conditional_unlock(df, index, verbose):
+            return
+
+        reference_maps = load_refmaps(file_ref, name, df, index, verbose)
+        if lock.conditional_unlock(df, index, verbose):
+            return
+
+        population_map = pmap_scan(
+                reference_maps=reference_maps,
+                session=session,
+                scan_cycle=scan_cycle)
+        if verbose:
+            print('{}: Population space equals subject position during scan cycle: {:d}'.format(
+                name.name(), scan_cycle))
+
+    if (vb_type == 'fit'):
+
+       result = load_result(file_fit, name, df, index, vb, verbose)
+       if lock.conditional_unlock(df, index, verbose):
+           return
+
+       if verbose > 1:
+           print('{}: Description of the fit:'.format(result.name.name()))
+           print(result.describe())
+
+       population_map = result.population_map
+       population_map.set_template(template=result.get_field('intercept', 'point'))
 
     try:
+        if verbose:
+            print('{}: Save: {}'.format(name.name(), file))
+
         population_map.save(file)
         df.ix[index,'locked'] = False
+
     except Exception as e:
         df.ix[index,'valid'] = False
-        print('{}: Unable to write: {}'.format(name.name(), file))
+        print('{}: Unable to create: {}'.format(name.name(), file))
         print('{}: Exception: {}'.format(name.name(), e))
         lock.conditional_unlock(df, index, verbose, True)
+        return
 
-    if verbose > 1:
-        print('{}: Description'.format(name.name()))
-        print(result.describe())
+    return

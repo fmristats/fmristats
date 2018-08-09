@@ -256,7 +256,7 @@ def load_result(file, name, df, index, vb, verbose=True):
 
 # TODO: name checks in load_population_map for vb, nb, and name need update!
 
-def load_population_map(file, name, df, index, vb, verbose=True):
+def load_population_map(file, name, df, index, vb, diffeo, verbose=True):
     """
     Load a file
 
@@ -291,28 +291,40 @@ def load_population_map(file, name, df, index, vb, verbose=True):
         df.ix[index,'valid'] = False
         return
 
-    if type(population_map) is PopulationMap and name.is_equal(
-            population_map.diffeomorphism.nb):
-        if vb is None:
-            return population_map
-        else:
-            if vb == population_map.diffeomorphism.name:
+    if type(population_map) is PopulationMap:
+        if name.is_equal(population_map.diffeomorphism.nb):
+            if vb is None:
                 return population_map
             else:
-                df.ix[index,'valid'] = False
-                print("""{}: PopulationMap does not match:
-                Expected: {}
-                Found:    {}""".format(name.name(), vb,
-                    population_map.diffeomorphism.name))
-                return population_map
+                if vb == population_map.name:
+                    if diffeo == population_map.diffeomorphism.name:
+                        return population_map
+                    else:
+                        #df.ix[index,'valid'] = False
+                        print("""{}: Warning: diffeomorphism in PopulationMap is not as expected:
+                        Expected: {}
+                        Found:    {}""".format(name.name(), diffeo,
+                            population_map.diffeomorphism.name))
+                        return population_map
+
+                else:
+                    df.ix[index,'valid'] = False
+                    print("""{}: PopulationMap starts at wrong standard space:
+                    Expected: {}
+                    Found:    {}""".format(name.name(), vb,
+                        population_map.name))
+                    return population_map
+
+        else:
+            df.ix[index,'valid'] = False
+            print("""{}: NB (image) space of the PopulationMap does not match:
+            Expected: {}
+            Found:    {}""".format(name.name(), name.name(True),
+                population_map.diffeomorphism.nb.name()))
+            return population_map
+
     elif type(population_map) is Lock:
+
         df.ix[index,'valid'] = False
         print('{}: PopulationMap is currently locked'.format(name.name(), file))
-        return population_map
-    else:
-        df.ix[index,'valid'] = False
-        print("""{}: NB (image) space of the PopulationMap does not match:
-        Expected: {}
-        Found:    {}""".format(name.name(), name.name(True),
-            population_map.diffeomorphism.nb.name()))
         return population_map

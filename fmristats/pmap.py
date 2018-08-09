@@ -141,10 +141,9 @@ class PopulationMap:
         same reference: the image's reference will be set identical to
         the reference of the diffeomorphism.
         """
-        assert image.shape == self.diffeomorphism.shape, \
-                'shapes of image and diffeomorphism must match'
-
         if type(image) is Image:
+            assert image.shape == self.diffeomorphism.shape, \
+                    'shapes of image and diffeomorphism must match'
             assert isclose(image.reference, self.diffeomorphism.reference), \
                     'references of image and diffeomorphism must match'
             image.reference = self.diffeomorphism.reference
@@ -173,10 +172,9 @@ class PopulationMap:
         same reference: the image's reference will be set identical to
         the reference of the diffeomorphism.
         """
-        assert image.shape == self.diffeomorphism.shape, \
-                'shapes of image and diffeomorphism must match'
-
         if type(image) is Image:
+            assert image.shape == self.diffeomorphism.shape, \
+                    'shapes of image and diffeomorphism must match'
             assert isclose(image.reference, self.diffeomorphism.reference), \
                     'references of image and diffeomorphism must match'
             image.reference = self.diffeomorphism.reference
@@ -205,10 +203,9 @@ class PopulationMap:
         same reference: the image's reference will be set identical to
         the reference of the diffeomorphism.
         """
-        assert image.shape == self.diffeomorphism.shape, \
-                'shapes of image and diffeomorphism must match'
-
         if type(image) is Image:
+            assert image.shape == self.diffeomorphism.shape, \
+                    'shapes of image and diffeomorphism must match'
             assert isclose(image.reference, self.diffeomorphism.reference), \
                     'references of image and diffeomorphism must match'
             image.reference = self.diffeomorphism.reference
@@ -266,24 +263,37 @@ class PopulationMap:
         nb_background: {:s}
         vb_estimate:   {:s}
         nb_estimate:   {:s}"""
-        if hasattr(self, 'vb'):
+
+        try:
             vb = self.vb.name
-        else: vb = '--'
-        if hasattr(self, 'nb'):
+        except:
+            vb = '--'
+
+        try:
             nb = self.nb.name.name()
-        else: vb = '--'
-        if hasattr(self, 'vb_background'):
+        except:
+            nb = '--'
+
+        try:
             vb_background = self.vb_background.name
-        else: vb_background = '--'
-        if hasattr(self, 'nb_background'):
+        except:
+            vb_background = '--'
+
+        try:
             nb_background = self.nb_background.name
-        else: nb_background = '--'
-        if hasattr(self, 'vb_estimate'):
+        except:
+            nb_background = '--'
+
+        try:
             vb_estimate = self.vb_estimate.name
-        else: vb_estimate = '--'
-        if hasattr(self, 'nb_estimate'):
+        except:
+            vb_estimate = '--'
+
+        try:
             nb_estimate = self.nb_estimate.name
-        else: nb_estimate = '--'
+        except:
+            nb_estimate = '--'
+
         return description.format(
                 self.name,
                 vb, nb, vb_background, nb_background, vb_estimate, nb_estimate,
@@ -448,7 +458,7 @@ def pmap_scan(session, reference_maps, scan_cycle):
     """
     diffeomorphism = AffineTransformation(
             reference=session.reference,
-            affine=reference_maps.scan_inverses[scan_cycle],
+            affine=reference_maps.scan_references.inv().affines[scan_cycle],
             shape=session.shape,
             vb=session.name.name(),
             nb=session.name,
