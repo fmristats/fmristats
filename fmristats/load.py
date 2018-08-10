@@ -220,41 +220,55 @@ def load_result(file, name, df, index, vb, verbose=True):
         df.ix[index,'valid'] = False
         return
 
-    if type(result) is Result and name.is_equal(result.population_map.nb.name):
+    if type(result) is Result:
+
+        # test whether vb is correct
         if vb is None:
             if np.isnan(result.statistics).all():
                 df.ix[index,'valid'] = False
                 print('{}: Result is completely empty'.format(name.name()))
                 return result
-            else:
-                return result
         else:
-            if vb == result.population_map.diffeomorphism.vb:
+            if vb == result.name:
                 if np.isnan(result.statistics).all():
                     df.ix[index,'valid'] = False
                     print('{}: Result is completely empty'.format(name.name()))
                     return result
-                else:
-                    return result
             else:
-                #df.ix[index,'valid'] = False
+                #df.ix[index,'valid'] = False # TODO: prior to version update: uncomment
                 print("""{}: Warning: Name of population space in Result does not match expected:
                     Expected: {}
                     Found:    {}""".format(
-                        name.name(), vb, result.population_map.diffeomorphism.vb))
-                return result
+                        name.name(), vb, result.name))
+
+        # test whether nb is correct
+        if not name.is_equal(result.population_map.diffeomorphism.nb):
+            df.ix[index,'valid'] = False
+            print("""{}: NB (image) space of the PopulationMap does not match:
+            Expected: {}
+            Found:    {}""".format(name.name(), name.name(True),
+                result.population_map.diffeomorphism.nb.name()))
+            return result
+
+        return result
+
+        #else:
+        #    df.ix[index,'valid'] = False
+        #    print("""{}: Name of the subject space does not match expected:
+        #    Expected: {}
+        #    Found:    {}""".format(name.name(), name.name(True), result.name.name(True)))
+        #    return result
+
     elif type(result) is Lock:
         df.ix[index,'valid'] = False
         print('{}: Result file is locked'.format(name.name()))
         return result
-    else:
-        df.ix[index,'valid'] = False
-        print("""{}: Name of the subject space does not match expected:
-        Expected: {}
-        Found:    {}""".format(name.name(), name.name(True), result.name.name(True)))
-        return result
 
-# TODO: name checks in load_population_map for vb, nb, and name need update!
+    else:
+
+        df.ix[index,'valid'] = False
+        print('{}: Unknown file type: {}'.format(name.name(), file))
+        return population_map
 
 def load_population_map(file, name, df, index, vb, diffeo, verbose=True):
     """
@@ -326,5 +340,11 @@ def load_population_map(file, name, df, index, vb, diffeo, verbose=True):
     elif type(population_map) is Lock:
 
         df.ix[index,'valid'] = False
-        print('{}: PopulationMap is currently locked'.format(name.name(), file))
+        print('{}: PopulationMap is currently locked'.format(name.name()))
+        return population_map
+
+    else:
+
+        df.ix[index,'valid'] = False
+        print('{}: Unknown file type: {}'.format(name.name(), file))
         return population_map

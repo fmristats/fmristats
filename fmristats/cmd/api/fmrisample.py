@@ -61,8 +61,8 @@ def create_argument_parser():
             help="""name if different to the name saved in vb""")
 
     parser.add_argument('--fit',
-            default='../data/fit/{2}/{4}/{5}/{0}-{1:04d}-{2}-{3}-{4}-{5}.fit',
-            help='output file;' + hp.sfit)
+            default='../data/fit/{2}/{4}/{5}/{6}/{0}-{1:04d}-{2}-{3}-{4}.fit',
+            help=hp.sfit)
 
     parser.add_argument('--diffeomorphism',
             default='ants',
@@ -142,7 +142,7 @@ from ...load import load, load_result
 
 from ...name import Identifier
 
-from ...protocol import layout_sdummy
+from ...protocol import layout_sdummy, layout_fdummy
 
 import numpy as np
 
@@ -211,10 +211,10 @@ def call(args):
 
     df_layout = df.copy()
 
-    layout_sdummy(df_layout, 'file',
+    layout_fdummy(df_layout, 'file',
             template=args.fit,
-            #urname=vb_name,
-            urname=args.diffeomorphism,
+            vb=vb_name,
+            diffeo=args.diffeomorphism,
             scale_type=args.scale_type,
             strftime=args.strftime
             )

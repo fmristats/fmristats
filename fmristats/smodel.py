@@ -712,7 +712,7 @@ class Result:
         An identifier
     population_map : PopulationMap
     field : ndarray, shape (…,3), dtype: float
-        The effect field, i.e., result of fitting the RSM model.
+        The effect field, i.e., result of fitting the DOM model.
     coordinates : ndarray, shape (…,3), dtype: float
     hyperparameters : dict
     parameters : dict {str: int}

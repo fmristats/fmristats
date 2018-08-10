@@ -11,7 +11,7 @@ with open(path.join(here, 'README.rst'), encoding='utf-8') as f:
 setup(
     name='fmristats',
     version='0.0.3',
-    description='Rigorous statistical estimation of FMRI models',
+    description='Data oriented method for fitting FMRI models',
     long_description=long_description,
     url='https://fmristats.github.io/',
     author='Thomas W. D. Möbius',
