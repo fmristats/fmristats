@@ -19,7 +19,7 @@
 
 """
 
-Plot summary field statistics of the effect field of a fitted RSM Signal
+Plot summary field statistics of the effect field of a fitted Signal
 Model, e.g. the estimated activation pattern fields, activation
 certainty fields, t-test statistic fields, or intercept fields.
 

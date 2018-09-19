@@ -1,26 +1,28 @@
-Data oriented method for the fitting of FMRI models
-===================================================
+Modelling the data and not the images in FMRI
+=============================================
 
-Most current approaches to the statistical analysis of functional
-magnetic resonance imaging (FMRI) data involve varieties of
-preprocessing steps which alter the signal to noise ratio of the
-original data.
+Current approaches to the analysis of functional magnetic resonance
+imaging (FMRI) data apply various preprocessing steps to the original
+FMRI. These preprocessings lead to a general underestimation of residual
+variance in the downstream analysis. This negatively impacts the type I
+error of statistical tests and increases the risk for reporting false
+positive results.
 
-Enhancing the SNR prior to a formal analysis, though, shakes at primary
-principles of statistical decision making and it will generally inflate
-the type I error of the analysis.
+This is the first statistical software tool which implements the *model
+based* (MB) estimator for FMRI data models. It is a new and original
+method for the statistical analysis of FMRI of brain scans. MB
+estimation combines all preprocessing steps of the standard approaches
+into one single modelling step. Without altering the original 4D-image,
+the method results in smooth fits of the underlying parameter fields.
+More importantly, the method yields a trustworthy estimate of the
+uncertainty in BOLD effect estimation.
 
-This is the first statistical software tool which implements the *data
-oriented method (DOM)* estimator for FMRI data models, a new and
-original method for the statistical analysis of FMRI data of brain
-scans. The method fits a weighted least squares model to points of a
-random vector field. Without prior spacial smoothings, i.e. without
-altering the original 4D-image, the method nevertheless results in
-smooth fits of the underlying activation parameter fields. More
-importantly, though, the method yields a trustworthy estimate of the
-uncertainty of the estimated activation field for each subject in a
-study. The availability of these uncertainty fields allows to model FMRI
-studies by random effects meta regression models acknowledging that
-individual subjects are random entities, and that the variability in the
-estimated individual activation patterns vary across the brain and
-between subjects.
+The availability of these uncertainty fields allows to model FMRI
+studies by random effects meta regression models, acknowledging that
+individual subjects are random entities, and that the certainty at which
+the actual BOLD effect in an individual can be estimated from an FMRI
+varies across the brain and between the subjects.
+
+MB estimation allows to process and report BOLD effects in ati units. In
+particular multicentre studies gain power by its use: if an effect is
+present in your data, you will be more likely to find it.

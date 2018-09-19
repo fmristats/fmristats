@@ -47,11 +47,12 @@ def load_verbose(f, verbose=False, name=None):
         return None
 
 class StudyIterator:
-    def __init__(self, df, keys, verbose=True):
+    def __init__(self, df, keys, new=None, verbose=True):
         assert type(df) is DataFrame, 'df must be DataFrame'
 
         self.df = df
         self.keys = keys
+        self.new = new
         self.verbose = verbose
         iter(self)
 
@@ -62,7 +63,13 @@ class StudyIterator:
     def __next__(self):
         r = next(self.it)
         name = Identifier(cohort=r.cohort, j=r.id, datetime=r.date, paradigm=r.paradigm)
-        return {k : load_verbose(getattr(r, k), self.verbose, name) for k in self.keys}
+        if self.new is None:
+            return name, \
+                {k : load_verbose(getattr(r, k), self.verbose, name) for k in self.keys}
+        else:
+            return name, \
+                {k : getattr(r, k) for k in self.new}, \
+                {k : load_verbose(getattr(r, k), self.verbose, name) for k in self.keys}
 
 class Study:
     """
@@ -100,7 +107,7 @@ class Study:
         self.vb_background   = vb_background
         self.vb_ati          = vb_ati
 
-        self.file_layout = {
+        self.layout = {
             'irritation' : '../data/irr/{2}/{0}-{1:04d}-{2}-{3}.irr',
             'session' : '../data/ses/{2}/{0}-{1:04d}-{2}-{3}.ses',
             'reference_maps' : '../data/ref/{2}/{0}-{1:04d}-{2}-{3}.ref',
@@ -109,37 +116,104 @@ class Study:
             'strftime' : '%Y-%m-%d-%H%M'}
 
         if layout is not None:
-            self.layout = self.file_layout.update(layout)
+            self.layout.update(layout)
 
         if strftime == 'short':
             strftime = '%Y-%m-%d'
 
         if strftime is not None:
-            self.layout = self.file_layout.update({'strftime' : strftime})
+            self.layout.update({'strftime' : strftime})
 
-        #self.irritation      = irritation
-        #self.session         = session
-        #self.reference_maps  = reference_maps
-        #self.population_map  = population_map
-        #self.result          = result
-        #self.strftime        = strftime
-
-    def iterate(self, *keys,
-            vb_name=None, diffeomorphism_name=None, scale_type=None):
+    def iterate(self, *keys, new=None,
+            vb_name=None, diffeomorphism_name=None, scale_type=None,
+            verbose=True):
         df = self.protocol.copy()
 
         for key in keys:
             df [key] = Series(
-                    data = [self.file_layout[key].format(
+                    data = [self.layout[key].format(
                         r.cohort,
                         r.id,
                         r.paradigm,
-                        r.date.strftime(self.file_layout['strftime']),
+                        r.date.strftime(self.layout['strftime']),
                         vb_name,
                         diffeomorphism_name,
                         scale_type)
                         for r in df.itertuples()],
                     index = df.index)
 
-        return StudyIterator(df, keys)
+        if new is not None:
+            for n in new:
+                if n not in keys:
+                    df [n] = Series(
+                            data = [self.layout[n].format(
+                                r.cohort,
+                                r.id,
+                                r.paradigm,
+                                r.date.strftime(self.layout['strftime']),
+                                vb_name,
+                                diffeomorphism_name,
+                                scale_type)
+                                for r in df.itertuples()],
+                            index = df.index)
 
+        return StudyIterator(df, keys, new, verbose)
+
+def add_study_parser(parser):
+
+    parser.add_argument('--protocol',
+            help="""A protocol file""")
+
+    parser.add_argument('--covariates',
+            help="""A covariate file""")
+
+    parser.add_argument('--irritation',
+            help="""Path to a irritation file or template for such a
+            file""")
+
+    parser.add_argument('--session',
+            help="""Path to a session file or template for such a
+            file""")
+
+    parser.add_argument('--reference-maps',
+            help="""Path to a reference maps or template for such a
+            file""")
+
+    parser.add_argument('--population-map',
+            help="""Path to a population map file or template for such a
+            file""")
+
+    parser.add_argument('--fit',
+            help="""Path to a result file or template for such a
+            file""")
+
+    parser.add_argument('--strftime',
+            help="""Format of date and time""")
+
+    parser.add_argument('--cohort',
+            help="""Cohort""")
+
+    parser.add_argument('--id',
+            type=int,
+            nargs='+',
+            help="""id""")
+
+    parser.add_argument('--datetime',
+            help="""Datetime""")
+
+    parser.add_argument('--paradigm',
+            help="""Paradigm""")
+
+    parser.add_argument('--vb-name',
+            default='self',
+            help="""Name of the population space""")
+
+    parser.add_argument('--diffeomorphism-name',
+            default='identity',
+            help="""Name of the diffeomorphism between population space
+            and subject space""")
+
+    parser.add_argument('--scale-type',
+            default='max',
+            choices=['diagonal','max','min'],
+            help="""Scale type""")

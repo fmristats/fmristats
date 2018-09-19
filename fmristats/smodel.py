@@ -491,11 +491,15 @@ class SignalModel:
             maskname = 'no mask being applied '
         elif mask is True:
             try:
-                mask = self.population_map.vb.get_mask()
-                maskname = 'template (vb)'
+                mask = self.population_map.vb_mask.get_mask()
+                maskname = 'template mask (vb_mask)'
             except AttributeError:
-                mask = datamask
-                maskname = 'data driven (foreground/background)'
+                try:
+                    mask = self.population_map.vb.get_mask()
+                    maskname = 'template (vb)'
+                except AttributeError:
+                    mask = datamask
+                    maskname = 'data driven (foreground/background)'
         elif type(mask) is str:
             if mask == 'vb':
                 mask = self.population_map.vb.get_mask()
@@ -600,7 +604,10 @@ class SignalModel:
         Parameters
         ----------
         mask : None or bool or str or ndarray, dtype: bool
-            string can be one of 'template', 'template_mask', or 'target'
+            string can be one of 'vb', 'vb_background',
+            'foreground', or 'vb_estimate'. None defaults to 'data'. True will
+            take precedence: 'vb'> 'vb_background'> 'vb_estimate' >
+            'foreground'.
         verbose : bool
             increase output verbosity
 
@@ -712,7 +719,7 @@ class Result:
         An identifier
     population_map : PopulationMap
     field : ndarray, shape (…,3), dtype: float
-        The effect field, i.e., result of fitting the DOM model.
+        The effect or fitted model parameter field
     coordinates : ndarray, shape (…,3), dtype: float
     hyperparameters : dict
     parameters : dict {str: int}
@@ -734,7 +741,7 @@ class Result:
         self.parameter_dict = parameter_dict
         self.value_dict = value_dict
 
-        self.name = self.population_map.name
+        self.name = self.population_map.diffeomorphism.nb
 
     ####################################################################
     # Extract summary statistics
@@ -779,7 +786,6 @@ class Result:
         return Image(
                 reference=self.population_map.diffeomorphism.reference,
                 data=field, name=self.name)
-                #name='-'.join((param,value)))
 
     def volume(self):
         return np.isfinite(self.statistics).sum() * \
@@ -793,39 +799,53 @@ class Result:
         """
         Apply mask to parameter fields
         """
-        if (mask is False) or (mask is None):
+        if (mask is None) or (mask is False):
             mask = None
-
+            maskname = 'no mask is being applied '
         elif mask is True:
-            if hasattr(self.population_map, 'template_mask'):
-                mask = self.population_map.template_mask.get_mask()
-                maskname = 'template mask'
-            elif hasattr(self.population_map, 'template'):
-                mask = self.population_map.template.get_mask()
-                maskname = 'template'
-            else:
-                mask = None
-                maskname = 'none'
+            try:
+                mask0 = self.population_map.vb_mask.get_mask()
+                maskname0 = 'template mask (vb_mask)'
+            except AttributeError:
+                mask0 = True
+                maskname0 = 'no vb to apply as mask'
+
+            try:
+                mask1 = self.population_map.vb.get_mask()
+                maskname1 = 'template (vb)'
+            except AttributeError:
+                mask1 = True
+                maskname1 = 'no vb mask to apply'
+
+            mask = mask0 & mask1
+            maskname = maskname0 + ' / ' + maskname1
 
         elif type(mask) is str:
-            if mask == 'template_mask':
-                mask = self.population_map.template_mask.get_mask()
-                massname = 'template mask'
-            elif mask == 'template':
-                mask = self.population_map.template.get_mask()
-                maskname = 'template'
-            elif mask == 'target':
-                mask = self.population_map.target.get_mask()
-                masskname = 'target'
+            if mask == 'vb':
+                mask = self.population_map.vb.get_mask()
+                massname = 'template (vb)'
+            elif mask == 'vb_background':
+                mask = self.population_map.vb_background.get_mask()
+                maskname = 'template background (vb_background)'
+            elif mask == 'vb_estimate':
+                mask = self.population_map.vb_estimate.get_mask()
+                maskname = 'template estimate (vb_estimate)'
+            elif mask == 'vb_mask':
+                mask = self.population_map.vb_mask.get_mask()
+                maskname = 'template mask (vb_mask)'
             else:
                 mask = None
-                maskname = 'none'
-
+                maskname = 'no mask to apply'
         else:
             maskname = 'user defined'
 
+        if mask is not None:
+            assert type(mask) is np.ndarray, 'mask must be an ndarray'
+            assert mask.dtype == bool, 'mask must be of dtype bool'
+            assert mask.shape == self.statistics.shape[:-2], 'mask shape must match image shape'
+
         if verbose:
-            print('{}: Fit is restricted to: {}'.format(self.name.name(), maskname))
+            print('Fit is restricted to: {}'.format(maskname))
 
         if mask is not None:
             assert type(mask) is np.ndarray, 'mask must be an ndarray'

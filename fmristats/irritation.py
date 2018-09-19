@@ -27,6 +27,10 @@ from .name import Identifier
 
 import numpy as np
 
+import pandas as pd
+
+from pandas import DataFrame
+
 import pickle
 
 class Irritation:
@@ -93,6 +97,23 @@ class Block(Irritation):
         self.names = names
         self.durations = durations
         self.onsets = onsets
+
+    def to_dataframe(self):
+        df = DataFrame(self.onsets)
+        df.columns.name = 'block'
+        df = df.stack()
+        df.name = 'onset'
+        df = df.reset_index()
+        del df['level_0']
+        df.sort_values(by='onset', inplace=True)
+        df['duration'] = 0.
+        df = df.reset_index()
+        del df['index']
+
+        for c,d in df.groupby('block'):
+            df.loc[df.block == c, 'duration'] = self.durations[c]
+
+        return df
 
 #    def design(self, slice_time, s, c, offset=0, preset=0):
 #        """
@@ -245,14 +266,13 @@ class Block(Irritation):
         Type of irritation: block design
         Block number: {}
         Block names:  {}
-        Onsets: {}
-        Durations: {}
-        Number of onsets per block: {}"""
+        Number of onsets per block: {}
+
+{}"""
         return description.format(
                 self.number,
                 self.names,
-                self.durations,
-                self.onsets,
                 self.number_of_onsets(),
+                self.to_dataframe()
                 )
 

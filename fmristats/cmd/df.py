@@ -79,7 +79,7 @@ def get_df(args, fall_back=None):
             assert type(args.epi_code) is int, \
                     """
 
-You need to provide an EPI code via --epi-code, and it must be integer,
+You need to provide an EPI code via --epi-code, it must be integer,
 within [-3,3], and not null.
 """
             df = pd.DataFrame({

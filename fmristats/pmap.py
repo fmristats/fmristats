@@ -62,6 +62,10 @@ class PopulationMap:
         An image in population space.
     nb_estimate : None, Image or ndarray
         An image in subject space.
+    vb_mask : None, Image or array
+        An image in population space.
+    nb_mask : None, Image or array
+        An image in subject space.
 
     Notes
     -----
@@ -95,6 +99,8 @@ class PopulationMap:
             nb_background=None,
             vb_estimate=None,
             nb_estimate=None,
+            vb_mask=None,
+            nb_mask=None,
             name=None):
 
         assert issubclass(type(diffeomorphism), Diffeomorphism), \
@@ -114,6 +120,9 @@ class PopulationMap:
         if vb_estimate:
             self.set_vb_estimate(image=vb_estimate)
 
+        if vb_mask:
+            self.set_vb_mask(image=vb_mask)
+
         if nb:
             self.set_nb(image=nb)
 
@@ -122,6 +131,9 @@ class PopulationMap:
 
         if nb_estimate:
             self.set_nb_estimate(image=nb_estimate)
+
+        if nb_mask:
+            self.set_nb_mask(image=nb_mask)
 
     def set_vb(self, image):
         """
@@ -216,6 +228,37 @@ class PopulationMap:
                     data=image,
                     name=self.diffeomorphism.vb)
 
+    def set_vb_mask(self, image):
+        """
+        Set or reset the estimate for the image in vb
+
+        Parameters
+        ----------
+        image : Image or ndarray
+            The image or data array.
+
+        Notes
+        -----
+        If image is an Image, it will be checked whether its reference
+        agrees with the reference of the diffeomorphism.  If image is an
+        ndarray, it must be equal to the shape stored with the
+        diffeomorphism, as it will then be assumed that they share the
+        same reference: the image's reference will be set identical to
+        the reference of the diffeomorphism.
+        """
+        if type(image) is Image:
+            assert image.shape == self.diffeomorphism.shape, \
+                    'shapes of image and diffeomorphism must match'
+            assert isclose(image.reference, self.diffeomorphism.reference), \
+                    'references of image and diffeomorphism must match'
+            image.reference = self.diffeomorphism.reference
+            self.vb_mask = image
+        else:
+            self.vb_mask = Image(
+                    reference=self.diffeomorphism.reference,
+                    data=image,
+                    name=self.diffeomorphism.vb)
+
     def set_nb(self, image):
         """
         Set or reset the image in nb
@@ -252,6 +295,18 @@ class PopulationMap:
         assert type(image) is Image, 'image must by an Image'
         self.nb_estimate = image
 
+    def set_nb_mask(self, image):
+        """
+        Set or reset the estimate of the image in nb
+
+        Parameters
+        ----------
+        image : Image or ndarray
+            The image or data array.
+        """
+        assert type(image) is Image, 'image must by an Image'
+        self.nb_mask = image
+
     def describe(self):
         description = """
         Population map
@@ -262,7 +317,9 @@ class PopulationMap:
         vb_background: {:s}
         nb_background: {:s}
         vb_estimate:   {:s}
-        nb_estimate:   {:s}"""
+        nb_estimate:   {:s}
+        vb_mask:       {:s}
+        nb_mask:       {:s}"""
 
         try:
             vb = self.vb.name
@@ -294,9 +351,21 @@ class PopulationMap:
         except:
             nb_estimate = '--'
 
+        try:
+            vb_mask = self.vb_mask.name
+        except:
+            vb_mask = '--'
+
+        try:
+            nb_mask = self.nb_mask.name
+        except:
+            nb_mask = '--'
+
         return description.format(
                 self.name,
-                vb, nb, vb_background, nb_background, vb_estimate, nb_estimate,
+                vb, nb, vb_background, nb_background,
+                vb_estimate, nb_estimate,
+                vb_mask, nb_mask,
                 )
 
     def save(self, file, **kwargs):

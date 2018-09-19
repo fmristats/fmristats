@@ -31,6 +31,8 @@ Prune
 
 import fmristats.cmd.hp as hp
 
+import argparse
+
 from ..api.fmriprune import create_argument_parser as cap
 
 import argparse
@@ -71,8 +73,6 @@ cmd.__doc__ = __doc__
 
 from ..df import get_df
 
-from ...lock import Lock
-
 from ...load import load_result
 
 from ...name import Identifier
@@ -80,6 +80,8 @@ from ...name import Identifier
 from ...protocol import layout_dummy, layout_sdummy
 
 from ...smodel import Result
+
+from ...study import Study
 
 from ...nifti import image2nii
 
@@ -104,11 +106,6 @@ import nibabel as ni
 ########################################################################
 
 def call(args):
-    output = args.protocol_log.format(
-            datetime.datetime.now().strftime('%Y-%m-%d-%H%M'))
-
-    if args.strftime == 'short':
-        args.strftime = '%Y-%m-%d'
 
     ####################################################################
     # Parse protocol
@@ -123,57 +120,83 @@ def call(args):
     # Add file layout
     ####################################################################
 
-    df_layout = df.copy()
+    study = Study(df,df,strftime=args.strftime)
 
-    layout_sdummy(df_layout, 'vb_file',
-            template=args.vb_file,
-            urname=args.population_space,
-            scale_type=args.scale_type,
-            strftime=args.strftime
-            )
+    study.layout.update({'vb_file':args.vb_file, 'vb_mask':args.vb_mask})
 
-    layout_sdummy(df_layout, 'vb_mask',
-            template=args.vb_mask,
-            urname=args.population_space,
-            scale_type=args.scale_type,
-            strftime=args.strftime
-            )
-
-    layout_sdummy(df_layout, 'filename',
-            template=args.fit,
-            urname=args.population_space,
-            scale_type=args.scale_type,
-            strftime=args.strftime
-            )
+    study_iterator = study.iterate('result',
+            new=['result', 'vb_file', 'vb_mask'],
+            vb_name=args.vb_name,
+            diffeomorphism_name=args.diffeomorphism_name,
+            scale_type=args.scale_type)
 
     ####################################################################
-    # Apply wrapper
+    # Wrapper
     ####################################################################
 
-    def wm(r):
-        name = Identifier(cohort=r.cohort, j=r.id, datetime=r.date, paradigm=r.paradigm)
+    def wm(result, vb_file, vb_mask, filename, name):
+            verbose        = args.verbose
+            threshold_df   = args.threshold
+            proportion_df  = args.proportion
+            cmd_bet        = args.cmd_bet
+            variante       = args.variante
 
-        wrapper(name                  = name,
-                df                    = df,
-                index                 = r.Index,
-                filename              = r.filename,
-                verbose               = args.verbose,
-                force                 = args.force,
-                vb                    = args.population_space,
-                threshold_df          = args.threshold,
-                proportion_df         = args.proportion,
-                intercept_file        = r.vb_file,
-                mask_file             = r.vb_mask,
-                cmd_bet               = args.cmd_bet,
-                variante              = args.variante
-                )
+            if verbose > 1:
+                print('{}: Description of the fit:'.format(name.name()))
+                print(result.describe())
+                print(result.population_map.describe())
 
-    it =  df_layout.itertuples()
+            gf = result.get_field('degrees_of_freedom')
 
-    if len(df_layout) > 1 and ((args.cores is None) or (args.cores > 1)):
+            if proportion_df:
+                threshold_df = int(proportion_df * np.nanmax(gf.data))
+
+            if verbose:
+                print('{}: Lower df threshold: {:d}'.format(name.name(), threshold_df))
+
+            inside = (gf.data >= threshold_df)
+
+            intercept = result.get_field('intercept', 'point')
+            intercept.mask(inside)
+            intercept = intercept.round()
+
+            if verbose:
+                print('{}: Fit brain mask'.format(name.name()))
+
+            template = bet(
+                    intercept = intercept,
+                    intercept_file = vb_file,
+                    mask_file = vb_mask,
+                    cmd = cmd_bet,
+                    variante = variante,
+                    verbose = verbose)
+
+            if template is None:
+                print('{}: Unable to bet'.format(name.name()))
+                return
+
+            result.population_map.set_vb_mask(gf.data >= threshold_df)
+
+            if verbose:
+                print('{}: Save: {}'.format(name.name(), filename))
+
+            try:
+                result.save(filename)
+            except Exception as e:
+                print('{}: Unable to write: {}'.format(name.name(), filename))
+                print('{}: Exception: {}'.format(name.name(), e))
+
+    if len(df) > 1 and ((args.cores is None) or (args.cores > 1)):
         try:
             pool = ThreadPool(args.cores)
-            results = pool.map(wm, it)
+            for name, files, instances in study_iterator:
+                result   = instances['result']
+                if result is not None:
+                    vb_file  = files['vb_file']
+                    vb_mask  = files['vb_mask']
+                    filename = files['result']
+                    pool.apply_async(wm, args=(result, vb_file, vb_mask, filename, name))
+
             pool.close()
             pool.join()
         except Exception as e:
@@ -186,83 +209,12 @@ def call(args):
     else:
         try:
             print('Process protocol entries sequentially')
-            for r in it:
-                wm(r)
+            for name, files, instances in study_iterator:
+                result   = instances['result']
+                if result is not None:
+                    vb_file  = files['vb_file']
+                    vb_mask  = files['vb_mask']
+                    filename = files['result']
+                    wm(result, vb_file, vb_mask, filename, name)
         finally:
             pass
-
-    ####################################################################
-    # Write protocol
-    ####################################################################
-
-    if args.verbose:
-        print('Save: {}'.format(output))
-
-    dfile = os.path.dirname(output)
-    if dfile and not isdir(dfile):
-       os.makedirs(dfile)
-
-    df.to_pickle(output)
-
-########################################################################
-
-def wrapper(name, df, index, filename, verbose, force, vb, threshold_df,
-        proportion_df, intercept_file, mask_file, cmd_bet, variante):
-
-    result = load_result(filename, name, df, index, vb, verbose)
-    if df.ix[index,'valid'] == False:
-        return
-
-    if verbose > 1:
-        print('{}: Description of the fit:'.format(result.name.name()))
-        print(result.describe())
-
-    if hasattr(result.population_map, 'template_mask') and \
-        (result.population_map.template_mask is not None) and not force:
-        if verbose:
-            print('{}: Template mask already exits. Use -f/--force to overwrite'.format(name.name()))
-        return
-
-    gf = result.get_field('degrees_of_freedom')
-
-    if proportion_df:
-        threshold_df = int(proportion_df * np.nanmax(gf.data))
-
-    if verbose:
-        print('{}: Lower df threshold: {:d}'.format(name.name(), threshold_df))
-
-    inside = (gf.data >= threshold_df)
-
-    intercept = result.get_field('intercept', 'point')
-    intercept = intercept.mask(inside)
-    intercept = intercept.round()
-
-    if verbose:
-        print('{}: Fit brain mask'.format(name.name()))
-
-    template = bet(
-            intercept = intercept,
-            intercept_file = intercept_file,
-            mask_file = mask_file,
-            cmd = cmd_bet,
-            variante = variante,
-            verbose = verbose)
-
-    if template is None:
-        df.ix[index,'valid'] = False
-        print('{}: Unable to bet'.format(name.name()))
-        lock.conditional_unlock(df, index, verbose, True)
-        return
-
-    result.population_map.set_template_mask(template)
-
-    if verbose:
-        print('{}: Save: {}'.format(name.name(), filename))
-
-    try:
-        result.save(filename)
-        df.ix[index,'locked'] = False
-    except Exception as e:
-        df.ix[index,'valid'] = False
-        print('{}: Unable to write: {}'.format(name.name(), filename))
-        print('{}: Exception: {}'.format(name.name(), e))

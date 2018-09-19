@@ -96,8 +96,7 @@ def create_argument_parser():
 
     signal_model = parser.add_argument_group(
             """define the signal model""",
-            """Arguments which define the model that shall be fitted to
-            the data by the DOM estimator.""")
+            """Model specifications of the signal model""")
 
     signal_model.add_argument('--formula',
             default='C(task)/C(block, Sum)',
@@ -146,7 +145,7 @@ def create_argument_parser():
 
     weighting = parser.add_argument_group(
             """control the weighting of observations""",
-            """Arguments which control the weighting scheme used in DOM
+            """Arguments which control the weighting scheme used in
             estimation.""")
 
     weighting.add_argument('--scale',

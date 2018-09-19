@@ -33,64 +33,14 @@ import fmristats.cmd.hp as hp
 
 import argparse
 
+from ...study import add_study_parser
+
 def create_argument_parser():
     parser = argparse.ArgumentParser(
             description=__doc__,
             epilog=hp.epilog)
 
-########################################################################
-# Input arguments
-########################################################################
-
-    parser.add_argument('--fit',
-            default='../data/fit/{2}/{4}/{5}/{0}-{1:04d}-{2}-{3}-{4}-{5}.fit',
-            help='input file;' + hp.sfit)
-
-########################################################################
-# Output arguments
-########################################################################
-
-    parser.add_argument('--pruned',
-            default='../data/fit/{2}/{4}/{5}/{0}-{1:04d}-{2}-{3}-{4}-{5}.fit',
-            help='input file;' + hp.sfit)
-
-    parser.add_argument('-o', '--protocol-log',
-            default='logs/{}-fsl4prune.pkl',
-            help=hp.protocol_log)
-
-########################################################################
-# Arguments specific for using the protocol API
-########################################################################
-
-    parser.add_argument('--protocol',
-            help=hp.protocol)
-
-    parser.add_argument('--cohort',
-            help=hp.cohort)
-
-    parser.add_argument('--id',
-            type=int,
-            nargs='+',
-            help=hp.j)
-
-    parser.add_argument('--datetime',
-            help=hp.datetime)
-
-    parser.add_argument('--paradigm',
-            help=hp.paradigm)
-
-    parser.add_argument('--strftime',
-            default='%Y-%m-%d-%H%M',
-            help=hp.strftime)
-
-    parser.add_argument('--population-space',
-            default='reference',
-            help=hp.population_space)
-
-    parser.add_argument('--scale-type',
-            default='max',
-            choices=['diagonal','max','min'],
-            help=hp.scale_type)
+    add_study_parser(parser)
 
 ########################################################################
 # Arguments specific for the application of masks
@@ -100,6 +50,7 @@ def create_argument_parser():
 
     handling_df_cutoff.add_argument('-p', '--proportion',
             type=float,
+            default=.6,
             help="""estimates which degrees of freedom are below the
             proportional threshold of the degrees of freedom in the
             effect field estimate are set to null.""")
@@ -156,6 +107,8 @@ from ...protocol import layout_dummy, layout_sdummy
 
 from ...smodel import Result
 
+from ...study import Study
+
 import pandas as pd
 
 import datetime
@@ -175,11 +128,6 @@ import nibabel as ni
 ########################################################################
 
 def call(args):
-    output = args.protocol_log.format(
-            datetime.datetime.now().strftime('%Y-%m-%d-%H%M'))
-
-    if args.strftime == 'short':
-        args.strftime = '%Y-%m-%d'
 
     ####################################################################
     # Parse protocol
@@ -194,39 +142,35 @@ def call(args):
     # Add file layout
     ####################################################################
 
-    df_layout = df.copy()
+    study = Study(df,df,strftime=args.strftime)
 
-    layout_sdummy(df_layout, 'filename',
-            template=args.fit,
-            urname=args.population_space,
-            scale_type=args.scale_type,
-            strftime=args.strftime
-            )
+    study_iterator = study.iterate('result',
+            new='result',
+            vb_name=args.vb_name,
+            diffeomorphism_name=args.diffeomorphism_name,
+            scale_type=args.scale_type)
 
     ####################################################################
     # Apply wrapper
     ####################################################################
 
     def wm(r):
-        name = Identifier(cohort=r.cohort, j=r.id, datetime=r.date, paradigm=r.paradigm)
+        name, n, i = r
+        result = i['result']
+        if result is not None:
+            wrapper(name           = name,
+                    result         = result,
+                    verbose        = args.verbose,
+                    force          = args.force,
+                    threshold_df   = args.threshold,
+                    proportion_df  = args.proportion,
+                    filename       = n
+                    )
 
-        wrapper(name                  = name,
-                df                    = df,
-                index                 = r.Index,
-                filename              = r.filename,
-                verbose               = args.verbose,
-                force                 = args.force,
-                vb                    = args.population_space,
-                threshold_df          = args.threshold,
-                proportion_df         = args.proportion,
-                )
-
-    it =  df_layout.itertuples()
-
-    if len(df_layout) > 1 and ((args.cores is None) or (args.cores > 1)):
+    if len(df) > 1 and ((args.cores is None) or (args.cores > 1)):
         try:
             pool = ThreadPool(args.cores)
-            results = pool.map(wm, it)
+            results = pool.map(wm, study_iterator)
             pool.close()
             pool.join()
         except Exception as e:
@@ -239,41 +183,20 @@ def call(args):
     else:
         try:
             print('Process protocol entries sequentially')
-            for r in it:
+            for r in study_iterator:
                 wm(r)
         finally:
             pass
 
-    ####################################################################
-    # Write protocol
-    ####################################################################
-
-    if args.verbose:
-        print('Save: {}'.format(output))
-
-    dfile = os.path.dirname(output)
-    if dfile and not isdir(dfile):
-       os.makedirs(dfile)
-
-    df.to_pickle(output)
-
 ########################################################################
 
-def wrapper(name, df, index, filename, verbose, force, vb, threshold_df, proportion_df):
-
-    result = load_result(filename, name, df, index, vb, verbose)
-    if df.ix[index,'valid'] == False:
-        return
+def wrapper(name, result, verbose, force, threshold_df, proportion_df,
+        filename):
 
     if verbose > 1:
-        print('{}: Description of the fit:'.format(result.name.name()))
+        print('{}: Description of the fit:'.format(name.name()))
         print(result.describe())
-
-    if hasattr(result.population_map, 'template_mask') and \
-        (result.population_map.template_mask is not None) and not force:
-        if verbose:
-            print('{}: Template mask already exits. Use -f/--force to overwrite'.format(name.name()))
-        return
+        print(result.population_map.describe())
 
     gf = result.get_field('degrees_of_freedom')
 
@@ -283,15 +206,13 @@ def wrapper(name, df, index, filename, verbose, force, vb, threshold_df, proport
     if verbose:
         print('{}: Lower df threshold: {:d}'.format(name.name(), threshold_df))
 
-    result.population_map.set_template_mask(gf.data >= threshold_df)
+    result.population_map.set_vb_mask(gf.data >= threshold_df)
 
     if verbose:
         print('{}: Save: {}'.format(name.name(), filename))
 
     try:
         result.save(filename)
-        df.ix[index,'locked'] = False
     except Exception as e:
-        df.ix[index,'valid'] = False
         print('{}: Unable to write: {}'.format(name.name(), filename))
         print('{}: Exception: {}'.format(name.name(), e))
