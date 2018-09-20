@@ -33,10 +33,14 @@ import fmristats.cmd.hp as hp
 
 import argparse
 
+from ...study import add_study_parser
+
 def create_argument_parser():
     parser = argparse.ArgumentParser(
             description=__doc__,
             epilog=hp.epilog)
+
+    add_study_parser(parser)
 
 ########################################################################
 # Input arguments
@@ -56,52 +60,6 @@ def create_argument_parser():
 
     parser.add_argument('vb_ati',
             help="""path to an ATI reference field in population space""")
-
-    parser.add_argument('--vb-name',
-            help="""name if different to the name saved in vb""")
-
-    parser.add_argument('--fit',
-            default='../data/fit/{2}/{4}/{5}/{6}/{0}-{1:04d}-{2}-{3}-{4}.fit',
-            help=hp.sfit)
-
-    parser.add_argument('--diffeomorphism',
-            default='ants',
-            help="""Name of the fitted diffeomorphisms.""")
-
-    parser.add_argument('--scale-type',
-            default='max',
-            choices=['diagonal','max','min'],
-            help=hp.scale_type)
-
-########################################################################
-# Output arguments
-########################################################################
-
-    parser.add_argument('-o', '--protocol-log',
-            default='logs/{}-fmrisample.pkl',
-            help=hp.protocol_log)
-
-########################################################################
-# Arguments specific for using the protocol API
-########################################################################
-
-    parser.add_argument('protocol',
-            help=hp.protocol)
-
-    parser.add_argument('--cohort',
-            help=hp.cohort)
-
-    parser.add_argument('--id',
-            type=int,
-            nargs='+',
-            help=hp.j)
-
-    parser.add_argument('--paradigm',
-            help=hp.paradigm)
-
-    parser.add_argument('--strftime',
-            default='%Y-%m-%d-%H%M',
-            help=hp.strftime)
 
 ########################################################################
 # Miscellaneous
@@ -142,7 +100,7 @@ from ...load import load, load_result
 
 from ...name import Identifier
 
-from ...protocol import layout_sdummy, layout_fdummy
+from ...study import Study
 
 import numpy as np
 
@@ -187,14 +145,6 @@ def call(args):
         vb_name = args.vb_name
 
     ####################################################################
-
-    output = args.protocol_log.format(
-            datetime.datetime.now().strftime('%Y-%m-%d-%H%M'))
-
-    if args.strftime == 'short':
-        args.strftime = '%Y-%m-%d'
-
-    ####################################################################
     # Parse protocol
     ####################################################################
 
@@ -204,23 +154,26 @@ def call(args):
         sys.exit()
 
     ####################################################################
-    # Add file layout
+    # Create study
     ####################################################################
 
-    df.reset_index(inplace=True, drop=True)
+    layout = {
+        'irritation':args.irritation,
+        'session':args.session,
+        'reference_maps':args.reference_maps,
+        'result':args.fit,
+        'population_map':args.population_map}
 
-    df_layout = df.copy()
+    study = Study(df, df, layout=layout, strftime=args.strftime)
 
-    layout_fdummy(df_layout, 'file',
-            template=args.fit,
-            vb=vb_name,
-            diffeo=args.diffeomorphism,
+    study_iterator = study.iterate('result',
+            vb_name=args.vb_name,
+            diffeomorphism_name=args.diffeomorphism_name,
             scale_type=args.scale_type,
-            strftime=args.strftime
-            )
+            integer_index = True)
 
     ####################################################################
-    # Apply wrapper
+    # Wrapper
     ####################################################################
 
     if not isfile(args.sample) or args.force:
@@ -230,26 +183,31 @@ def call(args):
         statistics = np.empty(vb.shape + (3,len(df),))
         statistics [ ... ] = np.nan
 
-        for r in df_layout.itertuples():
-            name = Identifier(cohort=r.cohort, j=r.id, datetime=r.date, paradigm=r.paradigm)
+        for index, name, instances in study_iterator:
+            result = instances['result']
+            if result is not None:
+                intercept = result.get_field('intercept','point')
+                c = vb_ati.data / intercept.data
 
-            wrapper(
-                    name             = name,
-                    df               = df,
-                    index            = r.Index,
-                    file             = r.file,
-                    vb               = vb,
-                    vb_ati           = vb_ati,
-                    vb_name          = vb_name,
-                    statistics       = statistics,
-                    verbose          = args.verbose,
-                    )
+                beta = result.get_field('task','point')
+                beta_stderr = result.get_field('task','stderr')
+
+                statistics[...,0,index] = c*beta.data
+                statistics[...,1,index] = c*beta_stderr.data
+                statistics[...,2,index] = c
+            else:
+                study_iterator.df.ix[index,'valid'] = False
+
+        df = study_iterator.df.copy()
+        del df['result']
+
+        print(df.head())
 
         sample = Sample(
                 vb            = vb,
                 vb_background = vb_background,
                 vb_ati        = vb_ati,
-                covariates    = df,
+                covariates    = study_iterator.df,
                 statistics    = statistics)
 
         sample = sample.filter()
@@ -269,36 +227,3 @@ def call(args):
         print(sample.vb.describe())
         print('Description of the sample:')
         print(sample.describe())
-
-    ####################################################################
-    # Write protocol
-    ####################################################################
-
-    if args.verbose:
-        print('Save: {}'.format(output))
-
-    dfile = os.path.dirname(output)
-    if dfile and not isdir(dfile):
-       os.makedirs(dfile)
-
-    df.to_pickle(output)
-
-########################################################################
-
-def wrapper(name, df, index, file, vb, vb_ati, vb_name,
-        statistics, verbose):
-
-    result = load_result(file, name, df, index, vb_name, verbose)
-
-    if not df.ix[index,'valid']:
-        return
-
-    intercept = result.get_field('intercept','point')
-    c = vb_ati.data / intercept.data
-
-    beta = result.get_field('task','point')
-    beta_stderr = result.get_field('task','stderr')
-
-    statistics[...,0,index] = c*beta.data
-    statistics[...,1,index] = c*beta_stderr.data
-    statistics[...,2,index] = c

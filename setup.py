@@ -10,7 +10,7 @@ with open(path.join(here, 'README.rst'), encoding='utf-8') as f:
 
 setup(
     name='fmristats',
-    version='0.0.3',
+    version='0.0.4',
     description='Modelling the data and not the images in FMRI',
     long_description=long_description,
     url='https://fmristats.github.io/',
@@ -36,7 +36,7 @@ setup(
             'fmrifit         = fmristats.cmd.api.fmrifit:cmd',
             'fmriirritation  = fmristats.cmd.api.fmriirritation:cmd',
             'fmririgid       = fmristats.cmd.api.fmririgid:cmd',
-            'fmripmap        = fmristats.cmd.api.fmripop:cmd',
+            'fmripop         = fmristats.cmd.api.fmripop:cmd',
             'fmriprune       = fmristats.cmd.api.fmriprune:cmd',
             'fmrisample      = fmristats.cmd.api.fmrisample:cmd',
 

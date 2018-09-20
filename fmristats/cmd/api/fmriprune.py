@@ -142,35 +142,68 @@ def call(args):
     # Add file layout
     ####################################################################
 
-    study = Study(df,df,strftime=args.strftime)
+    layout = {
+        'irritation':args.irritation,
+        'session':args.session,
+        'reference_maps':args.reference_maps,
+        'result':args.fit,
+        'population_map':args.population_map,
+        'diffeomorphism_name':args.diffeomorphism_name,
+        'scale_type':args.scale_type}
 
-    study_iterator = study.iterate('result',
-            new='result',
+    study = Study(df, df, layout=layout, strftime=args.strftime)
+
+    study_iterator = study.iterate('result', new=['result'],
             vb_name=args.vb_name,
             diffeomorphism_name=args.diffeomorphism_name,
             scale_type=args.scale_type)
 
     ####################################################################
-    # Apply wrapper
+    # wrapper
     ####################################################################
 
-    def wm(r):
-        name, n, i = r
-        result = i['result']
-        if result is not None:
-            wrapper(name           = name,
-                    result         = result,
-                    verbose        = args.verbose,
-                    force          = args.force,
-                    threshold_df   = args.threshold,
-                    proportion_df  = args.proportion,
-                    filename       = n
-                    )
+    def wm(result, filename, name):
+            verbose        = args.verbose
+            threshold_df   = args.threshold
+            proportion_df  = args.proportion
+
+            if verbose > 1:
+                print('{}: Description of the fit:'.format(name.name()))
+                print(result.describe())
+                print(result.population_map.describe())
+
+            gf = result.get_field('degrees_of_freedom')
+
+            if proportion_df:
+                threshold_df = int(proportion_df * np.nanmax(gf.data))
+
+            if verbose:
+                print('{}: Lower df threshold: {:d}'.format(name.name(), threshold_df))
+
+            inside = (gf.data >= threshold_df)
+
+            result.population_map.set_vb_mask(inside)
+
+            if verbose:
+                print('{}: Save: {}'.format(name.name(), filename))
+
+            try:
+                result.save(filename)
+            except Exception as e:
+                print('{}: Unable to write: {}'.format(name.name(), filename))
+                print('{}: Exception: {}'.format(name.name(), e))
+
+    ###################################################################
 
     if len(df) > 1 and ((args.cores is None) or (args.cores > 1)):
         try:
             pool = ThreadPool(args.cores)
-            results = pool.map(wm, study_iterator)
+            for name, files, instances in study_iterator:
+                result   = instances['result']
+                if result is not None:
+                    filename = files['result']
+                    pool.apply_async(wm, args=(result, filename, name))
+
             pool.close()
             pool.join()
         except Exception as e:
@@ -183,36 +216,10 @@ def call(args):
     else:
         try:
             print('Process protocol entries sequentially')
-            for r in study_iterator:
-                wm(r)
+            for name, files, instances in study_iterator:
+                result   = instances['result']
+                if result is not None:
+                    filename = files['result']
+                    wm(result, filename, name)
         finally:
             pass
-
-########################################################################
-
-def wrapper(name, result, verbose, force, threshold_df, proportion_df,
-        filename):
-
-    if verbose > 1:
-        print('{}: Description of the fit:'.format(name.name()))
-        print(result.describe())
-        print(result.population_map.describe())
-
-    gf = result.get_field('degrees_of_freedom')
-
-    if proportion_df:
-        threshold_df = int(proportion_df * np.nanmax(gf.data))
-
-    if verbose:
-        print('{}: Lower df threshold: {:d}'.format(name.name(), threshold_df))
-
-    result.population_map.set_vb_mask(gf.data >= threshold_df)
-
-    if verbose:
-        print('{}: Save: {}'.format(name.name(), filename))
-
-    try:
-        result.save(filename)
-    except Exception as e:
-        print('{}: Unable to write: {}'.format(name.name(), filename))
-        print('{}: Exception: {}'.format(name.name(), e))

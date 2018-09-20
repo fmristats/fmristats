@@ -186,6 +186,8 @@ def call(args):
                 print('{}: Unable to write: {}'.format(name.name(), filename))
                 print('{}: Exception: {}'.format(name.name(), e))
 
+    ###################################################################
+
     if len(df) > 1 and ((args.cores is None) or (args.cores > 1)):
         try:
             pool = ThreadPool(args.cores)

@@ -33,22 +33,17 @@ import fmristats.cmd.hp as hp
 
 import argparse
 
+from ...study import add_study_parser
+
 def create_argument_parser():
     parser = argparse.ArgumentParser(
             description=__doc__,
             epilog=hp.epilog)
 
-########################################################################
-# Output arguments
-########################################################################
+    add_study_parser(parser)
 
-    parser.add_argument('--irritation',
-            default='../data/irr/{2}/{0}-{1:04d}-{2}-{3}.irr',
-            help='input file;' + hp.irritation)
-
-    parser.add_argument('-o', '--protocol-log',
-            default='logs/{}-fmriirritation.pkl',
-            help=hp.protocol_log)
+    parser.add_argument('-o', '--out',
+            help="""Save (new) study instance to OUT""")
 
 ########################################################################
 # Arguments specific for the setup of an irritation instance
@@ -84,34 +79,9 @@ def create_argument_parser():
 # If not using the protocol API, you need this
 ########################################################################
 
-    parser.add_argument('--epi',
+    parser.add_argument('--epi-code',
             type=int,
             help=hp.epi_code)
-
-########################################################################
-# Arguments specific for using the protocol API
-########################################################################
-
-    parser.add_argument('--protocol',
-            help=hp.protocol)
-
-    parser.add_argument('--cohort',
-            help=hp.cohort)
-
-    parser.add_argument('--id',
-            type=int,
-            nargs='+',
-            help=hp.j)
-
-    parser.add_argument('--datetime',
-            help=hp.datetime)
-
-    parser.add_argument('--paradigm',
-            help=hp.paradigm)
-
-    parser.add_argument('--strftime',
-            default='%Y-%m-%d-%H%M',
-            help=hp.strftime)
 
 ########################################################################
 # Miscellaneous
@@ -119,23 +89,23 @@ def create_argument_parser():
 
     lock_handling = parser.add_mutually_exclusive_group()
 
-    lock_handling.add_argument('--remove-lock',
+    lock_handling.add_argument('-r', '--remove-lock',
             action='store_true',
-            help=hp.remove_lock.format('population space'))
+            help=hp.remove_lock.format('irritation'))
 
-    lock_handling.add_argument('--ignore-lock',
+    lock_handling.add_argument('-i', '--ignore-lock',
             action='store_true',
-            help=hp.ignore_lock.format('population space'))
+            help=hp.ignore_lock.format('irritation'))
 
     file_handling = parser.add_mutually_exclusive_group()
 
     file_handling.add_argument('-f', '--force',
             action='store_true',
-            help=hp.force.format('population space'))
+            help=hp.force.format('irritation'))
 
     file_handling.add_argument('-s', '--skip',
             action='store_true',
-            help=hp.skip.format('population space'))
+            help=hp.skip.format('irritation'))
 
     parser.add_argument('-v', '--verbose',
             action='count',
@@ -173,7 +143,9 @@ from ...load import load_block_irritation
 
 from ...name import Identifier
 
-from ...protocol import layout_dummy
+from ...study import Study
+
+#from ...protocol import layout_dummy
 
 from ...irritation import Block
 
@@ -194,11 +166,6 @@ import numpy as np
 ########################################################################
 
 def call(args):
-    output = args.protocol_log.format(
-            datetime.datetime.now().strftime('%Y-%m-%d-%H%M'))
-
-    if args.strftime == 'short':
-        args.strftime = '%Y-%m-%d'
 
     ####################################################################
     # Parse protocol
@@ -213,103 +180,43 @@ def call(args):
     # Add file layout
     ####################################################################
 
-    df_layout = df.copy()
+    layout = {
+        'irritation':args.irritation,
+        'session':args.session,
+        'reference_maps':args.reference_maps,
+        'result':args.fit,
+        'population_map':args.population_map,
+        'diffeomorphism_name':args.diffeomorphism_name,
+        'scale_type':args.scale_type}
 
-    layout_dummy(df_layout, 'file',
-            template=args.irritation,
-            strftime=args.strftime
-            )
+    study = Study(df, df, layout=layout, strftime=args.strftime)
+
+    study_iterator = study.iterate('irritation', new=['irritation'])
 
     ####################################################################
     # Apply wrapper
     ####################################################################
 
+    df = study_iterator.df.copy()
+
     df['locked'] = False
 
-    def wm(r):
-        name = Identifier(cohort=r.cohort, j=r.id, datetime=r.date, paradigm=r.paradigm)
+    def wm(instance, filename, name):
+        index = (name.cohort, name.j, name.paradigm, name.datetime)
 
-        try:
-            dfile = os.path.dirname(r.file)
-            if dfile and not isdir(dfile):
-                os.makedirs(dfile)
-        except Exception as e:
-            print('{}: {}'.format(name.name(), e))
+        remove_lock       = args.remove_lock
+        ignore_lock       = args.ignore_lock
+        force             = args.force
+        skip              = args.skip
+        verbose           = args.verbose
 
-        wrapper(name              = name,
-                df                = df,
-                index             = r.Index,
-                remove_lock       = args.remove_lock,
-                ignore_lock       = args.ignore_lock,
-                force             = args.force,
-                skip              = args.skip,
-                verbose           = args.verbose,
-                file              = r.file,
+        namex    = args.namex
+        namey    = args.namey
+        onsetsx  = np.asarray(args.onsetsx)
+        onsetsy  = np.asarray(args.onsetsy)
+        durationsx = np.asarray(args.durationsx)
+        durationsy = np.asarray(args.durationsy)
 
-                namex    = args.namex,
-                namey    = args.namey,
-                onsetsx  = np.asarray(args.onsetsx),
-                onsetsy  = np.asarray(args.onsetsy),
-                durationsx = np.asarray(args.durationsx),
-                durationsy = np.asarray(args.durationsy))
-
-    it =  df_layout.itertuples()
-
-    if len(df_layout) > 1 and ((args.cores is None) or (args.cores > 1)):
-        try:
-            pool = ThreadPool(args.cores)
-            results = pool.map(wm, it)
-            pool.close()
-            pool.join()
-        except Exception as e:
-            pool.close()
-            pool.terminate()
-            print('Pool execution has been terminated')
-            print(e)
-        finally:
-            files = df_layout.ix[df.locked, 'file'].values
-            if len(files) > 0:
-                for f in files:
-                    print('Unlock: {}'.format(f))
-                    os.remove(f)
-            del df['locked']
-    else:
-        try:
-            print('Process protocol entries sequentially')
-            for r in it:
-                wm(r)
-        finally:
-            files = df_layout.ix[df.locked, 'file'].values
-            if len(files) > 0:
-                for f in files:
-                    print('Unlock: {}'.format(f))
-                    os.remove(f)
-            del df['locked']
-
-    ####################################################################
-    # Write protocol
-    ####################################################################
-
-    if args.verbose:
-        print('Save: {}'.format(output))
-
-    dfile = os.path.dirname(output)
-    if dfile and not isdir(dfile):
-       os.makedirs(dfile)
-
-    df.to_pickle(output)
-
-    #if args.epi_code is None:
-    #    print('Warning: protocol has not been equipped with a valid EPI code')
-
-########################################################################
-
-def wrapper(name, df, index, remove_lock, ignore_lock, force, skip,
-        verbose, file, namex, namey, onsetsx, onsetsy, durationsx,
-        durationsy):
-
-    if isfile(file):
-        instance = load_block_irritation(file, name, df, index, verbose)
         if type(instance) is Lock:
             if remove_lock or ignore_lock:
                 if verbose:
@@ -321,47 +228,102 @@ def wrapper(name, df, index, remove_lock, ignore_lock, force, skip,
                 if verbose:
                     print('{}: Locked'.format(name.name()))
                 return
-        else:
-            if df.ix[index,'valid'] and not force:
-                if verbose:
-                    print('{}: Valid'.format(name.name()))
-                return
-            else:
-                if skip:
-                    if verbose:
-                        print('{}: Invalid'.format(name.name()))
-                    return
 
-    if skip:
-        return
+        if instance is not None and not force:
+            if verbose:
+                print('{}: Irritation already exists. Use -f/--force to overwrite'.format(name.name()))
+            return
 
-    if verbose:
-        print('{}: Lock: {}'.format(name.name(), file))
-
-    lock = Lock(name, 'fmrifit', file)
-    df.ix[index, 'locked'] = True
-    lock.save(file)
-    df.ix[index,'valid'] = True
-
-    ####################################################################
-    # Create irritation instance
-    ####################################################################
-
-    try:
-        irritation = Block(name=name,
-                names=[namex, namey],
-                onsets={namex:onsetsx,namey:onsetsy},
-                durations={namex:durationsx,namey:durationsy})
+        if skip:
+            return
 
         if verbose:
-            print('{}: Save: {}'.format(name.name(), file))
+            print('{}: Lock: {}'.format(name.name(), filename))
 
-        irritation.save(file)
-        df.ix[index,'locked'] = False
+        lock = Lock(name, 'fmriirritation', filename)
+        df.ix[index, 'locked'] = True
 
-    except Exception as e:
-        df.ix[index,'valid'] = False
-        print('{}: Unable to create: {}'.format(name.name(), file))
-        print('{}: Exception: {}'.format(name.name(), e))
-        lock.conditional_unlock(df, index, verbose, True)
-        return
+        dfile = os.path.dirname(filename)
+        if dfile and not isdir(dfile):
+           os.makedirs(dfile)
+
+        lock.save(filename)
+
+        ####################################################################
+        # Create irritation instance
+        ####################################################################
+
+        try:
+            irritation = Block(name=name,
+                    names=[namex, namey],
+                    onsets={namex:onsetsx,namey:onsetsy},
+                    durations={namex:durationsx,namey:durationsy})
+
+            if verbose:
+                print('{}: Save: {}'.format(name.name(), filename))
+
+            irritation.save(filename)
+            df.ix[index,'locked'] = False
+
+        except Exception as e:
+            df.ix[index,'valid'] = False
+            print('{}: Unable to create: {}'.format(name.name(), filename))
+            print('{}: Exception: {}'.format(name.name(), e))
+            lock.conditional_unlock(df, index, verbose, True)
+            return
+
+    ####################################################################
+
+    if len(df) > 1 and ((args.cores is None) or (args.cores > 1)):
+        try:
+            pool = ThreadPool(args.cores)
+            for name, files, instances in study_iterator:
+                irritation = instances['irritation']
+                filename = files['irritation']
+                pool.apply_async(wm, args=(irritation, filename, name))
+
+            pool.close()
+            pool.join()
+        except Exception as e:
+            pool.close()
+            pool.terminate()
+            print('Pool execution has been terminated')
+            print(e)
+        finally:
+            files = df.ix[df.locked, 'irritation'].values
+            if len(files) > 0:
+                for f in files:
+                    print('Unlock: {}'.format(f))
+                    os.remove(f)
+    else:
+        try:
+            print('Process protocol entries sequentially')
+            for name, files, instances in study_iterator:
+                irritation = instances['irritation']
+                filename = files['irritation']
+                wm(irritation, filename, name)
+        finally:
+            files = df.ix[df.locked, 'irritation'].values
+            if len(files) > 0:
+                for f in files:
+                    print('Unlock: {}'.format(f))
+                    os.remove(f)
+
+    ####################################################################
+    # Write study to disk
+    ####################################################################
+
+    # TODO: filter study protocol entries form invalid entries
+
+    if args.out is not None:
+        if args.epi_code is None:
+            print('Warning: study protocol has not been equipped with a valid EPI code')
+
+        if args.verbose:
+            print('Save: {}'.format(args.out))
+
+        dfile = os.path.dirname(args.out)
+        if dfile and not isdir(dfile):
+           os.makedirs(dfile)
+
+        study.save(args.out)

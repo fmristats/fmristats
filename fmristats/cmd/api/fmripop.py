@@ -33,10 +33,17 @@ import fmristats.cmd.hp as hp
 
 import argparse
 
+from ...study import add_study_parser
+
 def create_argument_parser():
     parser = argparse.ArgumentParser(
             description=__doc__,
             epilog=hp.epilog)
+
+    add_study_parser(parser)
+
+    parser.add_argument('-o', '--out',
+            help="""Save (new) study instance to OUT""")
 
 ########################################################################
 # Input arguments
@@ -49,67 +56,13 @@ def create_argument_parser():
             help=hp.vb_name)
 
 ########################################################################
-# Input arguments when a provided with reference maps
+# Input arguments when provided with reference maps
 ########################################################################
-
-    parser.add_argument('--session',
-            default='../data/ses/{2}/{0}-{1:04d}-{2}-{3}.ses',
-            help="""needed if --vb-name is set to reference or scanner.""")
-
-########################################################################
-# Input arguments when a provided with reference maps
-########################################################################
-
-    parser.add_argument('--reference-maps',
-            default='../data/ref/{2}/{0}-{1:04d}-{2}-{3}.ref',
-            help="""needed if --vb-name is set to scan.""")
 
     parser.add_argument('--cycle',
             type=int,
             help="""cycle to pick as reference. Needed if --vb-name is
             set to scan""")
-
-########################################################################
-# Input arguments when provided with a previous fit
-########################################################################
-
-    parser.add_argument('--fit',
-            default='../data/fit/{2}/{4}/{5}/{6}/{0}-{1:04d}-{2}-{3}-{4}.fit',
-            help="""needed if --vb-name is set to fit.""" + hp.sfit)
-
-    parser.add_argument('--scale-type',
-            default='max',
-            choices=['diagonal','max','min'],
-            help="""only needed as part of the template for --fit.""" + hp.scale_type)
-
-    parser.add_argument('--nb-name',
-            default='self',
-            help="""name of the population space that was originally
-            used for the fit. Only needed as part of the template for
-            --fit."""  + hp.nb_name)
-
-########################################################################
-# Output arguments
-########################################################################
-
-    parser.add_argument('--population-map',
-            default='../data/pop/{2}/{4}/{5}/{0}-{1:04d}-{2}-{3}-{4}.pop',
-            help=hp.population_map)
-
-    parser.add_argument('--vb',
-            default='self',
-            help=hp.vb)
-
-    parser.add_argument('--diffeomorphism',
-            help="""Name of the diffeomorphism. Default is VB_TYPE.""")
-
-########################################################################
-# Log file
-########################################################################
-
-    parser.add_argument('-o', '--protocol-log',
-            default='logs/{}-fmripop.pkl',
-            help=hp.protocol_log)
 
 ########################################################################
 # Configuration
@@ -118,33 +71,7 @@ def create_argument_parser():
     parser.add_argument('--resolution',
             default=2.,
             type=float,
-            help="""(optional) only applicable when population space is
-            reference.""")
-
-########################################################################
-# Arguments specific for using the protocol API
-########################################################################
-
-    parser.add_argument('--protocol',
-            help=hp.protocol)
-
-    parser.add_argument('--cohort',
-            help=hp.cohort)
-
-    parser.add_argument('--id',
-            type=int,
-            nargs='+',
-            help=hp.j)
-
-    parser.add_argument('--datetime',
-            help=hp.datetime)
-
-    parser.add_argument('--paradigm',
-            help=hp.paradigm)
-
-    parser.add_argument('--strftime',
-            default='%Y-%m-%d-%H%M',
-            help=hp.strftime)
+            help="""(optional) applicable when vb is reference.""")
 
 ########################################################################
 # Miscellaneous
@@ -200,6 +127,8 @@ cmd.__doc__ = __doc__
 
 from ..df import get_df
 
+from ...study import Study
+
 from ...lock import Lock
 
 from ...load import load_result, load_session, load_refmaps, load_population_map
@@ -233,11 +162,6 @@ import numpy as np
 ########################################################################
 
 def call(args):
-    output = args.protocol_log.format(
-            datetime.datetime.now().strftime('%Y-%m-%d-%H%M'))
-
-    if args.strftime == 'short':
-        args.strftime = '%Y-%m-%d'
 
     ####################################################################
     # Parse protocol
@@ -252,126 +176,47 @@ def call(args):
     # Add file layout
     ####################################################################
 
-    if args.diffeomorphism is None:
-        args.diffeomorphism = args.vb_type
+    if args.diffeomorphism_name is None:
+        args.diffeomorphism_name = args.vb_type
 
-    df_layout = df.copy()
+    layout = {
+        'irritation':args.irritation,
+        'session':args.session,
+        'reference_maps':args.reference_maps,
+        'result':args.fit,
+        'population_map':args.population_map,
+        'diffeomorphism_name':args.diffeomorphism_name,
+        'scale_type':args.scale_type}
 
-    layout_dummy(df_layout, 'ses',
-            template=args.session,
-            strftime=args.strftime
-            )
+    study = Study(df, df, layout=layout, strftime=args.strftime)
 
-    layout_dummy(df_layout, 'ref',
-            template=args.reference_maps,
-            strftime=args.strftime
-            )
-
-    layout_fdummy(df_layout, 'fit',
-            template=args.fit,
-            vb=args.nb_name,
-            diffeo=args.diffeomorphism,
-            scale_type=args.scale_type,
-            strftime=args.strftime
-            )
-
-    layout_sdummy(df_layout, 'file',
-            template=args.population_map,
-            urname=args.vb,
-            scale_type=args.diffeomorphism,
-            strftime=args.strftime
-            )
+    study_iterator = study.iterate(
+            'session',
+            'reference_maps',
+            'result',
+            'population_map', new=['population_map'])
 
     ####################################################################
     # Apply wrapper
     ####################################################################
 
+    df = study_iterator.df.copy()
+
     df['locked'] = False
 
-    def wm(r):
-        name = Identifier(cohort=r.cohort, j=r.id, datetime=r.date, paradigm=r.paradigm)
+    def wm(instance, session, reference_maps, result, filename, name):
+        index = (name.cohort, name.j, name.paradigm, name.datetime)
 
-        try:
-            dfile = os.path.dirname(r.file)
-            if dfile and not isdir(dfile):
-                os.makedirs(dfile)
-        except Exception as e:
-            print('{}: {}'.format(name.name(), e))
+        remove_lock       = args.remove_lock
+        ignore_lock       = args.ignore_lock
+        force             = args.force
+        skip              = args.skip
+        verbose           = args.verbose
 
-        wrapper(name              = name,
-                df                = df,
-                index             = r.Index,
-                remove_lock       = args.remove_lock,
-                ignore_lock       = args.ignore_lock,
-                force             = args.force,
-                skip              = args.skip,
-                verbose           = args.verbose,
-                file              = r.file,
+        vb_type           = args.vb_type
+        resolution        = args.resolution
+        scan_cycle        = args.cycle
 
-                file_ses          = r.ses,
-                file_ref          = r.ref,
-                file_fit          = r.fit,
-
-                vb_type           = args.vb_type,
-                vb                = args.vb,
-                resolution        = args.resolution,
-                scan_cycle        = args.cycle,
-                )
-
-    it =  df_layout.itertuples()
-
-    if len(df_layout) > 1 and ((args.cores is None) or (args.cores > 1)):
-        try:
-            pool = ThreadPool(args.cores)
-            results = pool.map(wm, it)
-            pool.close()
-            pool.join()
-        except Exception as e:
-            pool.close()
-            pool.terminate()
-            print('Pool execution has been terminated')
-            print(e)
-        finally:
-            files = df_layout.ix[df.locked, 'file'].values
-            if len(files) > 0:
-                for f in files:
-                    print('Unlock: {}'.format(f))
-                    os.remove(f)
-            del df['locked']
-    else:
-        try:
-            print('Process protocol entries sequentially')
-            for r in it:
-                wm(r)
-        finally:
-            files = df_layout.ix[df.locked, 'file'].values
-            if len(files) > 0:
-                for f in files:
-                    print('Unlock: {}'.format(f))
-                    os.remove(f)
-            del df['locked']
-
-    ####################################################################
-    # Write protocol
-    ####################################################################
-
-    if args.verbose:
-        print('Save: {}'.format(output))
-
-    dfile = os.path.dirname(output)
-    if dfile and not isdir(dfile):
-       os.makedirs(dfile)
-
-    df.to_pickle(output)
-
-#######################################################################
-
-def wrapper(name, df, index, remove_lock, ignore_lock, force, skip,
-        verbose, file, file_ses, file_ref, file_fit, vb_type, vb,
-        scan_cycle, resolution):
-
-    if isfile(file):
-        instance = load_population_map(file, name, df, index, vb, vb_type, verbose)
         if type(instance) is Lock:
             if remove_lock or ignore_lock:
                 if verbose:
@@ -383,93 +228,160 @@ def wrapper(name, df, index, remove_lock, ignore_lock, force, skip,
                 if verbose:
                     print('{}: Locked'.format(name.name()))
                 return
-        else:
-            if df.ix[index,'valid'] and not force:
-                if verbose:
-                    print('{}: Valid'.format(name.name()))
+
+        if instance is not None and not force:
+            if verbose:
+                print('{}: PopulationMap already exists. Use -f/--force to overwrite'.format(name.name()))
+            return
+
+        if skip:
+            return
+
+        if verbose:
+            print('{}: Lock: {}'.format(name.name(), filename))
+
+        lock = Lock(name, 'fmripop', filename)
+        df.ix[index, 'locked'] = True
+
+        dfile = os.path.dirname(filename)
+        if dfile and not isdir(dfile):
+           os.makedirs(dfile)
+
+        lock.save(filename)
+
+        ####################################################################
+        # Create population map instance from a session instance
+        ####################################################################
+
+        if (vb_type == 'scanner') or (vb_type == 'reference'):
+
+            if session is None:
+                print('{}: No session provided'.format(name.name()))
+                df.ix[index,'valid'] = False
+                lock.conditional_unlock(df, index, verbose)
                 return
-            else:
-                if skip:
-                    if verbose:
-                        print('{}: Invalid'.format(name.name()))
-                    return
 
-    if skip:
+            if vb_type == 'scanner':
+                population_map = pmap_scanner(session=session)
+                if verbose:
+                    print('{}: VB space equals scanner space (with native resolution)'.format(
+                        name.name()))
+
+            if vb_type == 'reference':
+                population_map = pmap_reference(session=session, resolution=resolution)
+                if verbose:
+                    print('{}: VB space equals scanner space (with resolution ({} mm)**3)'.format(
+                        name.name(), resolution))
+
+        ####################################################################
+        # Create population map instance from a session and reference
+        # map instance
+        ####################################################################
+
+        if (vb_type == 'scan'):
+
+            if (session is None) or (reference_maps is None) or (scan_cycle is None):
+                print('{}: No session or reference maps provided or CYCLE not defined'.format(name.name()))
+                df.ix[index,'valid'] = False
+                lock.conditional_unlock(df, index, verbose)
+                return
+
+            population_map = pmap_scan(
+                    reference_maps=reference_maps,
+                    session=session,
+                    scan_cycle=scan_cycle)
+
+            if verbose:
+                print('{}: VB space now equals subject position during scan cycle: {:d}'.format(
+                    name.name(), scan_cycle))
+
+        ####################################################################
+        # Create population map instance from a result instance
+        ####################################################################
+
+        if (vb_type == 'fit'):
+
+            if result is None:
+                print('{}: No fit provided'.format(name.name()))
+                df.ix[index,'valid'] = False
+                lock.conditional_unlock(df, index, verbose)
+                return
+
+            population_map = result.population_map
+            population_map.set_template(template=result.get_field('intercept', 'point'))
+
+        try:
+            if verbose:
+                print('{}: Save: {}'.format(name.name(), filename))
+
+            population_map.save(filename)
+            df.ix[index,'locked'] = False
+
+        except Exception as e:
+            df.ix[index,'valid'] = False
+            print('{}: Unable to create: {}'.format(name.name(), filename))
+            print('{}: Exception: {}'.format(name.name(), e))
+            lock.conditional_unlock(df, index, verbose, True)
+            return
+
         return
 
-    if verbose:
-        print('{}: Lock: {}'.format(name.name(), file))
-
-    lock = Lock(name, 'fmrifit', file)
-    df.ix[index, 'locked'] = True
-    lock.save(file)
-    df.ix[index,'valid'] = True
-
-    ####################################################################
-    # Load fit from disk
     ####################################################################
 
-    if (vb_type == 'scanner') or (vb_type == 'reference'):
+    if len(df) > 1 and ((args.cores is None) or (args.cores > 1)):
+        try:
+            pool = ThreadPool(args.cores)
+            for name, files, instances in study_iterator:
+                population_map = instances['population_map']
+                session = instances['session']
+                reference_maps = instances['reference_maps']
+                result = instances['result']
+                filename = files['population_map']
+                pool.apply_async(wm, args=(population_map, session,
+                    reference_maps, result, filename, name))
 
-        session = load_session(file_ses, name, df, index, verbose)
-        if lock.conditional_unlock(df, index, verbose):
-            return
+            pool.close()
+            pool.join()
+        except Exception as e:
+            pool.close()
+            pool.terminate()
+            print('Pool execution has been terminated')
+            print(e)
+        finally:
+            files = df.ix[df.locked, 'population_map'].values
+            if len(files) > 0:
+                for f in files:
+                    print('Unlock: {}'.format(f))
+                    os.remove(f)
+    else:
+        try:
+            print('Process protocol entries sequentially')
+            for name, files, instances in study_iterator:
+                population_map = instances['population_map']
+                session = instances['session']
+                reference_maps = instances['reference_maps']
+                result = instances['result']
+                filename = files['population_map']
+                wm(population_map, session, reference_maps, result, filename, name)
+        finally:
+            files = df.ix[df.locked, 'population_map'].values
+            if len(files) > 0:
+                for f in files:
+                    print('Unlock: {}'.format(f))
+                    os.remove(f)
 
-        if vb_type == 'scanner':
-            population_map = pmap_scanner(session=session)
-            if verbose:
-                print('{}: Population space equals to scanner space (with native resolution)'.format(
-                    name.name()))
+    ####################################################################
+    # Write study to disk
+    ####################################################################
 
-        if vb_type == 'reference':
-            population_map = pmap_reference(session=session, resolution=resolution)
-            if verbose:
-                print('{}: Population space equals scanner space (with resolution ({} mm)**3)'.format(
-                    name.name(), resolution))
+    # TODO: filter study protocol entries form invalid entries
 
-    if (vb_type == 'scan'):
+    if args.out is not None:
+        if args.verbose:
+            print('Save: {}'.format(args.out))
 
-        session = load_session(file_ses, name, df, index, verbose)
-        if lock.conditional_unlock(df, index, verbose):
-            return
+        dfile = os.path.dirname(args.out)
+        if dfile and not isdir(dfile):
+           os.makedirs(dfile)
 
-        reference_maps = load_refmaps(file_ref, name, df, index, verbose)
-        if lock.conditional_unlock(df, index, verbose):
-            return
-
-        population_map = pmap_scan(
-                reference_maps=reference_maps,
-                session=session,
-                scan_cycle=scan_cycle)
-        if verbose:
-            print('{}: Population space equals subject position during scan cycle: {:d}'.format(
-                name.name(), scan_cycle))
-
-    if (vb_type == 'fit'):
-
-       result = load_result(file_fit, name, df, index, vb, verbose)
-       if lock.conditional_unlock(df, index, verbose):
-           return
-
-       if verbose > 1:
-           print('{}: Description of the fit:'.format(result.name.name()))
-           print(result.describe())
-
-       population_map = result.population_map
-       population_map.set_template(template=result.get_field('intercept', 'point'))
-
-    try:
-        if verbose:
-            print('{}: Save: {}'.format(name.name(), file))
-
-        population_map.save(file)
-        df.ix[index,'locked'] = False
-
-    except Exception as e:
-        df.ix[index,'valid'] = False
-        print('{}: Unable to create: {}'.format(name.name(), file))
-        print('{}: Exception: {}'.format(name.name(), e))
-        lock.conditional_unlock(df, index, verbose, True)
-        return
-
-    return
+        study.save(args.out)

@@ -99,6 +99,8 @@ class Block(Irritation):
         self.onsets = onsets
 
     def to_dataframe(self):
+        # TODO: currently only works in balanced designs (equal number
+        # of blocks in each condition!)
         df = DataFrame(self.onsets)
         df.columns.name = 'block'
         df = df.stack()
@@ -114,59 +116,6 @@ class Block(Irritation):
             df.loc[df.block == c, 'duration'] = self.durations[c]
 
         return df
-
-#    def design(self, slice_time, s, c, offset=0, preset=0):
-#        """
-#        Defines the irritation design vector
-#
-#        Parameters
-#        ----------
-#        slice_time : ndarray, shape (n,) or (n,m)
-#            times at which slices have been measured during the
-#            experiment.  First dimension must be the same as the number
-#            of full scans
-#        s : str
-#            stimulus block of interest
-#        c : str
-#            name of the control block to be used
-#        offset : float
-#            offset to apply at the beginning of an irritation phase
-#        preset : float
-#            offset to apply at the end of an irritation phase
-#
-#        Returns
-#        -------
-#        ndarray, shape_like(slice_time), dtype: float
-#            The irritation vector indicating the kind of irritation under
-#            which the subject was exposed while the particular slice has
-#            been measured.
-#        """
-#        assert s != c, 'block names: {} and {c} must be different'.format(s,c)
-#        assert s in self.names, 'name of stimulus block: {} does not exist'.format(s)
-#        assert c in self.names, 'name of control block: {} does not exist'.format(c)
-#
-#        design = np.empty_like(slice_time)
-#        design[...] = np.nan
-#
-#        onsets = self.onsets[c]
-#        durations = self.durations[c]
-#        srt = onsets + offset
-#        end = onsets + durations - preset
-#        mat = np.vstack((srt, end)).T
-#
-#        for x in iter(mat):
-#            design[ (slice_time > x[0]) & (slice_time < x[1]) ] = 0
-#
-#        onsets = self.onsets[s]
-#        durations = self.durations[s]
-#        srt = onsets + offset
-#        end = onsets + durations - preset
-#        mat = np.vstack((srt, end)).T
-#
-#        for x in iter(mat):
-#            design[ (slice_time > x[0]) & (slice_time < x[1]) ] = 1
-#
-#        return design
 
     def design(self, slice_timing, s, c, offset=0, preset=0):
         """
@@ -266,13 +215,10 @@ class Block(Irritation):
         Type of irritation: block design
         Block number: {}
         Block names:  {}
-        Number of onsets per block: {}
-
-{}"""
+        Number of onsets per block: {}"""
         return description.format(
                 self.number,
                 self.names,
                 self.number_of_onsets(),
-                self.to_dataframe()
                 )
 

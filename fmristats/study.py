@@ -36,6 +36,8 @@ import os
 
 from os.path import isfile, isdir, join
 
+import pickle
+
 def load_verbose(f, verbose=False, name=None):
     try:
         instance = load(f)
@@ -43,33 +45,45 @@ def load_verbose(f, verbose=False, name=None):
             print('{}: Read {}'.format(name.name(), f))
         return instance
     except Exception as e:
-        print('{}: Unable to read {}, {}'.format(name.name(), f, e))
+        if verbose > 1:
+            print('{}: Unable to read {}, {}'.format(name.name(), f, e))
         return None
 
 class StudyIterator:
-    def __init__(self, df, keys, new=None, verbose=True):
+    def __init__(self, df, keys, new=None, verbose=True,
+            integer_index=False):
         assert type(df) is DataFrame, 'df must be DataFrame'
 
         self.df = df
         self.keys = keys
         self.new = new
         self.verbose = verbose
-        iter(self)
+        self.integer_index = integer_index
 
     def __iter__(self):
-        self.it = self.df.itertuples()
+        df = self.df.reset_index(drop=True)
+        self.it = df.itertuples()
         return self
 
     def __next__(self):
         r = next(self.it)
         name = Identifier(cohort=r.cohort, j=r.id, datetime=r.date, paradigm=r.paradigm)
         if self.new is None:
-            return name, \
-                {k : load_verbose(getattr(r, k), self.verbose, name) for k in self.keys}
+            if self.integer_index is False:
+                return name, \
+                    {k : load_verbose(getattr(r, k), self.verbose, name) for k in self.keys}
+            else:
+                return r.Index, name, \
+                    {k : load_verbose(getattr(r, k), self.verbose, name) for k in self.keys}
         else:
-            return name, \
-                {k : getattr(r, k) for k in self.new}, \
-                {k : load_verbose(getattr(r, k), self.verbose, name) for k in self.keys}
+            if self.integer_index is False:
+                return name, \
+                    {k : getattr(r, k) for k in self.new}, \
+                    {k : load_verbose(getattr(r, k), self.verbose, name) for k in self.keys}
+            else:
+                return r.Index, name, \
+                    {k : getattr(r, k) for k in self.new}, \
+                    {k : load_verbose(getattr(r, k), self.verbose, name) for k in self.keys}
 
 class Study:
     """
@@ -116,7 +130,7 @@ class Study:
             'strftime' : '%Y-%m-%d-%H%M'}
 
         if layout is not None:
-            self.layout.update(layout)
+            self.update_layout(layout)
 
         if strftime == 'short':
             strftime = '%Y-%m-%d'
@@ -124,9 +138,12 @@ class Study:
         if strftime is not None:
             self.layout.update({'strftime' : strftime})
 
+    def update_layout(self, layout):
+        self.layout.update( (k,v) for k,v in layout.items() if v is not None)
+
     def iterate(self, *keys, new=None,
             vb_name=None, diffeomorphism_name=None, scale_type=None,
-            verbose=True):
+            verbose=True, integer_index=False):
         df = self.protocol.copy()
 
         for key in keys:
@@ -157,7 +174,21 @@ class Study:
                                 for r in df.itertuples()],
                             index = df.index)
 
-        return StudyIterator(df, keys, new, verbose)
+        return StudyIterator(df, keys, new, verbose, integer_index)
+
+    def save(self, file, **kwargs):
+        """
+        Save instance to disk
+
+        This will save the current instance to disk for later use.
+
+        Parameters
+        ----------
+        file : str
+            File name.
+        """
+        with open(file, 'wb') as output:
+            pickle.dump(self, output, **kwargs)
 
 def add_study_parser(parser):
 

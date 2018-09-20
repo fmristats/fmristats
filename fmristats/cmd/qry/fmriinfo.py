@@ -76,6 +76,8 @@ from ... import load
 
 from ...sample import Sample
 
+from ...study import Study
+
 #from ...pmodel import PopulationModel, MetaResult
 
 import pandas as pd
@@ -133,6 +135,9 @@ def print_info(x, f):
     if type(x) is Sample:
         print('{}: sample file'.format(f))
         print(x.describe())
+
+    if type(x) is Study:
+        print('{}: study file'.format(f))
 
     if type(x) is DataFrame:
         if 'id' in x.columns:
