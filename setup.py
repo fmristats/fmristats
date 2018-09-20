@@ -11,7 +11,7 @@ with open(path.join(here, 'README.rst'), encoding='utf-8') as f:
 setup(
     name='fmristats',
     version='0.0.3',
-    description='Data oriented method for fitting FMRI models',
+    description='Modelling the data and not the images in FMRI',
     long_description=long_description,
     url='https://fmristats.github.io/',
     author='Thomas W. D. Möbius',
@@ -24,7 +24,7 @@ setup(
         'License :: OSI Approved :: GNU General Public License v3 or later (GPLv3+)',
         'Programming Language :: Python :: 3.5',
     ],
-    keywords='fmri mri statistics meta-analysis meta-regression imaging neuroimaging',
+    keywords='fmri neuroimaging neuroscience statistics',
     packages=find_packages(exclude=['contrib', 'docs', 'tests*']),
     install_requires=['numpy', 'scipy', 'scikit-image', 'pandas',
         'statsmodels', 'matplotlib', 'seaborn', 'nibabel'],
@@ -33,7 +33,6 @@ setup(
             # general api
             'fmriassessment  = fmristats.cmd.api.fmriassessment:cmd',
             'fmriati         = fmristats.cmd.api.fmriati:cmd',
-            'fmridf          = fmristats.cmd.api.fmridf:cmd',
             'fmrifit         = fmristats.cmd.api.fmrifit:cmd',
             'fmriirritation  = fmristats.cmd.api.fmriirritation:cmd',
             'fmririgid       = fmristats.cmd.api.fmririgid:cmd',
@@ -41,7 +40,7 @@ setup(
             'fmriprune       = fmristats.cmd.api.fmriprune:cmd',
             'fmrisample      = fmristats.cmd.api.fmrisample:cmd',
 
-            # wrapper
+            # wrappers
             'fsl4prune = fmristats.cmd.wrp.fsl4prune:cmd',
             'fsl4pop   = fmristats.cmd.wrp.fsl4pop:cmd',
             'ants4pop   = fmristats.cmd.wrp.ants4pop:cmd',

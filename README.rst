@@ -26,3 +26,14 @@ varies across the brain and between the subjects.
 MB estimation allows to process and report BOLD effects in ati units. In
 particular multicentre studies gain power by its use: if an effect is
 present in your data, you will be more likely to find it.
+
+Citing the MB estimation and this software:
+
+    Thomas W. D. Möbius (2018) Modelling the data and not the images in
+    FMRI, ArXiv e-prints, arXiv:1809.07232
+
+    Thomas W. D. Möbius (2018) fmristats: Modelling the data and not the
+    images in FMRI (Version 0.0.3) [Computer program]. Available at
+    http://fmristats.github.io/
+
+Thank you for citing this project.
