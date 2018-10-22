@@ -120,9 +120,18 @@ def call(args):
     # Add file layout
     ####################################################################
 
-    study = Study(df,df,strftime=args.strftime)
+    layout = {
+        'irritation':args.irritation,
+        'session':args.session,
+        'reference_maps':args.reference_maps,
+        'result':args.fit,
+        'population_map':args.population_map,
+        'diffeomorphism_name':args.diffeomorphism_name,
+        'scale_type':args.scale_type,
+        'vb_file':args.vb_file,
+        'vb_mask':args.vb_mask}
 
-    study.layout.update({'vb_file':args.vb_file, 'vb_mask':args.vb_mask})
+    study = Study(df, df, layout=layout, strftime=args.strftime)
 
     study_iterator = study.iterate('result',
             new=['result', 'vb_file', 'vb_mask'],
@@ -192,7 +201,7 @@ def call(args):
         try:
             pool = ThreadPool(args.cores)
             for name, files, instances in study_iterator:
-                result   = instances['result']
+                result = instances['result']
                 if result is not None:
                     vb_file  = files['vb_file']
                     vb_mask  = files['vb_mask']
@@ -212,7 +221,7 @@ def call(args):
         try:
             print('Process protocol entries sequentially')
             for name, files, instances in study_iterator:
-                result   = instances['result']
+                result = instances['result']
                 if result is not None:
                     vb_file  = files['vb_file']
                     vb_mask  = files['vb_mask']
