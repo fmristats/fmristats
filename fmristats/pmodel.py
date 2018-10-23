@@ -115,6 +115,10 @@ class PopulationModel:
     def fit(self):
         """
         Fit the population model to data
+
+        Returns
+        -------
+        MetaResult
         """
         statistics, p, parameter_names = fit_field(
                 obs=self.statistics,

@@ -167,9 +167,9 @@ class SignalModel:
 
         Returns
         -------
-        The affine transformation that maps a coordinate in reference
-        space to the mean index in the index space of the acquisition
-        grid of the session.
+        Affine : The affine transformation that maps a coordinate in
+        reference space to the mean index in the index space of the
+        acquisition grid of the session.
         """
         return self.references.inv().mean()
 
@@ -243,14 +243,112 @@ class SignalModel:
 
         return observations
 
+    def get_data_matrix(self, burn_in=None, demean=True, dropna=True, verbose=True, **kwargs):
+        """
+        Get the data matrix
+
+        This is the essentially the same matrix as returned by
+        .observations(kwargs). However, scan cycles missing data or
+        severe head movements are removed.
+
+        Returns
+        -------
+        ndarray, shape (n',x,y,z,6), dtype: float
+            [...,:3] = coordinates of observation
+            [..., 3] = MR signal response
+            [..., 4] = time of observation
+            [..., 5] = task during time of observation
+            [..., 6] = block number during time of observation
+        """
+        self.burn_in = burn_in
+
+        observations = self.observations(**kwargs)
+
+        # remove outlying scans due to severe movements of the subject
+        # in the scanner
+
+        if hasattr(self.reference_maps, 'outlying_scans'):
+            scans = self.reference_maps.outlying_scans
+            if scans.any():
+                tmp = np.moveaxis(observations, self.ep+1, 1)
+                tmp [scans] = np.nan
+
+                if verbose:
+                    print('{}: Removed {} ({:.2f}%) outlying scans'.format(
+                        self.name.name(), scans.sum(), 100*scans.mean()))
+
+        # these observations have no response as they are missing
+        # (they may lie outside of the brain)
+        none = np.isnan(observations[...,3])
+
+        # these observations have no response as they are zero
+        null = np.isclose(observations[...,3], 0)
+
+        # put them together and set all observations to NAN when
+        # anything is missing or invalid
+        missings = none | null
+        observations[missings] = np.nan
+
+        if dropna:
+            observations[ np.isnan(observations).any(axis=-1) ] = np.nan
+
+        # scan cycles that we do not need to process
+        if burn_in:
+            observations[:burn_in] = np.nan
+
+        # it is more numerically stable to work with a demeaned time
+        # vector. This has also the consequence that the intercept will
+        # refer to the mean signal intensity at the midpoint of the FMRI
+        # session. Again, this is the point at which the intercept will
+        # have the least variance.
+
+        if demean:
+            self.midpoint = np.nanmean(observations[...,4])
+            observations[...,4] = observations[...,4] - self.midpoint
+
+        if verbose:
+            valid = np.isfinite(observations).all(axis=-1)
+            if demean:
+                print("""{}:
+                …voxels which are part of the model: {:>10,d}
+                …voxels which are not:               {:>10,d}
+                …intercept field refers to:          {:>10.2f} s
+                """.format(self.name.name(), valid.sum(), (~valid).sum(),
+                    self.midpoint))
+            else:
+                print("""{}:
+                …voxels which are part of the model: {:>10,d}
+                …voxels which are not:               {:>10,d}
+                """.format(self.name.name(), valid.sum(), (~valid).sum()))
+
+        data_matrix = DataFrame({
+            'i'     : observations[...,0].ravel(),
+            'j'     : observations[...,1].ravel(),
+            'k'     : observations[...,2].ravel(),
+            'y'     : observations[...,3].ravel(),
+            'time'  : observations[...,4].ravel(),
+            'task'  : observations[...,5].ravel(),
+            'block' : observations[...,6].ravel(),
+            'cycle' : observations[...,7].ravel(),
+            'slice' : observations[...,8].ravel()})
+
+        if dropna:
+            data_matrix.dropna(inplace=True)
+        else:
+            data_matrix.dropna(inplace=True,
+                    subset=['i', 'j', 'k', 'y', 'time'])
+
+        self.data_matrix = data_matrix
+        return self.data_matrix
+
     def create_data_matrix(self, burn_in=None, verbose=True, **kwargs):
         """
         Create the data matrix
 
         This is the essentially the same matrix as returned by
-        .observations(). However, scan cycles with no subject
-        irritation or missing data are removed. However, time is centred
-        to its mean.
+        .observations(kwargs). However, scan cycles with no subject
+        irritation, missing data, or severe head movements are removed,
+        and time is centred to its mean.
 
         Returns
         -------
@@ -355,7 +453,7 @@ class SignalModel:
 
     def data_at_subject_coordinate(self, x):
         """
-        Fit the signal model to data at specificed coordinates given
+        Fit the signal model to data at specified coordinates given
         with respect to the coordinate system of the subject reference
         space.
 
@@ -375,7 +473,7 @@ class SignalModel:
 
     def data_at_index(self, index):
         """
-        Fit the signal model to data at specificed coordinates given
+        Fit the signal model to data at specified coordinates given
         with respect to the coordinate system of the subject reference
         space.
 
@@ -387,9 +485,9 @@ class SignalModel:
         x=self.population_map.diffeomorphism.apply_to_index(index)
         return self.data_at_subject_coordinate(x)
 
-    def model_at_subject_coordinate(self, x, formula='y~C(task)/C(block, Sum)'):
+    def data_at_coordinate(self, x):
         """
-        Fit the signal model to data at specificed coordinates given
+        Fit the signal model to data at specified coordinates given
         with respect to the coordinate system of the subject reference
         space.
 
@@ -398,18 +496,47 @@ class SignalModel:
         x : ndarray, shape (3,), dtype: float
             The coordinates at which to fit the model
         """
+        x=self.population_map.diffeomorphism.apply(x)
+        return self.data_at_subject_coordinate(x)
+
+    def model_at_subject_coordinate(self, x,
+            formula='y~C(task)/C(block, Sum)', timevec=False):
+        """
+        Fit the signal model to data at specified coordinates given
+        with respect to the coordinate system of the subject reference
+        space.
+
+        Parameters
+        ----------
+        x : ndarray, shape (3,), dtype: float
+            The coordinates at which to fit the model
+        formula : str
+            A formula.
+        timevec : bool
+            If the formula does not contain time, the design matrix
+            (exog) will not contain time as a covariate. If timevec is
+            True, this will add a timevec attribute to the model
+            instance that contains the time vector.
+        """
         assert hasattr(self, 'scale'), 'first set hyperparameters'
         assert hasattr(self, 'radius'), 'first set hyperparameters'
         assert hasattr(self, 'data_matrix'), 'first set data_matrix'
 
-        return model_at(coordinate=x, formula=formula,
-                data=self.data_matrix,
+        data_matrix = self.data_matrix.dropna().copy()
+
+        m = model_at(coordinate=x, formula=formula,
+                data=data_matrix,
                 scale=self.scale,
                 radius=self.radius)
 
+        if timvec:
+            m.timevec = data_matrix['time']
+
+        return m
+
     def model_at_index(self, index, **kwargs):
         """
-        Fit the signal model to data at specificed coordinates
+        Fit the signal model to data at specified coordinates
 
         Parameters
         ----------
@@ -421,8 +548,8 @@ class SignalModel:
 
     def model_at_coordinate(self, x, **kwargs):
         """
-        Fit the signal model to data at specificed coordinates given
-        with respect to the coordinate system of the population space.
+        Fit the signal model to data at specified coordinates given with
+        respect to the coordinate system of the population space.
 
         Parameters
         ----------
@@ -549,21 +676,23 @@ class SignalModel:
         assert hasattr(self, 'data_matrix'), 'first set the design using .create_data_matrix()'
         assert hasattr(self, 'exog'), 'first set the design using .create_design_matrix()'
 
+        data_matrix = self.data_matrix.dropna()
+
         if verbose:
             print('{}: Start fit'.format(self.name.name()))
 
         old_settings = np.seterr(divide='raise', invalid='raise')
         time0 = time.time()
 
-        dataframe = self.data_matrix[['time', 'i', 'j', 'k']].copy()
+        dataframe = data_matrix[['time', 'i', 'j', 'k']].copy()
         dataframe['reweighted_residual'] = 0.
 
         statistics, parameter_dict, value_dict = fit_field(
                 coordinates = coordinates.copy(),
                 mask        = mask,
-                endog       = self.data_matrix.y.values.copy(),
+                endog       = data_matrix.y.values.copy(),
                 exog        = self.exog.copy(),
-                agc         = self.data_matrix[['i','j','k']].values.copy(),
+                agc         = data_matrix[['i','j','k']].values.copy(),
                 dataframe   = dataframe,
                 ep          = self.ep,
                 scale       = self.scale,
@@ -594,7 +723,7 @@ class SignalModel:
         return result
 
     def fit_at_indices(self, indices, **kwargs):
-        coordinates = self.diffeomorphism.apply_to_indices(indices)
+        coordinates = self.population_map.diffeomorphism.apply_to_indices(indices)
         return self.fit_at_subject_coordinates(coordinates = coordinates, **kwargs)
 
     def fit(self, mask=True, verbose=True):
