@@ -33,10 +33,17 @@ import fmristats.cmd.hp as hp
 
 import argparse
 
+from ...study import add_study_parser
+
 def create_argument_parser():
     parser = argparse.ArgumentParser(
             description=__doc__,
             epilog=hp.epilog)
+
+    add_study_parser(parser)
+
+    parser.add_argument('-o', '--out',
+            help="""Save (new) study instance to OUT""")
 
 ########################################################################
 # Input arguments
@@ -45,22 +52,6 @@ def create_argument_parser():
     parser.add_argument('--nii',
             default='../raw/nii/{2}/{0}-{1:04d}-{2}-{3}.nii',
             help='input file;' + hp.nii)
-
-    parser.add_argument('--irritation',
-            default='../data/irr/{2}/{0}-{1:04d}-{2}-{3}.irr',
-            help='input file;' + hp.irritation)
-
-########################################################################
-# Output arguments
-########################################################################
-
-    parser.add_argument('--session',
-            default='../data/ses/{2}/{0}-{1:04d}-{2}-{3}.ses',
-            help='output file;' + hp.session)
-
-    parser.add_argument('-o', '--protocol-log',
-            default='logs/{}-nii2ses.pkl',
-            help=hp.protocol_log)
 
 ########################################################################
 # Arguments specific for the setup of a session instance
@@ -81,33 +72,8 @@ def create_argument_parser():
             help=hp.set_foreground)
 
     parser.add_argument('--foreground',
-            default='../raw/frg/{2}/{0}-{1:04d}-{2}-{3}-foreground.nii.gz',
+            default='../raw/foreground/{2}/{0}-{1:04d}-{2}-{3}-foreground.nii.gz',
             help=hp.set_foreground)
-
-########################################################################
-# Arguments specific for using the protocol API
-########################################################################
-
-    parser.add_argument('--protocol',
-            help=hp.protocol)
-
-    parser.add_argument('--cohort',
-            help=hp.cohort)
-
-    parser.add_argument('--id',
-            type=int,
-            nargs='+',
-            help=hp.j)
-
-    parser.add_argument('--datetime',
-            help=hp.datetime)
-
-    parser.add_argument('--paradigm',
-            help=hp.paradigm)
-
-    parser.add_argument('--strftime',
-            default='%Y-%m-%d-%H%M',
-            help=hp.strftime)
 
 ########################################################################
 # Miscellaneous
@@ -115,23 +81,23 @@ def create_argument_parser():
 
     lock_handling = parser.add_mutually_exclusive_group()
 
-    lock_handling.add_argument('--remove-lock',
+    lock_handling.add_argument('-r', '--remove-lock',
             action='store_true',
-            help=hp.remove_lock.format('population space'))
+            help=hp.remove_lock.format('session'))
 
-    lock_handling.add_argument('--ignore-lock',
+    lock_handling.add_argument('-i', '--ignore-lock',
             action='store_true',
-            help=hp.ignore_lock.format('population space'))
+            help=hp.ignore_lock.format('session'))
 
     file_handling = parser.add_mutually_exclusive_group()
 
     file_handling.add_argument('-f', '--force',
             action='store_true',
-            help=hp.force.format('population space'))
+            help=hp.force.format('session'))
 
     file_handling.add_argument('-s', '--skip',
             action='store_true',
-            help=hp.skip.format('population space'))
+            help=hp.skip.format('session'))
 
     parser.add_argument('-v', '--verbose',
             action='count',
@@ -169,7 +135,7 @@ from ...load import load_block_irritation, load_session
 
 from ...name import Identifier
 
-from ...protocol import layout_dummy
+from ...study import Study
 
 from ...irritation import Block
 
@@ -211,34 +177,32 @@ def call(args):
 
     if not 'epi' in df.columns:
         print("""
-No column epi found. You need to provide an EPI code via --epi-code, and
+No epi column found. You need to provide an EPI code via --epi-code,
 it must be integer, within [-3,3], and not null.""")
 
     ####################################################################
     # Add file layout
     ####################################################################
 
-    df_layout = df.copy()
+    layout = {
+        'irritation':args.irritation,
+        'session':args.session,
+        'reference_maps':args.reference_maps,
+        'result':args.fit,
+        'population_map':args.population_map,
+        'diffeomorphism_name':args.diffeomorphism_name,
+        'scale_type':args.scale_type,
+        'foreground':args.foreground,
+        'nii':args.nii,
+        }
 
-    layout_dummy(df_layout, 'nii',
-            template=args.nii,
-            strftime=args.strftime
-            )
+    study = Study(df, df, layout=layout, strftime=args.strftime)
 
-    layout_dummy(df_layout, 'foreground',
-            template=args.foreground,
-            strftime=args.strftime
-            )
-
-    layout_dummy(df_layout, 'irr',
-            template=args.irritation,
-            strftime=args.strftime
-            )
-
-    layout_dummy(df_layout, 'file',
-            template=args.session,
-            strftime=args.strftime
-            )
+    study_iterator = study.iterate('irritation', 'session',
+            new=['session', 'nii', 'foreground'],
+            vb_name=args.vb_name,
+            diffeomorphism_name=args.diffeomorphism_name,
+            scale_type=args.scale_type)
 
     ####################################################################
     # Apply wrapper
