@@ -76,7 +76,8 @@ def create_argument_parser():
             help="""name of block y""")
 
 ########################################################################
-# If not using the protocol API, you need this
+# If you are not using the protocol or study API, you need to provide
+# the:
 ########################################################################
 
     parser.add_argument('--epi-code',
@@ -145,8 +146,6 @@ from ...name import Identifier
 
 from ...study import Study
 
-#from ...protocol import layout_dummy
-
 from ...irritation import Block
 
 import pandas as pd
@@ -187,7 +186,8 @@ def call(args):
         'result':args.fit,
         'population_map':args.population_map,
         'diffeomorphism_name':args.diffeomorphism_name,
-        'scale_type':args.scale_type}
+        'scale_type':args.scale_type,
+        }
 
     study = Study(df, df, layout=layout, strftime=args.strftime)
 

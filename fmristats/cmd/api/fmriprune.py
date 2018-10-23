@@ -149,7 +149,8 @@ def call(args):
         'result':args.fit,
         'population_map':args.population_map,
         'diffeomorphism_name':args.diffeomorphism_name,
-        'scale_type':args.scale_type}
+        'scale_type':args.scale_type,
+        }
 
     study = Study(df, df, layout=layout, strftime=args.strftime)
 

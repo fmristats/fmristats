@@ -77,8 +77,6 @@ from ...load import load_result
 
 from ...name import Identifier
 
-from ...protocol import layout_dummy, layout_sdummy
-
 from ...smodel import Result
 
 from ...study import Study
@@ -129,7 +127,8 @@ def call(args):
         'diffeomorphism_name':args.diffeomorphism_name,
         'scale_type':args.scale_type,
         'vb_file':args.vb_file,
-        'vb_mask':args.vb_mask}
+        'vb_mask':args.vb_mask,
+        }
 
     study = Study(df, df, layout=layout, strftime=args.strftime)
 
