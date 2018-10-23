@@ -33,7 +33,7 @@ Citing the MB estimator and this software:
     FMRI, ArXiv e-prints, arXiv:1809.07232
 
     Thomas W. D. Möbius (2018) fmristats: Modelling the data and not the
-    images in FMRI (Version 0.0.4) [Computer program]. Available at
+    images in FMRI (Version 0.0.5) [Computer program]. Available at
     http://fmristats.github.io/
 
 Thank you for citing this project.
