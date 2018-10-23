@@ -139,6 +139,11 @@ def data_at(coordinate, data, scale : float, radius : float):
     data['weight'] = weights
     return data
 
-def model_at(formula, **kwargs):
+def model_at(formula, timevec=False, **kwargs):
     data = data_at(**kwargs)
-    return smf.wls(formula, weights=data.weight, data=data)
+    m = smf.wls(formula, weights=data.weight, data=data)
+
+    if timevec:
+        m.timevec = data['time']
+
+    return m

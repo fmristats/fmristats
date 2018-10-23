@@ -243,9 +243,9 @@ class SignalModel:
 
         return observations
 
-    def get_data_matrix(self, burn_in=None, demean=True, dropna=True, verbose=True, **kwargs):
+    def create_data_matrix(self, burn_in=None, demean=True, dropna=True, verbose=True, **kwargs):
         """
-        Get the data matrix
+        Create the data matrix
 
         This is the essentially the same matrix as returned by
         .observations(kwargs). However, scan cycles missing data or
@@ -253,7 +253,7 @@ class SignalModel:
 
         Returns
         -------
-        ndarray, shape (n',x,y,z,6), dtype: float
+        DataFrame : Not necessarily in this order,
             [...,:3] = coordinates of observation
             [..., 3] = MR signal response
             [..., 4] = time of observation
@@ -321,7 +321,7 @@ class SignalModel:
                 …voxels which are not:               {:>10,d}
                 """.format(self.name.name(), valid.sum(), (~valid).sum()))
 
-        data_matrix = DataFrame({
+        data = DataFrame({
             'i'     : observations[...,0].ravel(),
             'j'     : observations[...,1].ravel(),
             'k'     : observations[...,2].ravel(),
@@ -333,99 +333,13 @@ class SignalModel:
             'slice' : observations[...,8].ravel()})
 
         if dropna:
-            data_matrix.dropna(inplace=True)
+            data.dropna(inplace=True)
         else:
-            data_matrix.dropna(inplace=True,
+            data.dropna(inplace=True,
                     subset=['i', 'j', 'k', 'y', 'time'])
 
-        self.data_matrix = data_matrix
-        return self.data_matrix
-
-    def create_data_matrix(self, burn_in=None, verbose=True, **kwargs):
-        """
-        Create the data matrix
-
-        This is the essentially the same matrix as returned by
-        .observations(kwargs). However, scan cycles with no subject
-        irritation, missing data, or severe head movements are removed,
-        and time is centred to its mean.
-
-        Returns
-        -------
-        ndarray, shape (n',x,y,z,6), dtype: float
-            [...,:3] = coordinates of observation
-            [..., 3] = MR signal response
-            [..., 4] = time of observation
-            [..., 5] = task during time of observation
-            [..., 6] = block number during time of observation
-        """
-        self.burn_in = burn_in
-
-        observations = self.observations(**kwargs)
-
-        # remove outlying scans due to severe movements of the subject
-        # in the scanner
-
-        if hasattr(self.reference_maps, 'outlying_scans'):
-            scans = self.reference_maps.outlying_scans
-            if scans.any():
-                tmp = np.moveaxis(observations, self.ep+1, 1)
-                tmp [scans] = np.nan
-
-                if verbose:
-                    print('{}: Removed {} ({:.2f}%) outlying scans'.format(
-                        self.name.name(), scans.sum(), 100*scans.mean()))
-
-        # these observations have either no response (e.g. they are
-        # outside of the brain) or there are not all covariates
-        # available (e.g. they have been acquired outside of task blocks
-        # or the position of the slice in space could not be detected
-        # with success.
-        none = np.isnan(observations).any(axis=-1)
-
-        # these observations have no response as they are identical
-        # zero.
-        null = np.isclose(observations[...,3], 0)
-
-        # put them together and set all observations to NAN when
-        # anything is missing or invalid
-        missings = none | null
-        observations[missings] = np.nan
-
-        # scan cycles that we do not need to process at all
-        if burn_in:
-            observations[:burn_in] = np.nan
-
-        # it is more numerically stable to work with a demeaned time
-        # vector. This has also the consequence that the intercept will
-        # refer to the mean signal intensity at the midpoint of the FMRI
-        # session. Again, this is the point at which the intercept will
-        # have the least variance.
-        self.midpoint = np.nanmean(observations[...,4])
-        observations[...,4] = observations[...,4] - self.midpoint
-
-        if verbose:
-            valid = np.isfinite(observations).all(axis=-1)
-            print("""{}:
-            …voxels which are part of the model: {:>10,d}
-            …voxels which are not:               {:>10,d}
-            …intercept field refers to:          {:>10.2f} s
-            """.format(self.name.name(), valid.sum(), (~valid).sum(), self.midpoint))
-
-        data_matrix = DataFrame({
-            'i'     : observations[...,0].ravel(),
-            'j'     : observations[...,1].ravel(),
-            'k'     : observations[...,2].ravel(),
-            'y'     : observations[...,3].ravel(),
-            'time'  : observations[...,4].ravel(),
-            'task'  : observations[...,5].ravel(),
-            'block' : observations[...,6].ravel(),
-            'cycle' : observations[...,7].ravel(),
-            'slice' : observations[...,8].ravel()})
-
-        data_matrix.dropna(inplace=True)
-        self.data_matrix = data_matrix
-        return self.data_matrix
+        self.data = data
+        return self.data
 
     def create_design_matrix(self, formula='C(task)/C(block, Sum)',
             parameter=['intercept', 'task'], verbose=True):
@@ -436,7 +350,9 @@ class SignalModel:
         -------
         (DesignMatrix, DesignMatrix)
         """
-        assert hasattr(self, 'data_matrix'), 'first set the design using .create_data_matrix()'
+        assert hasattr(self, 'data'), 'first set the design using .create_data_matrix()'
+
+        self.data_matrix = self.data.dropna().copy()
 
         dmat = dmatrix(formula, self.data_matrix, eval_env=-1)
         names = dmat.design_info.column_names
@@ -464,10 +380,10 @@ class SignalModel:
         """
         assert hasattr(self, 'scale'), 'first set hyperparameters'
         assert hasattr(self, 'radius'), 'first set hyperparameters'
-        assert hasattr(self, 'data_matrix'), 'first set data_matrix'
+        assert hasattr(self, 'data'), 'first set data'
 
         return data_at(coordinate=x,
-                data=self.data_matrix,
+                data=self.data,
                 scale=self.scale,
                 radius=self.radius)
 
@@ -520,19 +436,15 @@ class SignalModel:
         """
         assert hasattr(self, 'scale'), 'first set hyperparameters'
         assert hasattr(self, 'radius'), 'first set hyperparameters'
-        assert hasattr(self, 'data_matrix'), 'first set data_matrix'
+        assert hasattr(self, 'data'), 'first set data'
 
-        data_matrix = self.data_matrix.dropna().copy()
+        data_matrix = self.data.dropna().copy()
 
-        m = model_at(coordinate=x, formula=formula,
+        return model_at(coordinate=x, formula=formula,
                 data=data_matrix,
                 scale=self.scale,
-                radius=self.radius)
-
-        if timvec:
-            m.timevec = data_matrix['time']
-
-        return m
+                radius=self.radius,
+                timevec=timevec)
 
     def model_at_index(self, index, **kwargs):
         """
@@ -591,7 +503,6 @@ class SignalModel:
                 self.name.name(), mask.sum(), (~mask).sum()))
 
         return mask
-
 
     def create_estimation_matrix(self, mask=True, verbose=True):
         """
@@ -673,10 +584,8 @@ class SignalModel:
         """
         assert hasattr(self, 'scale'), 'first set hyperparameters using .set_hyperparameters()'
         assert hasattr(self, 'radius'), 'first set hyperparameters using .set_hyperparameters()'
-        assert hasattr(self, 'data_matrix'), 'first set the design using .create_data_matrix()'
+        assert hasattr(self, 'data_matrix'), 'first set the design using .create_design_matrix()'
         assert hasattr(self, 'exog'), 'first set the design using .create_design_matrix()'
-
-        data_matrix = self.data_matrix.dropna()
 
         if verbose:
             print('{}: Start fit'.format(self.name.name()))
@@ -684,15 +593,15 @@ class SignalModel:
         old_settings = np.seterr(divide='raise', invalid='raise')
         time0 = time.time()
 
-        dataframe = data_matrix[['time', 'i', 'j', 'k']].copy()
+        dataframe = self.data_matrix[['time', 'i', 'j', 'k']].copy()
         dataframe['reweighted_residual'] = 0.
 
         statistics, parameter_dict, value_dict = fit_field(
                 coordinates = coordinates.copy(),
                 mask        = mask,
-                endog       = data_matrix.y.values.copy(),
+                endog       = self.data_matrix.y.values.copy(),
                 exog        = self.exog.copy(),
-                agc         = data_matrix[['i','j','k']].values.copy(),
+                agc         = self.data_matrix[['i','j','k']].values.copy(),
                 dataframe   = dataframe,
                 ep          = self.ep,
                 scale       = self.scale,
