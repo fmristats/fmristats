@@ -27,7 +27,7 @@ setup(
     keywords='fmri neuroimaging neuroscience statistics',
     packages=find_packages(exclude=['contrib', 'docs', 'tests*']),
     install_requires=['numpy', 'scipy', 'scikit-image', 'pandas',
-        'statsmodels', 'matplotlib', 'seaborn', 'nibabel'],
+        'statsmodels', 'matplotlib', 'seaborn', 'nibabel', 'nipype'],
     entry_points={
         'console_scripts': [
             # general api
