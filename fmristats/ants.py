@@ -43,13 +43,6 @@ from contextlib import contextmanager
 
 import sys
 
-# There seems to be a bug either in nipype.interfaces or ANTS. Expected
-# by nipype is
-#     RegistrationSynQuick
-# provided by ANTS is
-#     RegistrationSyNQuick
-# whether this is due to the installation by NeuroDebian?
-
 def fit_population_map(vb_image, nb_image, output_prefix, threads=4,
         verbose=True, vb=None, name='ants'):
     """
