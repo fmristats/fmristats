@@ -185,6 +185,8 @@ def call(args):
 
             result.population_map.set_vb_mask(gf.data >= threshold_df)
 
+            result.population_map.vb_mask.name = 'FSL_BETTED_INTERCEPT'
+
             if verbose:
                 print('{}: Save: {}'.format(name.name(), filename))
 
