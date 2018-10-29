@@ -37,3 +37,17 @@ Citing the MB estimator and this software:
     http://fmristats.github.io/
 
 Thank you for citing this project.
+
+.. changelog:: 0.0.5
+
+    * So far, creating the data matrix dropped between block
+      observations and demeaned the time vector for numerical stability
+      and convenience. This is still the default behaviour but there is
+      now the option to not follow the default.
+
+    * CLI-argument to --fit was ignored in fmriprune, fsl4prune and
+      thus always reverted to the default template. Fixed.
+
+.. changelog:: 0.0.4
+
+    This is the first official version.
