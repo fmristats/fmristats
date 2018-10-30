@@ -148,7 +148,7 @@ def picture(self, epi_code, nx, ny, slices=None, cmap=None,
         pt.axvline(index[1], c='k', linewidth=.8)
         pt.axhline(index[0], c='k', linewidth=.8)
 
-    return p, slices, imatrix
+    return p, slices, imatrix, cmap
 
 def contour(self, epi_code, nx, ny, slices=None, cmap=None,
         interpolation=None, background=None, mark_peak=False, **kwargs):
