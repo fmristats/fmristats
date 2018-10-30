@@ -35,11 +35,14 @@ def nii2image(nii, name=None):
     assert len(data.shape) == 3, 'not a 3D-image'
     return Image(reference=nii.affine, data=data, name=name)
 
-def image2nii(image):
+def image2nii(image, nan_to_zero=False):
     """
     Converts Image to Nifti1Image
     """
-    return ni.Nifti1Image(image.data, image.reference.affine)
+    data = image.data.copy()
+    if nan_to_zero:
+        data [ ~image.get_mask() ] = 0
+    return ni.Nifti1Image(data, image.reference.affine)
 
 #######################################################################
 # Session
