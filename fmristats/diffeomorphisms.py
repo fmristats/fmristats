@@ -36,7 +36,7 @@ import numpy.ma as ma
 
 from numpy.linalg import inv
 
-from scipy.ndimage import map_coordinates
+from scipy.ndimage import label, map_coordinates
 
 class Diffeomorphism:
     """
@@ -377,9 +377,64 @@ class Image(Identity):
         data = data.round().astype(int)
         return Image(reference=self.reference, data=data, name=self.name)
 
+    def volume(self):
+        """
+        Calculates the volume occupied by the image
+
+        Returns
+        -------
+        float : volume of non-zero values in the image
+        """
+        return self.get_mask().sum() * self.reference.volume()
+
+    def components(self, threshold, component_size=None, direction='lower'):
+        """
+        Components of an image
+
+        Enumerates (more precisely: labels) the components above or below
+        the given threshold in the image.
+
+        Parameters
+        ----------
+        threshold : float
+            The threshold
+        component_size : float
+            Minimal volume for a component to be labelled
+        direction : str, 'lower' or 'upper'
+            Direction of the cut. Default is 'lower'.
+
+        Returns
+        -------
+        labelled : Image
+            The labelled image
+        labels : list
+            The labels in the image
+
+        Notes
+        -----
+        Please note that the `component_size` is expected to be given in ml
+        and **not** as the number of voxels.
+        """
+        if direction == 'upper':
+            label_map, n_labels = label(self.data < threshold)
+        else:
+            label_map, n_labels = label(self.data > threshold)
+
+        if component_size is not None:
+            for l in range(1,n_labels+1):
+                x = label_map == l
+                if self.reference.volume() * x.sum() < component_size:
+                    label_map[x] = 0
+
+        labelled = Image(self.reference, label_map)
+        labelled.mask()
+
+        labels = np.unique(labelled.data[np.isfinite(labelled.data)])
+        return labelled, labels
+
     def mean(self):
         """
-        Calculates the mean signal in the image
+        Calculates the mean value in the image
 
         Notes
         -----
@@ -389,20 +444,24 @@ class Image(Identity):
 
         Returns
         -------
-        float
+        float : mean value of the image
         """
         data = ma.array(self.data, mask=~self.get_mask(), fill_value=0)
         return data.mean()
 
-    def volume(self):
+    def range(self):
         """
-        Calculates the volume occupied by the image
+        Return the range of values in the image
+
+        Notes
+        -----
+        Values of 0 or nan will not contribute to the range.
 
         Returns
         -------
-        float
+        tuple : (minimum, maximum)
         """
-        return self.get_mask().sum() * self.reference.volume()
+        return np.nanmin(self.data), np.nanmax(self.data)
 
     def describe(self):
         """
