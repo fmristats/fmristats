@@ -38,9 +38,18 @@ Citing the MB estimator and this software:
 
 Thank you for citing this project.
 
+.. changelog:: 0.0.6
+
+    * Added .ravel to Image: Will return a copy of the 1-D flattend
+      data that do not contain zeros or nan.
+    * Added .components to Image: Will label the non-zero components in
+      the image.
+    * Beautified the output of picture(). (A legend and a colourbar are
+      now added by default.)
+
 .. changelog:: 0.0.5
 
-    * So far, creating the data matrix dropped between block
+    * Thus far creating the data matrix dropped between block
       observations and demeaned the time vector for numerical stability
       and convenience. This is still the default behaviour but there is
       now the option to not follow the default.

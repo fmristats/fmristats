@@ -882,7 +882,7 @@ class Result:
                 maskname1 = 'no vb mask to apply'
 
             mask = mask0 & mask1
-            maskname = maskname0 + ' / ' + maskname1
+            maskname = maskname0 + ' and ' + maskname1
 
         elif type(mask) is str:
             if mask == 'vb':

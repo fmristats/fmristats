@@ -286,6 +286,17 @@ class Image(Identity):
             self.vb = None
             self.nb = None
 
+    def ravel(self):
+        """
+        Return a contiguous flattened array of the image
+
+        A 1-D array, containing the non-null, and non-nan elements of
+        the input, is returned. Array is a copy of the data.
+        """
+        data = self.mask(inplace=False).data
+        data = data[np.isfinite(data)]
+        return data.ravel()
+
     def flatten(self, epi_code, xpic, ypic, slices=None):
         """
         Flatten a 3D image into a 2D image
@@ -412,8 +423,8 @@ class Image(Identity):
 
         Notes
         -----
-        Please note that the `component_size` is expected to be given in ml
-        and **not** as the number of voxels.
+        Please note that the `component_size` is expected to be given in
+        mm^3 and **not** as the number of voxels.
         """
         if direction == 'upper':
             label_map, n_labels = label(self.data < threshold)
@@ -426,11 +437,10 @@ class Image(Identity):
                 if self.reference.volume() * x.sum() < component_size:
                     label_map[x] = 0
 
-        labelled = Image(self.reference, label_map)
-        labelled.mask()
-
-        labels = np.unique(labelled.data[np.isfinite(labelled.data)])
-        return labelled, labels
+        label_image = Image(self.reference, label_map)
+        labels = np.unique(label_image.data)
+        labels = labels[labels != 0]
+        return label_image, labels
 
     def mean(self):
         """

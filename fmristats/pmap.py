@@ -353,7 +353,8 @@ class PopulationMap:
         vb_estimate:   {:s}
         nb_estimate:   {:s}
         vb_mask:       {:s}
-        nb_mask:       {:s}"""
+        nb_mask:       {:s}
+        vb_ati:        {:s}"""
 
         try:
             vb = self.vb.name
@@ -395,11 +396,16 @@ class PopulationMap:
         except:
             nb_mask = '--'
 
+        try:
+            vb_ati = self.vb_ati.name
+        except:
+            vb_ati = '--'
+
         return description.format(
                 self.name,
                 vb, nb, vb_background, nb_background,
                 vb_estimate, nb_estimate,
-                vb_mask, nb_mask,
+                vb_mask, nb_mask, vb_ati,
                 )
 
     def save(self, file, **kwargs):
