@@ -40,12 +40,17 @@ Thank you for citing this project.
 
 .. changelog:: 0.0.6
 
-    * Added .ravel to Image: Will return a copy of the 1-D flattend
-      data that do not contain zeros or nan.
-    * Added .components to Image: Will label the non-zero components in
-      the image.
+    * Added .ravel to Image: image.ravel() will return a copy of the 1-D
+      flattend data that do not contain zeros or nan.
+    * Added .components to Image: image.components() will label the
+      non-zero, path-connected components in the image.
+    * Added .detect_peaks() to Image: Detect the peaks in an image and
+      return a list of their indicies.
     * Beautified the output of picture(). (A legend and a colourbar are
       now added by default.)
+    * MetaResult has been renamed to PopulationResult. It is still
+      possible to load a MetaResult from disk. However, this is now
+      depreciated.
 
 .. changelog:: 0.0.5
 
