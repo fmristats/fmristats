@@ -51,6 +51,16 @@ Thank you for citing this project.
     * MetaResult has been renamed to PopulationResult. It is still
       possible to load a MetaResult from disk. However, this is now
       depreciated.
+    * A PopulationMap can now store an ATI-reference.
+    * Result has now the option to norm the BOLD-effect field to ATI
+      with result.norm_to_ati().
+    * The function image2nii has now the option to zero any nan in the
+      image. Needed for data export to Nistats.
+    * fmriprune and fsl4prune now give a name to mask they produce.
+    * Added nipype to install_requires.
+    * Added a warning to --inverse in fmrimap that the function
+      currently only works for Warp and Displacement.
+
 
 .. changelog:: 0.0.5
 
