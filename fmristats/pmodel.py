@@ -154,7 +154,7 @@ class MetaResult:
         self.p          = p
         self.parameter_names = parameter_names
 
-    def get_parameter(self):
+    def get_parameter(self, p=0):
         f = np.moveaxis(self.statistics[...,0,:-1], -1, 0)
         return Image(data=f[p], reference=self.model.sample.vb.reference)
 
