@@ -154,8 +154,8 @@ def picture(self, epi_code=3, nx=7, ny=2, slices=None, cmap=None,
     if mark_peak:
         peak  = np.nanargmax(imatrix)
         index = np.unravel_index(peak, imatrix.shape)
-        pt.axvline(index[1], c='k', linewidth=.8)
-        pt.axhline(index[0], c='k', linewidth=.8)
+        pt.plot([index[1]], [index[0]], 'ko')
+        pt.plot([index[1]], [index[0]], 'w+')
 
     if add_legend:
         pt.xlabel(xlabel)
