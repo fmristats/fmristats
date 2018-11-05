@@ -146,7 +146,7 @@ class PopulationModel:
         with open(file, 'wb') as output:
             pickle.dump(self, output, **kwargs)
 
-class MetaResult:
+class PopulationResult:
 
     def __init__(self, statistics, model, p, parameter_names):
         self.statistics = statistics
@@ -205,3 +205,6 @@ class MetaResult:
         """
         with open(file, 'wb') as output:
             pickle.dump(self, output, **kwargs)
+
+class MetaResult(PopulationResult):
+    pass
