@@ -176,7 +176,7 @@ class PopulationResult:
         x  = self.statistics[index]
         tstatistics = x[2,:self.p]
         df = x[1,-1]
-        pvalues = 1 - t.cdf(tstatistics, df=df)
+        pvalues = t.sf(tstatistics, df=df)
 
         df = pd.DataFrame({
             'parameter' : self.parameter_names + ['heterogeneity'],
