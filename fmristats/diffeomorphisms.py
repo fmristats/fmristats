@@ -50,12 +50,14 @@ class Diffeomorphism:
         An affine transformation
     shape : tuple
         Shape of template data in standard space.
-    vb : str or Identifier
+    vb : None or str or Identifier
         An object that will be used to identify the domain (vb) of this
         diffeomorphism.
-    nb : str or Identifier
+    nb : None or Identifier
         An object that will be used to identify the image (nb) of this
         diffeomorphism.
+    name : None or str
+        Method that has produced this diffeomorphism.
     metadata : dict
         If meta data is provided which give information on which data
         had been used for the fit: which had provided, should be a dict
@@ -73,7 +75,7 @@ class Diffeomorphism:
         self.shape = shape
         self.vb = vb
         self.nb = nb
-        self.name = name
+        self.name = nb.name
 
         if metadata is not None:
             self.metadata = metadata

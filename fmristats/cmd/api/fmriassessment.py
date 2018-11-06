@@ -143,8 +143,6 @@ from ...name import Identifier
 
 from ...protocol import layout_dummy, layout_sdummy
 
-#from ... import Session, ReferenceMaps, PopulationMap, SignalModel, Result
-
 import pandas as pd
 
 from pandas import Series

@@ -19,6 +19,8 @@
 
 import numpy as np
 
+from pandas import DataFrame
+
 from datetime import datetime
 
 class Identifier:
@@ -69,6 +71,52 @@ class Identifier:
                     self.paradigm)
         else:
             return self.template.format(self.cohort, self.j, self.paradigm)
+
+    def to_data_frame(self, epi_code=None):
+        """
+        Return identifier as DataFrame entry
+
+        Parameters
+        ----------
+        epi_code: int or None
+            epi_code must be within [-3,-1] or [1,3].
+
+        Returns
+        -------
+        DataFrame : Identifier as DataFrame
+
+        Notes
+        -----
+        If epi_code is not None, the code is added to the DataFrame.
+        """
+        if epi_code is None:
+            df = DataFrame({
+                'cohort'   : self.cohort,
+                'id'       : self.j,
+                'date'     : self.datetime,
+                'paradigm' : self.paradigm,
+                'valid'    : True,
+                }, index=[self.j])
+        else:
+            assert type(epi_code) is int, \
+                """epi_code must be within [-3,-1] or [1,3]"""
+            assert epi_code in [-3,-2,-1,1,2,3], \
+                """epi_code must be within [-3,-1] or [1,3]"""
+            df = DataFrame({
+                'cohort'   : self.cohort,
+                'id'       : self.j,
+                'date'     : self.datetime,
+                'paradigm' : self.paradigm,
+                'epi'      : epi_code,
+                'valid'    : True,
+                }, index=[self.j])
+
+        df.set_index(
+                keys=['cohort', 'id', 'paradigm', 'date'],
+                drop=True,
+                inplace=True,
+                verify_integrity=True)
+        return df
 
     def describe(self):
         description = """

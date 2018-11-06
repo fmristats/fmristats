@@ -61,8 +61,7 @@ class StudyIterator:
         self.integer_index = integer_index
 
     def __iter__(self):
-        df = self.df.reset_index(drop=True)
-        self.it = df.itertuples()
+        self.it = self.df.itertuples()
         return self
 
     def __next__(self):
@@ -92,42 +91,45 @@ class Study:
 
     def __init__(self,
             protocol,
-            covariates,
+            covariates=None,
             vb=None,
             vb_background=None,
             vb_ati=None,
             layout=None,
             strftime=None,
-
+            root_dir='.',
             ):
         """
         Parameters
         ----------
+        protocol : DataFrame
         covariates : DataFrame
-        statistics : ndarray, shape (…,3)
         vb : Image
         vb_background : Image
         vb_ati : Image
-        irritation : str
-        session : str
-        reference_maps : str
-        population_map : str
-        result : str
+        layout : dict
         strftime : str
+        root_dir : str
+
+        Notes
+        -----
+        The covariates data frame can also be empty (None). If not None,
+        though, it will never be allowed to be empty again.
         """
         self.protocol        = protocol
         self.covariates      = covariates
         self.vb              = vb
         self.vb_background   = vb_background
         self.vb_ati          = vb_ati
+        self.root_dir        = root_dir
 
         self.layout = {
-            'irritation' : '../data/irr/{2}/{0}-{1:04d}-{2}-{3}.irr',
-            'session' : '../data/ses/{2}/{0}-{1:04d}-{2}-{3}.ses',
-            'reference_maps' : '../data/ref/{2}/{0}-{1:04d}-{2}-{3}.ref',
-            'population_map' : '../data/pop/{2}/{4}/{5}/{0}-{1:04d}-{2}-{3}-{4}.pop',
-            'result' : '../data/fit/{2}/{4}/{5}/{6}/{0}-{1:04d}-{2}-{3}-{4}.fit',
-            'strftime' : '%Y-%m-%d-%H%M'}
+            'irritation'     : 'data/irr/{2}/{0}-{1:04d}-{2}-{3}.irr',
+            'session'        : 'data/ses/{2}/{0}-{1:04d}-{2}-{3}.ses',
+            'reference_maps' : 'data/ref/{2}/{0}-{1:04d}-{2}-{3}.ref',
+            'population_map' : 'data/pop/{2}/{4}/{5}/{0}-{1:04d}-{2}-{3}-{4}.pop',
+            'result'         : 'data/fit/{2}/{4}/{5}/{6}/{0}-{1:04d}-{2}-{3}-{4}.fit',
+            'strftime'       : '%Y-%m-%d-%H%M'}
 
         if layout is not None:
             self.update_layout(layout)
@@ -144,37 +146,128 @@ class Study:
     def iterate(self, *keys, new=None,
             vb_name=None, diffeomorphism_name=None, scale_type=None,
             verbose=True, integer_index=False):
-        df = self.protocol.copy()
+        """
+        If covariates in not None, then only subjects in the protocol are
+        going to be processed which are also marked as valid in the
+        covariates file.
+        """
+        protocol = self.protocol[self.protocol.valid == True].copy()
+
+        if self.covariates is not None:
+            covariates = self.covariates[self.covariates.valid == True]
+
+            df = (protocol.join(up, on=['cohort', 'id'], lsuffix='_')
+                    .assign(valid=lambda x: x.valid.fillna(False))
+                    .assign(valid=lambda x: x.valid & x.valid_)
+                    .drop('valid_', axis=1))
+        else:
+            df = protocol.copy()
+
+        df.reset_index(inplace=True)
 
         for key in keys:
-            df [key] = Series(
-                    data = [self.layout[key].format(
-                        r.cohort,
-                        r.id,
-                        r.paradigm,
-                        r.date.strftime(self.layout['strftime']),
-                        vb_name,
-                        diffeomorphism_name,
-                        scale_type)
-                        for r in df.itertuples()],
-                    index = df.index)
-
+                df [key] = Series(
+                        data = [join(self.root_dir, self.layout[key].format(
+                            r.cohort,
+                            r.id,
+                            r.paradigm,
+                            r.date.strftime(self.layout['strftime']),
+                            vb_name,
+                            diffeomorphism_name,
+                            scale_type))
+                            for r in df.itertuples()],
+                        index = df.index)
         if new is not None:
             for n in new:
                 if n not in keys:
                     df [n] = Series(
-                            data = [self.layout[n].format(
+                            data = [join(self.root_dir, self.layout[n].format(
                                 r.cohort,
                                 r.id,
                                 r.paradigm,
                                 r.date.strftime(self.layout['strftime']),
                                 vb_name,
                                 diffeomorphism_name,
-                                scale_type)
+                                scale_type))
                                 for r in df.itertuples()],
                             index = df.index)
 
         return StudyIterator(df, keys, new, verbose, integer_index)
+
+    def filter(self, cohort=None, j=None, paradigm=None, inplace=False):
+        """
+        Filter protocol and covariates
+
+        Will filter the study to only include protocol and the covariate
+        entries which match the specified cohort, id, or paradigm.
+
+        Parameters
+        ----------
+        cohort : str
+            Only keep subject that belong to cohort.
+        j : int or tuple or list
+            Only keep the subject that has this id (if j is int), that
+            lies between the tuple of ids (if j is tuple) or that is
+            in the list (if j is list)
+        paradigm : str
+            Only keep protocol entries that belong to this paradigm.
+
+        Returns
+        -------
+        study : Study or None
+            The filtered study or None if inplace is True.
+        """
+        if cohort is None:
+            cohort = slice(None)
+
+        if paradigm is None:
+            paradigm = slice(None)
+
+        if j is None:
+            j = slice(None)
+        elif len(j) == 1:
+            j = slice(j[0], j[0])
+        elif len(j) == 2:
+            j = slice(j[0], j[1])
+
+        protocol = self.protocol.sort_index()
+
+        if len(protocol) < 1:
+            print('No valid entries in the protocol')
+            return
+
+        protocol = protocol.loc(axis=0)[(cohort, j, paradigm)]
+
+        if len(protocol) < 1:
+            print('No entries left in the protocol')
+            return
+
+        if self.covariates is not None:
+            covariates = self.covariates.sort_index()
+
+            if len(covariates) < 1:
+                print('No valid entries in the covariates data set')
+                return
+
+            covariates = covariates.loc(axis=0)[(cohort, j, paradigm)]
+
+            if len(covariates) < 1:
+                print('No entries left in the covariates data set')
+                return
+        else:
+            covariates = None
+
+        if inplace is True:
+            self.protocol = protocol
+            self.covariates = covariates
+        else:
+            return Study(protocol, covariates,
+            vb            = study.vb,
+            vb_background = study.vb_background,
+            vb_ati        = study.vb_ati,
+            layout        = study.layout,
+            strftime      = study.strftime,
+            )
 
     def save(self, file, **kwargs):
         """
@@ -189,62 +282,3 @@ class Study:
         """
         with open(file, 'wb') as output:
             pickle.dump(self, output, **kwargs)
-
-def add_study_parser(parser):
-
-    parser.add_argument('--protocol',
-            help="""A protocol file""")
-
-    parser.add_argument('--covariates',
-            help="""A covariate file""")
-
-    parser.add_argument('--irritation',
-            help="""Path to a irritation file or template for such a
-            file""")
-
-    parser.add_argument('--session',
-            help="""Path to a session file or template for such a
-            file""")
-
-    parser.add_argument('--reference-maps',
-            help="""Path to a reference maps or template for such a
-            file""")
-
-    parser.add_argument('--population-map',
-            help="""Path to a population map file or template for such a
-            file""")
-
-    parser.add_argument('--fit',
-            help="""Path to a result file or template for such a
-            file""")
-
-    parser.add_argument('--strftime',
-            help="""Format of date and time""")
-
-    parser.add_argument('--cohort',
-            help="""Cohort""")
-
-    parser.add_argument('--id',
-            type=int,
-            nargs='+',
-            help="""id""")
-
-    parser.add_argument('--datetime',
-            help="""Datetime""")
-
-    parser.add_argument('--paradigm',
-            help="""Paradigm""")
-
-    parser.add_argument('--vb-name',
-            default='self',
-            help="""Name of the population space""")
-
-    parser.add_argument('--diffeomorphism-name',
-            default='identity',
-            help="""Name of the diffeomorphism between population space
-            and subject space""")
-
-    parser.add_argument('--scale-type',
-            default='max',
-            choices=['diagonal','max','min'],
-            help="""Scale type""")

@@ -31,14 +31,15 @@ setup(
     entry_points={
         'console_scripts': [
             # general api
-            'fmriassessment  = fmristats.cmd.api.fmriassessment:cmd',
-            'fmriati         = fmristats.cmd.api.fmriati:cmd',
-            'fmrifit         = fmristats.cmd.api.fmrifit:cmd',
-            'fmriirritation  = fmristats.cmd.api.fmriirritation:cmd',
-            'fmririgid       = fmristats.cmd.api.fmririgid:cmd',
-            'fmripop         = fmristats.cmd.api.fmripop:cmd',
-            'fmriprune       = fmristats.cmd.api.fmriprune:cmd',
-            'fmrisample      = fmristats.cmd.api.fmrisample:cmd',
+            'fmristudy      = fmristats.cmd.api.fmristudy:cmd',
+            'fmriassessment = fmristats.cmd.api.fmriassessment:cmd',
+            'fmriati        = fmristats.cmd.api.fmriati:cmd',
+            'fmrifit        = fmristats.cmd.api.fmrifit:cmd',
+            'fmriirritation = fmristats.cmd.api.fmriirritation:cmd',
+            'fmririgid      = fmristats.cmd.api.fmririgid:cmd',
+            'fmripop        = fmristats.cmd.api.fmripop:cmd',
+            'fmriprune      = fmristats.cmd.api.fmriprune:cmd',
+            'fmrisample     = fmristats.cmd.api.fmrisample:cmd',
 
             # wrappers
             'fsl4prune = fmristats.cmd.wrp.fsl4prune:cmd',

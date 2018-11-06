@@ -72,6 +72,8 @@ from ...pmap import PopulationMap
 
 from ...smodel import SignalModel, Result
 
+from ...study import Study
+
 from ... import load
 
 from ...sample import Sample
@@ -138,6 +140,10 @@ def print_info(x, f):
 
     if type(x) is Study:
         print('{}: study file'.format(f))
+        print(x.protocol.head())
+
+        if x.covariates is not None:
+            print(x.covariates.head())
 
     if type(x) is DataFrame:
         if 'id' in x.columns:

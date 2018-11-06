@@ -92,8 +92,6 @@ from ..df import get_df
 
 from ...smodel import Result
 
-from ...pmap import PopulationMap
-
 from ...sample import Sample
 
 from ...load import load, load_result

@@ -145,8 +145,7 @@ def fit_population_map(vb_image, nb_image, output_prefix, threads=4,
             vb=vb_image,
             nb=nb_image,
             vb_estimate=vb_estimate,
-            nb_estimate=nb_estimate,
-            name=vb,
+            nb_estimate=nb_estimate
             )
 
 # Some remarks:

@@ -110,7 +110,7 @@ def fit_warpcoef(nb_file, warpcoef_file, preimage_file=None,
     cmd : str
         Name of the FSL's FNIRT command line program.
     verbose : bool
-        Print concatinated command to stdout
+        Print command to stdout
     """
     command = [cmd]
 
@@ -221,12 +221,11 @@ def warpcoef2pmap(warpcoef_file, vb_file, vb_name, nb_file, nb_name,
             metadata={
                 'vb_file': vb_file,
                 'nb_file': nb_file,
-                'warpcoef':warpcoef_file,
+                'warp_coefficient_file' : warpcoef_file,
                 }
             )
 
     return PopulationMap(diffeomorphism,
             vb=vb_image,
             nb=nb_image,
-            name=vb,
             )

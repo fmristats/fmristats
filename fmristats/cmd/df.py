@@ -25,31 +25,6 @@ import pandas as pd
 
 import numpy as np
 
-def filter_df(df, cohort, j, paradigm):
-
-    if cohort is None:
-        cohort = slice(None)
-
-    if paradigm is None:
-        paradigm = slice(None)
-
-    if j is None:
-        j = slice(None)
-    elif len(j) == 1:
-        j = j[0]
-    elif len(j) == 2:
-        j = slice(j[0], j[1])
-
-    df = df.loc(axis=0)[cohort, j, paradigm]
-
-    if len(df) < 1:
-        return
-
-    df = df[ df.valid == True].copy()
-    df['epi'] = df.epi.astype(int)
-    df.sort_index(inplace=True)
-    return df
-
 def get_df(args, fall_back=None):
     if args.protocol:
         try:

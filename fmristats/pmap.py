@@ -103,8 +103,7 @@ class PopulationMap:
             vb_estimate=None,
             nb_estimate=None,
             vb_mask=None,
-            nb_mask=None,
-            name=None):
+            nb_mask=None):
 
         assert issubclass(type(diffeomorphism), Diffeomorphism), \
                 'diffeomorphism must be a subclass of Diffeomorphism'
@@ -112,7 +111,8 @@ class PopulationMap:
                 'nb of diffeomorphism must be Identifier'
 
         self.diffeomorphism = diffeomorphism
-        self.name = name
+
+        self.name = self.diffeomorphism.nb.name
 
         if vb:
             self.set_vb(image=vb)
@@ -474,7 +474,7 @@ def pmap_scanner(session):
             nb=session.name,
             name='scanner')
 
-    return PopulationMap(diffeomorphism, name='self')
+    return PopulationMap(diffeomorphism)
 
 def pmap_reference(session, resolution=2.):
     """
@@ -530,7 +530,7 @@ def pmap_reference(session, resolution=2.):
             nb=session.name,
             name='reference')
 
-    return PopulationMap(diffeomorphism, name='self')
+    return PopulationMap(diffeomorphism)
 
 def pmap_scan(session, reference_maps, scan_cycle):
     """
@@ -573,4 +573,4 @@ def pmap_scan(session, reference_maps, scan_cycle):
             nb=session.name,
             name='cycle{:d}'.format(scan_cycle))
 
-    return PopulationMap(diffeomorphism, name='self')
+    return PopulationMap(diffeomorphism)

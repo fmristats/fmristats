@@ -33,62 +33,52 @@ import fmristats.cmd.hp as hp
 
 import argparse
 
-from ...study import add_study_parser
-
-def create_argument_parser():
+def define_parser():
     parser = argparse.ArgumentParser(
             description=__doc__,
             epilog=hp.epilog)
 
-    add_study_parser(parser)
+    ####################################################################
+    # Specific arguments
+    ####################################################################
 
-    parser.add_argument('-o', '--out',
-            help="""Save (new) study instance to OUT""")
+    specific = parser.add_argument_group(
+            """Setup of a two-block stimulus design""")
 
-########################################################################
-# Arguments specific for the setup of an irritation instance
-########################################################################
-
-    parser.add_argument('--onsetsx',
+    specific.add_argument('--onsetsx',
             type=float,
             nargs='+',
             help=hp.onsetx)
 
-    parser.add_argument('--onsetsy',
+    specific.add_argument('--onsetsy',
             type=float,
             nargs='+',
             help=hp.onsety)
 
-    parser.add_argument('--durationsx',
+    specific.add_argument('--durationsx',
             type=float,
             help=hp.durationx)
 
-    parser.add_argument('--durationsy',
+    specific.add_argument('--durationsy',
             type=float,
             help=hp.durationy)
 
-    parser.add_argument('--namex',
+    specific.add_argument('--namex',
             default='control',
             help="""name of block x""")
 
-    parser.add_argument('--namey',
+    specific.add_argument('--namey',
             default='stimulus',
             help="""name of block y""")
 
-########################################################################
-# If you are not using the protocol or study API, you need to provide
-# the:
-########################################################################
+    ####################################################################
+    # File handling
+    ####################################################################
 
-    parser.add_argument('--epi-code',
-            type=int,
-            help=hp.epi_code)
+    file_handling = parser.add_argument_group(
+            """File handling""")
 
-########################################################################
-# Miscellaneous
-########################################################################
-
-    lock_handling = parser.add_mutually_exclusive_group()
+    lock_handling = file_handling.add_mutually_exclusive_group()
 
     lock_handling.add_argument('-r', '--remove-lock',
             action='store_true',
@@ -98,33 +88,46 @@ def create_argument_parser():
             action='store_true',
             help=hp.ignore_lock.format('irritation'))
 
-    file_handling = parser.add_mutually_exclusive_group()
+    skip_force = file_handling.add_mutually_exclusive_group()
 
-    file_handling.add_argument('-f', '--force',
+    skip_force.add_argument('-f', '--force',
             action='store_true',
             help=hp.force.format('irritation'))
 
-    file_handling.add_argument('-s', '--skip',
+    skip_force.add_argument('-s', '--skip',
             action='store_true',
             help=hp.skip.format('irritation'))
 
-    parser.add_argument('-v', '--verbose',
+    ####################################################################
+    # Verbosity
+    ####################################################################
+
+    control_verbosity  = parser.add_argument_group(
+            """Control the level of verbosity""")
+
+    control_verbosity.add_argument('-v', '--verbose',
             action='count',
             default=0,
             help=hp.verbose)
 
-########################################################################
-# Multiprocessing
-########################################################################
+    ####################################################################
+    # Multiprocessing
+    ####################################################################
 
-    parser.add_argument('-j', '--cores',
+    control_multiprocessing  = parser.add_argument_group(
+            """Control the level of verbosity""")
+
+    control_multiprocessing.add_argument('-j', '--cores',
             type=int,
             help=hp.cores)
 
     return parser
 
+from .fmristudy import add_study_arguments
+
 def cmd():
-    parser = create_argument_parser()
+    parser = define_parser()
+    add_study_arguments(parser)
     args = parser.parse_args()
     call(args)
 
@@ -136,7 +139,7 @@ cmd.__doc__ = __doc__
 #
 ########################################################################
 
-from ..df import get_df
+from .fmristudy import get_study
 
 from ...lock import Lock
 
@@ -166,32 +169,19 @@ import numpy as np
 
 def call(args):
 
-    ####################################################################
-    # Parse protocol
-    ####################################################################
+    study = get_study(args)
 
-    df = get_df(args)
-
-    if df is None:
+    if study is None:
         sys.exit()
 
-    ####################################################################
-    # Add file layout
-    ####################################################################
+    if args.verbose:
+        print(study.protocol.head())
 
-    layout = {
-        'irritation':args.irritation,
-        'session':args.session,
-        'reference_maps':args.reference_maps,
-        'result':args.fit,
-        'population_map':args.population_map,
-        'diffeomorphism_name':args.diffeomorphism_name,
-        'scale_type':args.scale_type,
-        }
+        if study.covariates is not None:
+            print(study.covariates.head())
 
-    study = Study(df, df, layout=layout, strftime=args.strftime)
-
-    study_iterator = study.iterate('irritation', new=['irritation'])
+    study_iterator = study.iterate('irritation', new=['irritation'],
+            integer_index=True)
 
     ####################################################################
     # Apply wrapper
@@ -201,8 +191,7 @@ def call(args):
 
     df['locked'] = False
 
-    def wm(instance, filename, name):
-        index = (name.cohort, name.j, name.paradigm, name.datetime)
+    def wm(index, instance, filename, name):
 
         remove_lock       = args.remove_lock
         ignore_lock       = args.ignore_lock
@@ -277,10 +266,10 @@ def call(args):
     if len(df) > 1 and ((args.cores is None) or (args.cores > 1)):
         try:
             pool = ThreadPool(args.cores)
-            for name, files, instances in study_iterator:
+            for index, name, files, instances in study_iterator:
                 irritation = instances['irritation']
                 filename = files['irritation']
-                pool.apply_async(wm, args=(irritation, filename, name))
+                pool.apply_async(wm, args=(index, irritation, filename, name))
 
             pool.close()
             pool.join()
@@ -298,10 +287,10 @@ def call(args):
     else:
         try:
             print('Process protocol entries sequentially')
-            for name, files, instances in study_iterator:
+            for index, name, files, instances in study_iterator:
                 irritation = instances['irritation']
                 filename = files['irritation']
-                wm(irritation, filename, name)
+                wm(index, irritation, filename, name)
         finally:
             files = df.ix[df.locked, 'irritation'].values
             if len(files) > 0:
@@ -312,8 +301,6 @@ def call(args):
     ####################################################################
     # Write study to disk
     ####################################################################
-
-    # TODO: filter study protocol entries form invalid entries
 
     if args.out is not None:
         if args.epi_code is None:

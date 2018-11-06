@@ -87,7 +87,21 @@ class Sample:
                 statistics       = self.statistics[...,b])
 
     def at_index(self, index):
+        """
+        Returns the summary statistics at an index
 
+        Returns the effect and respective standard error of all subjects
+        in the sample.
+
+        Parameters
+        ----------
+        index : tuple(int)
+            The index. A 3-tuple of integers
+
+        Returns
+        -------
+        DataFrame
+        """
         df = self.covariates.copy()
         df['task'] = self.statistics[index[0],index[1],index[2],0]
         df['stderr'] = self.statistics[index[0],index[1],index[2],1]

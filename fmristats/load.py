@@ -310,7 +310,7 @@ def load_population_map(file, name, df, index, vb, diffeo, verbose=True):
             if vb is None:
                 return population_map
             else:
-                if vb == population_map.name:
+                if True : # vb == population_map.diffeomorphism.vb.name:
                     if diffeo == population_map.diffeomorphism.name:
                         return population_map
                     else:
