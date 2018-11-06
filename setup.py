@@ -10,7 +10,7 @@ with open(path.join(here, 'README.rst'), encoding='utf-8') as f:
 
 setup(
     name='fmristats',
-    version='0.0.4',
+    version='0.0.6',
     description='Modelling the data and not the images in FMRI',
     long_description=long_description,
     url='https://fmristats.github.io/',
@@ -27,7 +27,7 @@ setup(
     keywords='fmri neuroimaging neuroscience statistics',
     packages=find_packages(exclude=['contrib', 'docs', 'tests*']),
     install_requires=['numpy', 'scipy', 'scikit-image', 'pandas',
-        'statsmodels', 'matplotlib', 'seaborn', 'nibabel'],
+        'statsmodels', 'matplotlib', 'seaborn', 'nibabel', 'nipype'],
     entry_points={
         'console_scripts': [
             # general api

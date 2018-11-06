@@ -33,7 +33,45 @@ Citing the MB estimator and this software:
     FMRI, ArXiv e-prints, arXiv:1809.07232
 
     Thomas W. D. Möbius (2018) fmristats: Modelling the data and not the
-    images in FMRI (Version 0.0.4) [Computer program]. Available at
+    images in FMRI (Version 0.0.6) [Computer program]. Available at
     http://fmristats.github.io/
 
 Thank you for citing this project.
+
+.. changelog:: 0.0.6
+
+    * Added .ravel to Image: image.ravel() will return a copy of the 1-D
+      flattend data that do not contain zeros or nan.
+    * Added .components to Image: image.components() will label the
+      non-zero, path-connected components in the image.
+    * Added .detect_peaks() to Image: Detect the peaks in an image and
+      return a list of their indicies.
+    * Beautified the output of picture(). (A legend and a colourbar are
+      now added by default.)
+    * MetaResult has been renamed to PopulationResult. It is still
+      possible to load a MetaResult from disk. However, this is now
+      depreciated.
+    * A PopulationMap can now store an ATI-reference.
+    * Result has now the option to norm the BOLD-effect field to ATI
+      with result.norm_to_ati().
+    * The function image2nii has now the option to zero any nan in the
+      image. Needed for data export to Nistats.
+    * fmriprune and fsl4prune now give a name to mask they produce.
+    * Added nipype to install_requires.
+    * Added a warning to --inverse in fmrimap that the function
+      currently only works for Warp and Displacement.
+
+
+.. changelog:: 0.0.5
+
+    * Thus far creating the data matrix dropped between block
+      observations and demeaned the time vector for numerical stability
+      and convenience. This is still the default behaviour but there is
+      now the option to not follow the default.
+
+    * CLI-argument to --fit was ignored in fmriprune, fsl4prune and
+      thus always reverted to the default template. Fixed.
+
+.. changelog:: 0.0.4
+
+    This is the first official version.

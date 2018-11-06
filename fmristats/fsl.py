@@ -33,9 +33,7 @@ import nibabel as ni
 
 import numpy as np
 
-from subprocess import PIPE
-
-from subprocess import run
+from subprocess import run, PIPE
 
 import os
 

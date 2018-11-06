@@ -66,6 +66,9 @@ class PopulationMap:
         An image in population space.
     nb_mask : None, Image or array
         An image in subject space.
+    vb_ati : None, Image or array
+        An image in population space that will serve as the reference
+        field for the BOLD unit.
 
     Notes
     -----
@@ -81,15 +84,15 @@ class PopulationMap:
     creates a warped images of its inputs, they can be stored in
     `vb_estimate` and `nb_estimate` respectively.
 
-    Naming convetions for images in `vb` and `nb` seem to be
-    non-existant, ranging from `input`, `target`, `template`,
-    `reference`, `moving`, `fixed`, and more: Although the induitive
-    meaning of what these images shall represent is typically clear from
-    teh context, the question which of these images live in `vb` or `nb`
-    is not clear and ambigious at best. When fitting a diffeomorphism
-    providing the algorithm with the arguments `reference` and `input`
-    (FNIRT) or `fixed` and `moving` (ANTS): does the diffeomorphism go
-    from `reference` to `input` or vice versa?
+    There appears to be no clear naming convention for images in `vb`
+    and `nb`. Examples for images in `vb` and `nb` are `input`,
+    `target`, `template`, `reference`, `moving`, `fixed`, and more: The
+    intuitive meaning of what these images shall represent is often (and
+    not always) clear from the context, but the question which of these
+    images live in `vb` or `nb` is ambiguous at best. Say, when fitting
+    a diffeomorphism providing an algorithm with the arguments
+    `reference` and `input` (FNIRT) or `fixed` and `moving` (ANTS): does
+    the diffeomorphism go from `reference` to `input` or vice versa?
     """
 
     def __init__(self, diffeomorphism,
@@ -259,6 +262,37 @@ class PopulationMap:
                     data=image,
                     name=self.diffeomorphism.vb)
 
+    def set_vb_ati(self, image):
+        """
+        Set or reset the reference field for the BOLD unit.
+
+        Parameters
+        ----------
+        image : Image or ndarray
+            The image or data array.
+
+        Notes
+        -----
+        If image is an Image, it will be checked whether its reference
+        agrees with the reference of the diffeomorphism.  If image is an
+        ndarray, it must be equal to the shape stored with the
+        diffeomorphism, as it will then be assumed that they share the
+        same reference: the image's reference will be set identical to
+        the reference of the diffeomorphism.
+        """
+        if type(image) is Image:
+            assert image.shape == self.diffeomorphism.shape, \
+                    'shapes of image and diffeomorphism must match'
+            assert isclose(image.reference, self.diffeomorphism.reference), \
+                    'references of image and diffeomorphism must match'
+            image.reference = self.diffeomorphism.reference
+            self.vb_ati = image
+        else:
+            self.vb_ati = Image(
+                    reference=self.diffeomorphism.reference,
+                    data=image,
+                    name=self.diffeomorphism.vb)
+
     def set_nb(self, image):
         """
         Set or reset the image in nb
@@ -319,7 +353,8 @@ class PopulationMap:
         vb_estimate:   {:s}
         nb_estimate:   {:s}
         vb_mask:       {:s}
-        nb_mask:       {:s}"""
+        nb_mask:       {:s}
+        vb_ati:        {:s}"""
 
         try:
             vb = self.vb.name
@@ -361,11 +396,16 @@ class PopulationMap:
         except:
             nb_mask = '--'
 
+        try:
+            vb_ati = self.vb_ati.name
+        except:
+            vb_ati = '--'
+
         return description.format(
                 self.name,
                 vb, nb, vb_background, nb_background,
                 vb_estimate, nb_estimate,
-                vb_mask, nb_mask,
+                vb_mask, nb_mask, vb_ati,
                 )
 
     def save(self, file, **kwargs):

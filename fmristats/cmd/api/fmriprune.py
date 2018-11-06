@@ -185,6 +185,8 @@ def call(args):
 
             result.population_map.set_vb_mask(inside)
 
+            result.population_map.vb_mask.name = 'pruned_intercept'
+
             if verbose:
                 print('{}: Save: {}'.format(name.name(), filename))
 

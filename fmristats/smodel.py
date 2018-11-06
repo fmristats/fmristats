@@ -782,6 +782,32 @@ class Result:
         self.name = self.population_map.diffeomorphism.nb
 
     ####################################################################
+    # Norm to ATI
+    ####################################################################
+
+    def norm_to(self, rf):
+        """
+        Norm the part of the statistics field that has a unit, to a
+        reference field.
+
+        Parameters
+        ----------
+        rf : Image
+            The reference field for the unit.
+        """
+
+        has_unit = self.statistics[...,:2,:]
+        self.statistics[...,:2,:] = self.statistics[...,:2,:] * \
+                (rf.data / self.statistics[...,0,0])[...,None,None]
+
+    def norm_to_ati(self):
+        """
+        Norm the part of the statistics field that has a unit, to the
+        ati-reference field that is stored in the PopulationMap.
+        """
+        self.norm_to(self.population_map.vb_ati)
+
+    ####################################################################
     # Extract summary statistics
     ####################################################################
 
@@ -856,7 +882,7 @@ class Result:
                 maskname1 = 'no vb mask to apply'
 
             mask = mask0 & mask1
-            maskname = maskname0 + ' / ' + maskname1
+            maskname = maskname0 + ' and ' + maskname1
 
         elif type(mask) is str:
             if mask == 'vb':

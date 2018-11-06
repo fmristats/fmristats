@@ -146,7 +146,7 @@ class PopulationModel:
         with open(file, 'wb') as output:
             pickle.dump(self, output, **kwargs)
 
-class MetaResult:
+class PopulationResult:
 
     def __init__(self, statistics, model, p, parameter_names):
         self.statistics = statistics
@@ -154,7 +154,7 @@ class MetaResult:
         self.p          = p
         self.parameter_names = parameter_names
 
-    def get_parameter(self):
+    def get_parameter(self, p=0):
         f = np.moveaxis(self.statistics[...,0,:-1], -1, 0)
         return Image(data=f[p], reference=self.model.sample.vb.reference)
 
@@ -176,7 +176,7 @@ class MetaResult:
         x  = self.statistics[index]
         tstatistics = x[2,:self.p]
         df = x[1,-1]
-        pvalues = 1 - t.cdf(tstatistics, df=df)
+        pvalues = t.sf(tstatistics, df=df)
 
         df = pd.DataFrame({
             'parameter' : self.parameter_names + ['heterogeneity'],
@@ -205,3 +205,6 @@ class MetaResult:
         """
         with open(file, 'wb') as output:
             pickle.dump(self, output, **kwargs)
+
+class MetaResult(PopulationResult):
+    pass

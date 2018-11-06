@@ -36,7 +36,9 @@ import numpy.ma as ma
 
 from numpy.linalg import inv
 
-from scipy.ndimage import map_coordinates
+from scipy.ndimage import label, map_coordinates, \
+        maximum_filter, generate_binary_structure, binary_erosion, \
+        maximum_position
 
 class Diffeomorphism:
     """
@@ -286,6 +288,17 @@ class Image(Identity):
             self.vb = None
             self.nb = None
 
+    def ravel(self):
+        """
+        Return a contiguous flattened array of the image
+
+        A 1-D array, containing the non-null, and non-nan elements of
+        the input, is returned. Array is a copy of the data.
+        """
+        data = self.mask(inplace=False).data
+        data = data[np.isfinite(data)]
+        return data.ravel()
+
     def flatten(self, epi_code, xpic, ypic, slices=None):
         """
         Flatten a 3D image into a 2D image
@@ -377,9 +390,110 @@ class Image(Identity):
         data = data.round().astype(int)
         return Image(reference=self.reference, data=data, name=self.name)
 
+    def volume(self):
+        """
+        Calculates the volume occupied by the image
+
+        Returns
+        -------
+        float : volume of non-zero values in the image
+        """
+        return self.get_mask().sum() * self.reference.volume()
+
+    def detect_peaks(self, connectivity=3, **kwargs):
+        """
+        Detects the peaks in an image
+
+        Takes an image and detect the peaks using a local maximum
+        filter. Returns a boolean mask of the peaks (i.e. 1 when the
+        pixel's value is the neighbourhood of a maximum and 0 otherwise)
+
+        Parameters
+        ----------
+
+
+        """
+        if self.data is None:
+            return
+
+        image = self.data
+
+        # define an connected neighbourhood
+        neighbourhood = generate_binary_structure(3,
+                connectivity=connectivity, **kwargs)
+
+        # apply the local maximum filter; all pixel of maximal value
+        # in their neighbourhood are set to 1:
+        local_max = maximum_filter(image, footprint=neighbourhood)==image
+
+        # local_max is a mask that contains the peaks we are looking
+        # for, but also the background. In order to isolate the peaks we
+        # must remove the background from the mask.
+
+        # we create the mask of the background
+        background = (image==0) | np.isclose(image, 0)
+
+        # a little technicality: we must erode the background in order
+        # to successfully subtract it form local_max, otherwise a line
+        # will appear along the background border (artefact of the local
+        # maximum filter).
+
+        eroded_background = binary_erosion(background,
+                structure=neighbourhood, border_value=1)
+
+        # we obtain the final mask, containing only peaks, by removing
+        # the background from the local_max mask (xor operation)
+        detected_peaks = local_max ^ eroded_background
+
+        return Image(self.reference, detected_peaks)
+
+    def components(self, threshold, component_size=None, direction='lower'):
+        """
+        Components of an image
+
+        Enumerates (more precisely: labels) the components above or below
+        the given threshold in the image.
+
+        Parameters
+        ----------
+        threshold : float
+            The threshold
+        component_size : float
+            Minimal volume for a component to be labelled
+        direction : str, 'lower' or 'upper'
+            Direction of the cut. Default is 'lower'.
+
+        Returns
+        -------
+        labelled : Image
+            The labelled image
+        labels : list
+            The labels in the image
+
+        Notes
+        -----
+        Please note that the `component_size` is expected to be given in
+        mm^3 and **not** as the number of voxels.
+        """
+        if direction == 'upper':
+            label_map, n_labels = label(self.data < threshold)
+        else:
+            label_map, n_labels = label(self.data > threshold)
+
+        if component_size is not None:
+            for l in range(1,n_labels+1):
+                x = label_map == l
+                if self.reference.volume() * x.sum() < component_size:
+                    label_map[x] = 0
+
+        label_image = Image(self.reference, label_map)
+        labels = np.unique(label_image.data)
+        labels = labels[labels != 0]
+        return label_image, labels
+
     def mean(self):
         """
-        Calculates the mean signal in the image
+        Calculates the mean value in the image
 
         Notes
         -----
@@ -389,20 +503,24 @@ class Image(Identity):
 
         Returns
         -------
-        float
+        float : mean value of the image
         """
         data = ma.array(self.data, mask=~self.get_mask(), fill_value=0)
         return data.mean()
 
-    def volume(self):
+    def range(self):
         """
-        Calculates the volume occupied by the image
+        Return the range of values in the image
+
+        Notes
+        -----
+        Values of 0 or nan will not contribute to the range.
 
         Returns
         -------
-        float
+        tuple : (minimum, maximum)
         """
-        return self.get_mask().sum() * self.reference.volume()
+        return np.nanmin(self.data), np.nanmax(self.data)
 
     def describe(self):
         """

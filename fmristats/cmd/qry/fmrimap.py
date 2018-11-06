@@ -141,16 +141,18 @@ and coordinates in the image:  {}""".format(
                 distances   = ((coordinates - coordinate)**2).sum(axis=-1)
                 domain_index = np.unravel_index(np.argmin(distances), distances.shape)
                 domain_coordinate = x.reference.apply_to_index(domain_index)
-            if args.verbose:
-                print(
-"""index (in RAS+): {}
-has coordinates in the domain: {}
-and coordinates in the image:  {}""".format(
-                    domain_index,
-                    domain_coordinate,
-                    coordinate))
+                if args.verbose:
+                    print(
+    """index (in RAS+): {}
+    has coordinates in the domain: {}
+    and coordinates in the image:  {}""".format(
+                        domain_index,
+                        domain_coordinate,
+                        coordinate))
+                else:
+                    print(domain_coordinate)
             else:
-                print(domain_coordinate)
+                print('fmrimap --inverse is currently only implemented for Warp and Displacement')
 
         else:
             if args.verbose:
