@@ -95,7 +95,6 @@ def fit_field(coordinates, mask, endog, exog, agc, dataframe, ep,
                 df = dataframe[valid].copy()
                 df.reweighted_residual = weights * fit.resid
                 df.sort_values(by=sortvar, inplace=True)
-                dw = durbin_watson(df.reweighted_residual)
 
                 x[0]   = fit.params
                 x[1]   = fit.bse
