@@ -24,6 +24,32 @@ Create a block stimulus instances
 """
 
 ########################################################################
+
+onsetx = """Times of onsets of condition x, which will be interpreted
+as the control stimulus of the subject.  Should, e.g., be given in the
+form:
+
+                --onsetx 2 84 166 248 330
+
+to be parsed correctly.  If onsets are not given in order, they will be
+sorted automatically.  Must be specified if --stimulus is not."""
+
+onsety = """Times of onset of condition y, which will be interpreted as
+the stimulus stimulus of the subject.  Should, e.g., be given in the
+form:
+
+                --onsety 37 119 201 283
+
+to be parsed correctly.  If onsets are not given in order, they will be
+sorted automatically.  Must be specified if --stimulus is not."""
+
+durationx = """Duration of the stimulus of the subject under condition
+x.  Must be specified if --stimulus is not."""
+
+durationy = """Duration of the stimulus of the subject under condition
+y.  Must be specified if --stimulus is not."""
+
+########################################################################
 #
 # Command line program
 #
@@ -48,20 +74,20 @@ def define_parser():
     specific.add_argument('--onsetsx',
             type=float,
             nargs='+',
-            help=hp.onsetx)
+            help=onsetx)
 
     specific.add_argument('--onsetsy',
             type=float,
             nargs='+',
-            help=hp.onsety)
+            help=onsety)
 
     specific.add_argument('--durationsx',
             type=float,
-            help=hp.durationx)
+            help=durationx)
 
     specific.add_argument('--durationsy',
             type=float,
-            help=hp.durationy)
+            help=durationy)
 
     specific.add_argument('--namex',
             default='control',
@@ -122,11 +148,11 @@ def define_parser():
     control_multiprocessing.add_argument('-j', '--cores',
             type=int,
             help="""Number of cores to use. Default is the number of
-            cores on the machine."""
+            cores on the machine.""")
 
     return parser
 
-from .fmristudy import add_study_arguments
+from ..api.fmristudy import add_study_arguments
 
 def cmd():
     parser = define_parser()

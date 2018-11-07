@@ -23,8 +23,6 @@ Handling studies
 
 """
 
-import fmristats.cmd.hp as hp
-
 import argparse
 
 # TODO: --protocol_from_csv
@@ -76,6 +74,15 @@ def add_study_arguments(parser):
     study_parser.add_argument('--session',
         help="""Path to a session file or template for such a file""")
 
+    study_parser.add_argument('--epi-code',
+        type=int,
+        help="""This code defines the direction in which the planes in
+        the FMRI have been measured. If the EPIs have been measured
+        inferior to superior, then EP is 2, if they have been measured
+        superior to inferior, then EP is -2. if they have been measured
+        posterior to anterior, then EP is 1. Values in a protocol file
+        will always take precedence.""")
+
     study_parser.add_argument('--reference-maps',
         help="""Path to a reference maps or template for such a file""")
 
@@ -120,20 +127,26 @@ def add_study_arguments(parser):
     study_parser.add_argument('-o', '--out',
             help="""Save possibly modified study instance to OUT""")
 
+from ...epilog import epilog
+
 def define_parser():
     parser = argparse.ArgumentParser(
             description=__doc__,
-            epilog=hp.epilog)
+            epilog=epilog)
 
     add_study_arguments(parser)
 
+    ####################################################################
+    # Verbosity
+    ####################################################################
+
     control_verbosity  = parser.add_argument_group(
-            """Control the level of verbosity""")
+        """Control the level of verbosity""")
 
     control_verbosity.add_argument('-v', '--verbose',
-            action='count',
-            default=0,
-            help=hp.verbose)
+        action='count',
+        default=0,
+        help="""Increase output verbosity""")
 
     return parser
 
@@ -192,14 +205,15 @@ def get_study(args):
         protocol = None
 
     if protocol is None and args.id is not None:
+        assert len(args.id) == 1, \
+                """When no protocol is specified, only a single id is
+                allowed"""
+
         if hasattr(args, 'epi_code'):
             epi_code = args.epi_code
         else:
             epi_code = None
 
-        assert len(args.id) == 1, \
-                """When no protocol is specified, only a single id is
-                allowed"""
         try:
             date = pd.to_datetime(args.datetime, format=args.strftime)
         except Exception as e:
@@ -219,12 +233,16 @@ def get_study(args):
         for f in [args.session, args.reference_maps,
                 args.population_map, args.fit, args.stimulus]:
             if f is not None:
-                print('Read: {}'.format(f))
+                #print('Read: {}'.format(f))
                 try:
                     instance = load(f)
                     protocol = instance.name.to_data_frame(epi_code)
+                    print('Processing subject: {}'.format(
+                        instance.name.name()))
+                    break
                 except Exception as e:
-                    print('…failed with {}'.format(e))
+                    pass
+                    #print('…failed with {}'.format(e))
 
     # Parse or create the covariate file
     if args.covariates:
@@ -335,13 +353,13 @@ def call(args):
         sys.exit()
 
     if args.verbose > 1:
-        #print(study.protocol.head())
-
-        #if study.covariates is not None:
-        #    print(study.covariates.head())
-
         for k, v in study.file_layout.items():
             print('{:<24}: {}'.format(k,v))
+
+    if args.verbose > 2:
+        print(study.protocol.head())
+        if study.covariates is not None:
+            print(study.covariates.head())
 
     if args.out is not None:
         if args.verbose:

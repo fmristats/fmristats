@@ -42,98 +42,89 @@ def define_parser():
     # Specific arguments
     ####################################################################
 
-    specific.add_argument('--nii',
-            default='../raw/nii/{2}/{0}-{1:04d}-{2}-{3}.nii',
-            help="""The file should contain a 4D-image of a fMRI session
-            in any file format understood by the NiBabel project, e.g,
-            any of ANALYZE (plain, SPM99, SPM2 and later), GIFTI,
-            NIfTI1, NIfTI2, MINC1, MINC2, MGH and ECAT as well as
-            Philips PAR/REC.  For more details see
-            http://nipy.org/nibabel/.  Please note that fmristats has
-            only been tested with Nifti1 files.""")
+    specific = parser.add_argument_group(
+        """Setup of a two-block stimulus design""")
 
-    specific.add_argument('--epi-code',
-            type=int,
-            help="""Code for the direction of the normal vector of the
-            EPIs; assuming the data is in RAS+. For example, if the EPIs
-            have been measured inferior to superior, then set EP to 2,
-            if they have been measured superior to inferior, set EP to
-            -2, if they have been measured posterior to anterior, i.e.,
-            they are parallel to the left--right-inferior--superior
-            plain, then EP is 1.  Values in a protocol file will take
-            precedence""")
+    specific.add_argument('--nii',
+        default='../raw/nii/{2}/{0}-{1:04d}-{2}-{3}.nii',
+        help="""The file should contain a 4D-image of a fMRI session in
+        any file format understood by the NiBabel project, e.g, any of
+        ANALYZE (plain, SPM99, SPM2 and later), GIFTI, NIfTI1, NIfTI2,
+        MINC1, MINC2, MGH and ECAT as well as Philips PAR/REC.  For more
+        details see http://nipy.org/nibabel/.  Please note that
+        fmristats has only been tested with Nifti1 files.""")
 
     foreground_handling = specific.add_mutually_exclusive_group()
 
     foreground_handling.add_argument('--detect-foreground',
-            action='store_true',
-            help="""Detect the foreground in the FMRI""")
+        action='store_true',
+        help="""Detect the foreground in the FMRI""")
 
     foreground_handling.add_argument('--set-foreground',
-            action='store_true',
-            help="""Set the foreground to the image in FOREGROUND""")
+        action='store_true',
+        help="""Set the foreground to the image in FOREGROUND""")
 
     specific.add_argument('--foreground',
-            default='../raw/foreground/{2}/{0}-{1:04d}-{2}-{3}-foreground.nii.gz',
-            help="""A 4D-image that contains a mask for the foreground
-            in the FMRI""")
+        default='../raw/foreground/{2}/{0}-{1:04d}-{2}-{3}-foreground.nii.gz',
+        help="""A 4D-image that contains a mask for the foreground in
+        the FMRI""")
 
     ####################################################################
     # File handling
     ####################################################################
 
     file_handling = parser.add_argument_group(
-            """File handling""")
+        """File handling""")
 
     lock_handling = file_handling.add_mutually_exclusive_group()
 
     lock_handling.add_argument('-r', '--remove-lock',
-            action='store_true',
-            help="""Remove lock, if file is locked. This is useful, if
-            used together with -s/--skip to remove orphan locks.""")
+        action='store_true',
+        help="""Remove lock, if file is locked. This is useful, if used
+        together with -s/--skip to remove orphan locks.""")
 
     lock_handling.add_argument('-i', '--ignore-lock',
-            action='store_true',
-            help="""Ignore lock, if file is locked. Together with
-            -s/--skip this will also remove orphan locks.""")
+        action='store_true',
+        help="""Ignore lock, if file is locked. Together with -s/--skip
+        this will also remove orphan locks.""")
 
     skip_force = file_handling.add_mutually_exclusive_group()
 
     skip_force.add_argument('-f', '--force',
-            action='store_true',
-            help="""Force re-writing any files""")
+        action='store_true',
+        help="""Force re-writing any files""")
 
     skip_force.add_argument('-s', '--skip',
-            action='store_true',
-            help="""Do not perform any calculations.""")
+        action='store_true',
+        help="""Do not perform any calculations.""")
 
     ####################################################################
     # Verbosity
     ####################################################################
 
     control_verbosity  = parser.add_argument_group(
-            """Control the level of verbosity""")
+        """Control the level of verbosity""")
 
     control_verbosity.add_argument('-v', '--verbose',
-            action='count',
-            default=0,
-            help="""Increase output verbosity""")
+        action='count',
+        default=0,
+        help="""Increase output verbosity""")
 
     ####################################################################
     # Multiprocessing
     ####################################################################
 
     control_multiprocessing  = parser.add_argument_group(
-            """Multiprocessing""")
+        """Multiprocessing""")
 
     control_multiprocessing.add_argument('-j', '--cores',
-            type=int,
-            help="""Number of cores to use. Default is the number of
-            cores on the machine."""
+        type=int,
+        help="""Number of cores to use. Default is the number of cores
+        on the machine.""")
 
     return parser
 
-from .fmristudy import add_study_arguments
+from ..api.fmristudy import add_study_arguments
 
 def cmd():
     parser = define_parser()
@@ -163,8 +154,6 @@ from ..api.fmristudy import get_study
 
 from ...lock import Lock
 
-from ...name import Identifier
-
 from ...study import Study
 
 from ...session import Session, fmrisetup
@@ -187,6 +176,21 @@ def call(args):
         'foreground' : args.foreground,
         })
 
+    if not 'epi' in study.protocol.columns:
+        if args.epi_code is not None:
+            assert args.epi_code >= -3, 'epi code must be ≥ -3'
+            assert args.epi_code >= 3, 'epi code must be ≤ 3'
+            assert args.epi_code != 0, 'epi code must be ≠ 0'
+            study.protocol['epi'] = args.epi_code
+        else:
+            print("""
+            You need to provide an EPI code via --epi-code. This code
+            defines the direction in which the planes in the FMRI have been
+            measured. Visit:
+
+            https://fmristats.github.io/tutorials/getting-started.html""")
+            sys.exit()
+
     study_iterator = study.iterate('session', 'stimulus',
             new=['session', 'nii', 'foreground'],
             integer_index=True)
@@ -201,16 +205,16 @@ def call(args):
     skip              = args.skip
     verbose           = args.verbose
 
-    detect_foreground = args.detect_foreground,
-    set_foreground    = args.set_foreground,
+    detect_foreground = args.detect_foreground
+    set_foreground    = args.set_foreground
 
     def wm(index, name, session, stimulus, file_session, file_nii, file_foreground):
 
-        if type(instance) is Lock:
+        if type(session) is Lock:
             if remove_lock or ignore_lock:
                 if verbose:
                     print('{}: Remove lock'.format(name.name()))
-                instance.unlock()
+                session.unlock()
                 if remove_lock:
                     return
             else:
@@ -218,7 +222,7 @@ def call(args):
                     print('{}: Locked'.format(name.name()))
                 return
 
-        if instance is not None and not force:
+        elif session is not None and not force:
             if verbose:
                 print('{}: Session already exists. Use -f/--force to overwrite'.format(name.name()))
             return
@@ -248,8 +252,8 @@ def call(args):
                 print('{}: Read: {}'.format(name.name(), file_nii))
         except Exception as e:
             df.ix[index,'valid'] = False
-            print('{}: Unable to read: {}'.format(name.name(), file_nii))
-            print('{}: Exception: {}'.format(name.name(), e))
+            print('{}: Unable to read: {}, {}'.format(name.name(),
+                file_nii, e))
 
         if lock.conditional_unlock(df, index, verbose):
             return
@@ -258,37 +262,38 @@ def call(args):
         # Create session instance
         ####################################################################
 
-        try:
-            session = nii2session(
-                    name=name,
-                    nii=img,
-                    epi_code=df['epi_code'])
+        session = nii2session(
+                name=name,
+                nii=img,
+                epi_code=df.loc[index, 'epi'])
 
-            fmrisetup(session = session, stimulus = stimulus)
+        fmrisetup(session = session, stimulus = stimulus)
 
-            if detect_foreground:
-                if verbose:
-                    print('{}: Detect foreground'.format(name.name()))
-                session.fit_foreground()
-            elif set_foreground:
+        if detect_foreground:
+            if verbose:
+                print('{}: Detect foreground'.format(name.name()))
+            session.fit_foreground()
+
+        elif set_foreground:
+
+            try:
                 foreground_nii = ni.load(file_foreground)
-                if verbose:
-                    print('{}: Set foreground: {}'.format(name.name(),
-                        foreground_nii))
-                session.set_foreground(foreground_nii.get_data())
+            except Exception as e:
+                df.ix[index,'valid'] = False
+                print('{}: Unable to read: {}, {}'.format(name.name(),
+                    file_nii, e))
 
             if verbose:
-                print('{}: Save: {}'.format(name.name(), file))
+                print('{}: Set foreground: {}'.format(name.name(),
+                    foreground_nii))
 
-            session.save(file)
-            df.ix[index,'locked'] = False
+            session.set_foreground(foreground_nii.get_data())
 
-        except Exception as e:
-            df.ix[index,'valid'] = False
-            print('{}: Unable to create: {}'.format(name.name(), file))
-            print('{}: Exception: {}'.format(name.name(), e))
-            lock.conditional_unlock(df, index, verbose, True)
-            return
+        if verbose:
+            print('{}: Save: {}'.format(name.name(), file_session))
+
+        session.save(file_session)
+        df.ix[index,'locked'] = False
 
     ####################################################################
 
@@ -314,7 +319,7 @@ def call(args):
             print('Pool execution has been terminated')
             print(e)
         finally:
-            files = df.ix[df.locked, 'stimulus'].values
+            files = df.ix[df.locked, 'session'].values
             if len(files) > 0:
                 for f in files:
                     print('Unlock: {}'.format(f))
@@ -330,7 +335,7 @@ def call(args):
                 file_foreground = files['foreground']
                 wm(index, name, session, stimulus, file_session, file_nii, file_foreground)
         finally:
-            files = df.ix[df.locked, 'stimulus'].values
+            files = df.ix[df.locked, 'session'].values
             if len(files) > 0:
                 for f in files:
                     print('Unlock: {}'.format(f))

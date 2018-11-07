@@ -286,17 +286,29 @@ class Affine:
         resolution = self.resolution()
         return resolution[x] / resolution[y]
 
-    def describe(self):
-        description = """
-        Resolution (left to right):         {:>3.2f} mm
-        Resolution (posterior to anterior): {:>3.2f} mm
-        Resolution (inferior to superior):  {:>3.2f} mm
-        Diagonal of one voxel:              {:>3.2f} mm
-        Volume of one voxel:                {:>3.2f} mm^3
-        Aspect 0 on 1:                      {:>3.2f}
-        Aspect 0 on 2:                      {:>3.2f}
-        Aspect 1 on 2:                      {:>3.2f}
+    def describe(self, is_rigid=False):
+        if is_rigid:
+            description = """
+        Resolution (left to right):         {:>5.2f} mm
+        Resolution (posterior to anterior): {:>5.2f} mm
+        Resolution (inferior to superior):  {:>5.2f} mm
+        Diagonal of one voxel:              {:>5.2f} mm
+        Volume of one voxel:                {:>5.2f} mm^3
+        Aspect 0 on 1:                      {:>5.2f}
+        Aspect 0 on 2:                      {:>5.2f}
+        Aspect 1 on 2:                      {:>5.2f}
         Rigid transformation: {}"""
+        else:
+            description = """
+        Resolution (left to right):         {:>5.2f} mm
+        Resolution (posterior to anterior): {:>5.2f} mm
+        Resolution (inferior to superior):  {:>5.2f} mm
+        Diagonal of one voxel:              {:>5.2f} mm
+        Volume of one voxel:                {:>5.2f} mm^3
+        Aspect 0 on 1:                      {:>5.2f}
+        Aspect 0 on 2:                      {:>5.2f}
+        Aspect 1 on 2:                      {:>5.2f}"""
+
         resolution = self.resolution()
         return description.format(
                 resolution[0],

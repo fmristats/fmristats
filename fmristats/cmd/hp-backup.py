@@ -155,31 +155,6 @@ strftime = """convert time to string according to this format specification."""
 # Arguments specific for the setup of a session instances
 ########################################################################
 
-onsetx = """times of onsets of condition x, which will be interpreted
-as the control stimulus of the subject.  Should, e.g., be given in the
-form:
-
-                --onsetx 2 84 166 248 330
-
-to be parsed correctly.  If onsets are not given in order, they will be
-sorted automatically.  Must be specified if --stimulus is not.
-"""
-
-onsety = """times of onset of condition y, which will be interpreted as
-the stimulus stimulus of the subject.  Should, e.g., be given in the
-form:
-
-                --onsety 37 119 201 283
-
-to be parsed correctly.  If onsets are not given in order, they will be
-sorted automatically.  Must be specified if --stimulus is not.  """
-
-durationx = """duration of the stimulus of the subject under condition
-x.  Must be specified if --stimulus is not."""
-
-durationy = """duration of the stimulus of the subject under condition
-y.  Must be specified if --stimulus is not.  """
-
 detect_foreground = """detect foreground."""
 
 set_foreground = """set foreground."""

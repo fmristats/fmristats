@@ -19,7 +19,7 @@
 
 """
 
-Command line tool to create a fmristats session instance
+Fit head movements of a subject in an FMRI session
 
 """
 
@@ -29,114 +29,101 @@ Command line tool to create a fmristats session instance
 #
 ########################################################################
 
-import fmristats.cmd.hp as hp
+from ...epilog import epilog
 
 import argparse
 
-def create_argument_parser():
+def define_parser():
     parser = argparse.ArgumentParser(
             description=__doc__,
-            epilog=hp.epilog)
+            epilog=epilog)
 
-########################################################################
-# Input arguments
-########################################################################
+    ####################################################################
+    # Specific arguments
+    ####################################################################
 
-    parser.add_argument('--session',
-            default='../data/ses/{2}/{0}-{1:04d}-{2}-{3}.ses',
-            help='output file;' + hp.session)
+    specific = parser.add_argument_group(
+        """Arguments controlling the fit""")
 
-    parser.add_argument('--cycle',
-            type=int,
-            help="""optional. CYCLE to pick as reference""")
+    specific.add_argument('--cycle',
+        type=int,
+        help="""Use the data in scan cycle CYCLE as a template for
+        the subject reference space.""")
 
-########################################################################
-# Output arguments
-########################################################################
+    specific.add_argument('--grubbs',
+        type=float,
+        default=0.1,
+        help="""An outlier detection is performed to identify scans
+        which may have been acquired during severe head movements. More
+        precisely, a Grubbs' outlying test will be performed on the set
+        of estimated principle semi axis for each full scan cycle on the
+        given level of significance. When using fmririgid to create
+        ReferenceMaps, the default is 0.1, and the information of
+        outlying scans is saved to disk together with the estimated
+        rigid body transformations. Then, when running fmrifit, this
+        information is used. When setting --grubbs in fmrifit, outlier
+        estimation is performed again.""")
 
-    parser.add_argument('--reference-maps',
-            default='../data/ref/{2}/{0}-{1:04d}-{2}-{3}.ref',
-            help='output file;' + hp.reference_maps)
+    ####################################################################
+    # File handling
+    ####################################################################
 
-    parser.add_argument('-o', '--protocol-log',
-            default='logs/{}-fmririgid.pkl',
-            help=hp.protocol_log)
+    file_handling = parser.add_argument_group(
+        """File handling""")
 
-########################################################################
-# Arguments specific for fmririgid
-########################################################################
+    lock_handling = file_handling.add_mutually_exclusive_group()
 
-    parser.add_argument('--grubbs',
-            type=float,
-            default=0.1,
-            help=hp.grubbs)
+    lock_handling.add_argument('-r', '--remove-lock',
+        action='store_true',
+        help="""Remove lock, if file is locked. This is useful, if used
+        together with -s/--skip to remove orphan locks.""")
 
-########################################################################
-# Arguments specific for using the protocol API
-########################################################################
+    lock_handling.add_argument('-i', '--ignore-lock',
+        action='store_true',
+        help="""Ignore lock, if file is locked. Together with -s/--skip
+        this will also remove orphan locks.""")
 
-    parser.add_argument('--protocol',
-            help=hp.protocol)
+    skip_force = file_handling.add_mutually_exclusive_group()
 
-    parser.add_argument('--cohort',
-            help=hp.cohort)
+    skip_force.add_argument('-f', '--force',
+        action='store_true',
+        help="""Force re-writing any files""")
 
-    parser.add_argument('--id',
-            type=int,
-            nargs='+',
-            help=hp.j)
+    skip_force.add_argument('-s', '--skip',
+        action='store_true',
+        help="""Do not perform any calculations.""")
 
-    parser.add_argument('--datetime',
-            help=hp.datetime)
+    ####################################################################
+    # Verbosity
+    ####################################################################
 
-    parser.add_argument('--paradigm',
-            help=hp.paradigm)
+    control_verbosity  = parser.add_argument_group(
+        """Control the level of verbosity""")
 
-    parser.add_argument('--strftime',
-            default='%Y-%m-%d-%H%M',
-            help=hp.strftime)
+    control_verbosity.add_argument('-v', '--verbose',
+        action='count',
+        default=0,
+        help="""Increase output verbosity""")
 
-########################################################################
-# Miscellaneous
-########################################################################
+    ####################################################################
+    # Multiprocessing
+    ####################################################################
 
-    lock_handling = parser.add_mutually_exclusive_group()
+    control_multiprocessing  = parser.add_argument_group(
+        """Multiprocessing""")
 
-    lock_handling.add_argument('--remove-lock',
-            action='store_true',
-            help=hp.remove_lock.format('population space'))
-
-    lock_handling.add_argument('--ignore-lock',
-            action='store_true',
-            help=hp.ignore_lock.format('population space'))
-
-    file_handling = parser.add_mutually_exclusive_group()
-
-    file_handling.add_argument('-f', '--force',
-            action='store_true',
-            help=hp.force.format('population space'))
-
-    file_handling.add_argument('-s', '--skip',
-            action='store_true',
-            help=hp.skip.format('population space'))
-
-    parser.add_argument('-v', '--verbose',
-            action='count',
-            default=0,
-            help=hp.verbose)
-
-########################################################################
-# Multiprocessing
-########################################################################
-
-    parser.add_argument('-j', '--cores',
-            type=int,
-            help=hp.cores)
+    control_multiprocessing.add_argument('-j', '--cores',
+        type=int,
+        help="""Number of cores to use. Default is the number of cores
+        on the machine.""")
 
     return parser
 
+from ..api.fmristudy import add_study_arguments
+
 def cmd():
-    parser = create_argument_parser()
+    parser = define_parser()
+    add_study_arguments(parser)
     args = parser.parse_args()
     call(args)
 
@@ -148,24 +135,6 @@ cmd.__doc__ = __doc__
 #
 ########################################################################
 
-from ..df import get_df
-
-from ...lock import Lock
-
-from ...load import load_session, load_refmaps
-
-from ...name import Identifier
-
-from ...protocol import layout_dummy
-
-from ...session import Session
-
-from ...reference import ReferenceMaps
-
-import pandas as pd
-
-import datetime
-
 import sys
 
 import os
@@ -176,77 +145,118 @@ from multiprocessing.dummy import Pool as ThreadPool
 
 import numpy as np
 
+from ..api.fmristudy import get_study
+
+from ...lock import Lock
+
+from ...study import Study
+
+from ...reference import ReferenceMaps
+
 ########################################################################
 
 def call(args):
-    output = args.protocol_log.format(
-            datetime.datetime.now().strftime('%Y-%m-%d-%H%M'))
 
-    if args.strftime == 'short':
-        args.strftime = '%Y-%m-%d'
+    study = get_study(args)
 
-    ####################################################################
-    # Parse protocol
-    ####################################################################
-
-    df = get_df(args, fall_back=args.session)
-
-    if df is None:
+    if study is None:
         sys.exit()
 
-    ####################################################################
-    # Add file layout
-    ####################################################################
+    study_iterator = study.iterate('session', 'reference_maps',
+            new=['reference_maps'],
+            integer_index=True)
 
-    df_layout = df.copy()
-
-    layout_dummy(df_layout, 'ses',
-            template=args.session,
-            strftime=args.strftime
-            )
-
-    layout_dummy(df_layout, 'file',
-            template=args.reference_maps,
-            strftime=args.strftime
-            )
-
-    ####################################################################
-    # Apply wrapper
-    ####################################################################
+    df = study_iterator.df.copy()
 
     df['locked'] = False
 
-    def wm(r):
-        name = Identifier(cohort=r.cohort, j=r.id, datetime=r.date, paradigm=r.paradigm)
+    remove_lock       = args.remove_lock
+    ignore_lock       = args.ignore_lock
+    force             = args.force
+    skip              = args.skip
+    verbose           = args.verbose
+
+    cycle  = args.cycle
+    grubbs = args.grubbs
+
+    def wm(index, name, session, reference_maps, file_reference_maps):
+
+        if type(reference_maps) is Lock:
+            if remove_lock or ignore_lock:
+                if verbose:
+                    print('{}: Remove lock'.format(name.name()))
+                reference_maps.unlock()
+                if remove_lock:
+                    return
+            else:
+                if verbose:
+                    print('{}: Locked'.format(name.name()))
+                return
+
+        elif reference_maps is not None and not force:
+            if verbose:
+                print('{}: ReferenceMaps already exists. Use -f/--force to overwrite'.format(name.name()))
+            return
+
+        if skip:
+            return
+
+        if verbose:
+            print('{}: Lock: {}'.format(name.name(), file_reference_maps))
+
+        lock = Lock(name, 'fmririgid', file_reference_maps)
+        df.ix[index, 'locked'] = True
+
+        dfile = os.path.dirname(file_reference_maps)
+        if dfile and not isdir(dfile):
+           os.makedirs(dfile)
+
+        lock.save(file_reference_maps)
+
+        ####################################################################
+        # Fit rigid body transformations
+        ####################################################################
 
         try:
-            dfile = os.path.dirname(r.file)
-            if dfile and not isdir(dfile):
-                os.makedirs(dfile)
+            if verbose:
+                print('{}: Start fit of rigid body transformations'.format(name.name()))
+
+            reference_maps = ReferenceMaps(name)
+            reference_maps.fit(session)
+            reference_maps.reset_reference_space(cycle=cycle)
+
+            if not np.isclose(grubbs, 1):
+                if verbose:
+                    print('{}: Detect outlying scans'.format(name.name()))
+                reference_maps.detect_outlying_scans(grubbs)
+
+            if verbose:
+                print('{}: Save: {}'.format(name.name(), file_reference_maps))
+
+            reference_maps.save(file_reference_maps)
+            df.ix[index,'locked'] = False
+
         except Exception as e:
-            print('{}: {}'.format(name.name(), e))
+            df.ix[index,'valid'] = False
+            print('{}: Unable to create: {}'.format(name.name(), file_reference_maps))
+            print('{}: Exception: {}'.format(name.name(), e))
+            lock.conditional_unlock(df, index, verbose, True)
+            return
 
-        wrapper(name              = name,
-                df                = df,
-                index             = r.Index,
-                remove_lock       = args.remove_lock,
-                ignore_lock       = args.ignore_lock,
-                force             = args.force,
-                skip              = args.skip,
-                verbose           = args.verbose,
-                file              = r.file,
+    ####################################################################
 
-                file_ses          = r.ses,
-                sgnf              = args.grubbs,
-                cycle             = args.cycle,
-                )
-
-    it =  df_layout.itertuples()
-
-    if len(df_layout) > 1 and ((args.cores is None) or (args.cores > 1)):
+    if len(df) > 1 and ((args.cores is None) or (args.cores > 1)):
         try:
             pool = ThreadPool(args.cores)
-            results = pool.map(wm, it)
+            for index, name, files, instances in study_iterator:
+                session         = instances['session']
+                reference_maps  = instances['reference_maps']
+                file_reference_maps = files['reference_maps']
+                wm
+                pool.apply_async(wm, args=\
+                    (index, name, session, reference_maps, file_reference_maps)
+                    )
+
             pool.close()
             pool.join()
         except Exception as e:
@@ -255,112 +265,39 @@ def call(args):
             print('Pool execution has been terminated')
             print(e)
         finally:
-            files = df_layout.ix[df.locked, 'file'].values
+            files = df.ix[df.locked, 'reference_maps'].values
             if len(files) > 0:
                 for f in files:
                     print('Unlock: {}'.format(f))
                     os.remove(f)
-            del df['locked']
     else:
         try:
             print('Process protocol entries sequentially')
-            for r in it:
-                wm(r)
+            for index, name, files, instances in study_iterator:
+                session         = instances['session']
+                reference_maps  = instances['reference_maps']
+                file_reference_maps = files['reference_maps']
+                wm(index, name, session, reference_maps, file_reference_maps)
         finally:
-            files = df_layout.ix[df.locked, 'file'].values
+            files = df.ix[df.locked, 'reference_maps'].values
             if len(files) > 0:
                 for f in files:
                     print('Unlock: {}'.format(f))
                     os.remove(f)
-            del df['locked']
 
     ####################################################################
-    # Write protocol
+    # Write study to disk
     ####################################################################
 
-    if args.verbose:
-        print('Save: {}'.format(output))
+    if args.out is not None:
+        if args.epi_code is None:
+            print('Warning: study protocol has not been equipped with a valid EPI code')
 
-    dfile = os.path.dirname(output)
-    if dfile and not isdir(dfile):
-       os.makedirs(dfile)
+        if args.verbose:
+            print('Save: {}'.format(args.out))
 
-    df.to_pickle(output)
+        dfile = os.path.dirname(args.out)
+        if dfile and not isdir(dfile):
+           os.makedirs(dfile)
 
-########################################################################
-
-def wrapper(name, df, index, remove_lock, ignore_lock, force, skip,
-        verbose, file, file_ses, sgnf, cycle):
-
-    if isfile(file):
-        instance = load_refmaps(file, name, df, index, verbose)
-        if type(instance) is Lock:
-            if remove_lock or ignore_lock:
-                if verbose:
-                    print('{}: Remove lock'.format(name.name()))
-                instance.unlock()
-                if remove_lock:
-                    return
-            else:
-                if verbose:
-                    print('{}: Locked'.format(name.name()))
-                return
-        else:
-            if df.ix[index,'valid'] and not force:
-                if verbose:
-                    print('{}: Valid'.format(name.name()))
-                return
-            else:
-                if skip:
-                    if verbose:
-                        print('{}: Invalid'.format(name.name()))
-                    return
-
-    if skip:
-        return
-
-    if verbose:
-        print('{}: Lock: {}'.format(name.name(), file))
-
-    lock = Lock(name, 'fmrifit', file)
-    df.ix[index, 'locked'] = True
-    lock.save(file)
-    df.ix[index,'valid'] = True
-
-    ####################################################################
-    # Load session instance from disk
-    ####################################################################
-
-    session = load_session(file_ses, name, df, index, verbose)
-    if lock.conditional_unlock(df, index, verbose):
-        return
-
-    ####################################################################
-    # Fit rigid body transformations
-    ####################################################################
-
-    try:
-        if verbose:
-            print('{}: Start fit of rigid body transformations'.format(name.name()))
-
-        reference_maps = ReferenceMaps(name)
-        reference_maps.fit(session)
-        reference_maps.reset_reference_space(cycle=cycle)
-
-        if not np.isclose(sgnf, 1):
-            if verbose:
-                print('{}: Detect outlying scans'.format(name.name()))
-            reference_maps.detect_outlying_scans(sgnf)
-
-        if verbose:
-            print('{}: Save: {}'.format(name.name(), file))
-
-        reference_maps.save(file)
-        df.ix[index,'locked'] = False
-
-    except Exception as e:
-        df.ix[index,'valid'] = False
-        print('{}: Unable to create: {}'.format(name.name(), file))
-        print('{}: Exception: {}'.format(name.name(), e))
-        lock.conditional_unlock(df, index, verbose, True)
-        return
+        study.save(args.out)

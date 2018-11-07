@@ -30,14 +30,14 @@ standard output
 #
 ########################################################################
 
-import fmristats.cmd.hp as hp
+from ...epilog import epilog
 
 import argparse
 
 def create_argument_parser():
     parser = argparse.ArgumentParser(
             description=__doc__,
-            epilog=hp.epilog)
+            epilog=epilog)
 
     parser.add_argument('files', nargs='+', help='input files')
 
