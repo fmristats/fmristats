@@ -19,7 +19,8 @@
 
 """
 
-Quality assessment statistics for the ability to track head movements.
+Quality assessment statistics for evaluating the ability to track the head
+movements of a subject within an FMRI
 
 """
 
@@ -29,105 +30,81 @@ Quality assessment statistics for the ability to track head movements.
 #
 ########################################################################
 
-import fmristats.cmd.hp as hp
+from ...epilog import epilog
 
 import argparse
 
-def create_argument_parser():
+def define_parser():
     parser = argparse.ArgumentParser(
             description=__doc__,
-            epilog=hp.epilog)
+            epilog=epilog)
 
-########################################################################
-# Input arguments
-########################################################################
+    ####################################################################
+    # Specific arguments
+    ####################################################################
 
-    parser.add_argument('--reference-maps',
-            default='../data/ref/{2}/{0}-{1:04d}-{2}-{3}.ref',
-            help='input file;' + hp.reference_maps)
+    specific = parser.add_argument_group(
+        """Arguments controlling the plots""")
 
-########################################################################
-# Output arguments
-########################################################################
 
-    parser.add_argument('-d', '--directory',
-            default='figures/{2}/assessments',
-            help="""output directory""")
+    specific.add_argument('-d', '--directory',
+        default='figures/head-movements',
+        help="""Directory where to save the plots.""")
 
-    parser.add_argument('-e', '--extension',
-            default='pdf',
-            help="""anything that matplotlib understands""")
+    specific.add_argument('--extension',
+        default='pdf',
+        help="""Format of the plots. May be anything that matplotlib
+        understands.""")
 
-    parser.add_argument('--dpi',
-            type=int,
-            default=1200,
-            help="""dpi.""")
+    specific.add_argument('--dpi',
+        type=int,
+        default=1200,
+        help="""The dpi to use (whenever relevant).""")
 
-    parser.add_argument('-t', '--template',
-            default='{0}-{1:04d}-{2}-{3}',
-            help="""template for the file name""")
+    specific.add_argument('--grubbs',
+        type=float,
+        help="""An outlier detection is performed to identify scans
+        which may have been acquired during severe head movements. More
+        precisely, a Grubbs' outlying test will be performed on the set
+        of estimated principle semi axis for each full scan cycle on the
+        given level of significance. When using fmririgid to create
+        ReferenceMaps, the default is 0.1, and the information of
+        outlying scans is saved to disk together with the estimated
+        rigid body transformations. Then, when running fmrifit, this
+        information is used. When setting --grubbs in fmrifit, outlier
+        estimation is performed again.""")
 
-#    parser.add_argument('-o', '--protocol-log',
-#            default='logs/{}-ref2plot.pkl',
-#            help=hp.protocol_log)
+    ####################################################################
+    # Verbosity
+    ####################################################################
 
-########################################################################
-# Arguments specific for using the protocol API
-########################################################################
+    control_verbosity  = parser.add_argument_group(
+        """Control the level of verbosity""")
 
-    parser.add_argument('--protocol',
-            help=hp.protocol)
+    control_verbosity.add_argument('-v', '--verbose',
+        action='count',
+        default=0,
+        help="""Increase output verbosity""")
 
-    parser.add_argument('--cohort',
-            help=hp.cohort)
+    ####################################################################
+    # Multiprocessing
+    ####################################################################
 
-    parser.add_argument('--id',
-            type=int,
-            nargs='+',
-            help=hp.j)
+    control_multiprocessing  = parser.add_argument_group(
+        """Multiprocessing""")
 
-    parser.add_argument('--datetime',
-            help=hp.datetime)
-
-    parser.add_argument('--paradigm',
-            help=hp.paradigm)
-
-    parser.add_argument('--strftime',
-            default='%Y-%m-%d-%H%M',
-            help=hp.strftime)
-
-########################################################################
-# Arguments specific for plot
-########################################################################
-
-    parser.add_argument('--grubbs',
-            type=float,
-            help=hp.grubbs)
-
-########################################################################
-# Miscellaneous
-########################################################################
-
-    #parser.add_argument('-f', '--force',
-    #        action='store_true',
-    #        help=hp.force.format('result'))
-
-    parser.add_argument('-v', '--verbose',
-            action='store_true',
-            help=hp.verbose)
-
-########################################################################
-# Multiprocessing
-########################################################################
-
-    #parser.add_argument('-j', '--cores',
-    #        type=int,
-    #        help=hp.cores)
+    control_multiprocessing.add_argument('-j', '--cores',
+        type=int,
+        help="""Number of cores to use. Default is the number of cores
+        on the machine.""")
 
     return parser
 
+from ..api.fmristudy import add_study_arguments
+
 def cmd():
-    parser = create_argument_parser()
+    parser = define_parser()
+    add_study_arguments(parser)
     args = parser.parse_args()
     call(args)
 
@@ -139,134 +116,29 @@ cmd.__doc__ = __doc__
 #
 ########################################################################
 
-from ..df import get_df
-
-from ...load import load_refmaps
-
-from ...name import Identifier
-
-from ...protocol import layout_dummy
-
-from ...session import Session
-
-from ...reference import ReferenceMaps
-
-from ...euler import rotation_matrix_to_euler_angles
-
-import pandas as pd
-
-import datetime
-
 import sys
 
 import os
 
 from os.path import isfile, isdir, join
 
-#from multiprocessing.dummy import Pool as ThreadPool
+from multiprocessing.dummy import Pool as ThreadPool
 
 import numpy as np
+
+from ..api.fmristudy import get_study
+
+from ...lock import Lock
+
+from ...study import Study
+
+from ...reference import ReferenceMaps
+
+from ...euler import rotation_matrix_to_euler_angles
 
 import scipy.stats.distributions as dist
 
 import matplotlib.pyplot as pt
-
-pt.ioff()
-
-########################################################################
-
-def call(args):
-#    output = args.protocol_log.format(
-#            datetime.datetime.now().strftime('%Y-%m-%d-%H%M'))
-
-    if args.strftime == 'short':
-        args.strftime = '%Y-%m-%d'
-
-    ####################################################################
-    # Parse protocol
-    ####################################################################
-
-    df = get_df(args, fall_back=args.reference_maps)
-
-    if df is None:
-        sys.exit()
-
-    ####################################################################
-    # Add file layout
-    ####################################################################
-
-    df_layout = df.copy()
-
-    layout_dummy(df_layout, 'file_semiaxis',
-            template=args.template + '-semi-axis.' + args.extension,
-            strftime=args.strftime
-            )
-
-    layout_dummy(df_layout, 'file_euler',
-            template=args.template + '-euler-angles.' + args.extension,
-            strftime=args.strftime
-            )
-
-    layout_dummy(df_layout, 'file_euler_studenised',
-            template=args.template + '-euler-angles-studenised.' + args.extension,
-            strftime=args.strftime
-            )
-
-    layout_dummy(df_layout, 'file_bary',
-            template=args.template + '-bary-centre.' + args.extension,
-            strftime=args.strftime
-            )
-
-    layout_dummy(df_layout, 'file_bary_studenised',
-            template=args.template + '-bary-centre-studenised.' + args.extension,
-            strftime=args.strftime
-            )
-
-    layout_dummy(df_layout, 'dir',
-            template=args.directory,
-            strftime=args.strftime
-            )
-
-    layout_dummy(df_layout, 'file',
-            template=args.reference_maps,
-            strftime=args.strftime
-            )
-
-    ####################################################################
-    # Apply wrapper
-    ####################################################################
-
-    def wm(r):
-        name = Identifier(cohort=r.cohort, j=r.id, datetime=r.date, paradigm=r.paradigm)
-
-        try:
-            dfile = r.dir
-            if dfile and not isdir(dfile):
-                os.makedirs(dfile)
-        except Exception as e:
-            print('{}: {}'.format(name.name(), e))
-
-        wrapper(
-                name                  = name,
-                df                    = df,
-                index                 = r.Index,
-                filename              = r.file,
-                directory             = r.dir,
-
-                file_semiaxis         = r.file_semiaxis,
-                file_euler            = r.file_euler,
-                file_euler_studenised = r.file_euler_studenised,
-                file_bary             = r.file_bary,
-                file_bary_studenised  = r.file_bary_studenised,
-
-                sgnf                  = args.grubbs,
-                dpi                   = args.dpi,
-                verbose               = args.verbose)
-
-    it =  df_layout.itertuples()
-
-    for r in it:
-        wm(r)
 
 #######################################################################
 # Plot quality measures of head movement
@@ -309,136 +181,192 @@ def qc_plot(x, o, t, outlying_cycles, ax, studenise=False):
 
 ########################################################################
 
-def wrapper(name, df, index, filename, directory, file_semiaxis,
-        file_euler, file_euler_studenised,
-        file_bary, file_bary_studenised, sgnf, dpi,
-        verbose):
+def call(args):
 
-    ####################################################################
-    # Load reference maps from disk
-    ####################################################################
+    study = get_study(args)
 
-    reference_maps = load_refmaps(filename, name, df, index, verbose)
-    if df.ix[index,'valid'] == False:
-        return
+    if study is None:
+        sys.exit()
 
-    if (sgnf is not None) and (not np.isclose(sgnf, 1)):
+    study_iterator = study.iterate('reference_maps')
+
+    df = study_iterator.df.copy()
+
+    verbose   = args.verbose
+    grubbs    = args.grubbs
+    dpi       = args.dpi
+    directory = args.directory
+
+    if directory and not isdir(directory):
+       os.makedirs(directory)
+
+    pt.ioff()
+
+    def wm(name, reference_maps):
+
+        if (grubbs is not None) and (not np.isclose(grubbs, 1)):
+            if verbose:
+                print('{}: Detect outlying scans'.format(name.name()))
+            reference_maps.detect_outlying_scans(grubbs)
+
+        file1 = join(directory, name.name() + '-radii.' + args.extension)
+        file2 = join(directory, name.name() + '-euler.' + args.extension)
+        file3 = join(directory, name.name() + '-euler-studenised.' + args.extension)
+        file4 = join(directory, name.name() + '-bary.' + args.extension)
+        file5 = join(directory, name.name() + '-bary-studenised.' + args.extension)
+
+        ####################################################################
+        # Get slice times and outlying
+        ####################################################################
+
+        slice_times     = reference_maps.slice_time[:,0]
+        outlying        = reference_maps.outlying
+        values          = reference_maps.values
+        outlying_cycles = reference_maps.outlying_cycles
+
+        #######################################################################
+        # Studenised Semi axis norms
+        #######################################################################
+
+        fig, ax = pt.subplots()
+        qc_plot(
+                values[:3],
+                outlying[:3],
+                slice_times,
+                outlying_cycles,
+                ax, True)
+        ax.set_xlabel('Time (seconds)')
+        ax.set_ylabel('Studenised semi axis length')
+        ax.legend(loc='upper center', bbox_to_anchor=(0.5, 1.15),
+                  ncol=2, fancybox=True, shadow=True)
+        ax.set_ylim((-6,6))
+
         if verbose:
-            print('{}: Detect outlying scans'.format(name.name()))
-        reference_maps.detect_outlying_scans(sgnf)
+            print('{}: Save figure to: {}'.format(name.name(), file1))
+        pt.savefig(file1, dpi=dpi)
+        pt.close()
+
+        #######################################################################
+        # Calculate Euler angles for all head movements
+        #######################################################################
+
+        fig, ax = pt.subplots()
+        qc_plot(
+                np.degrees(values[6:]),
+                outlying[6:],
+                slice_times,
+                outlying_cycles,
+                ax, False)
+        ax.set_xlabel('Time (seconds)')
+        ax.set_ylabel('Euler angels (degrees)')
+        ax.legend(loc='upper center', bbox_to_anchor=(0.5, 1.15),
+                  ncol=2, fancybox=True, shadow=True)
+        ax.axhline(0, c='k', ls='--', lw=0.5)
+
+        if verbose:
+            print('{}: Save figure to: {}'.format(name.name(), file2))
+        pt.savefig(file2, dpi=dpi)
+        pt.close()
+
+        fig, ax = pt.subplots()
+        qc_plot(
+                values[6:],
+                outlying[6:],
+                slice_times,
+                outlying_cycles,
+                ax, True)
+        ax.set_xlabel('Time (seconds)')
+        ax.set_ylabel('Euler angels (studenised)')
+        ax.legend(loc='upper center', bbox_to_anchor=(0.5, 1.15),
+                  ncol=2, fancybox=True, shadow=True)
+        ax.axhline(0, c='k', ls='--', lw=0.5)
+        ax.set_ylim((-6,6))
+
+        if verbose:
+            print('{}: Save figure to: {}'.format(name.name(), file3))
+        pt.savefig(file3, dpi=dpi)
+        pt.close()
+
+        #######################################################################
+        # Plot barycentre of the head with respect to different references
+        #######################################################################
+
+        fig, ax = pt.subplots()
+        qc_plot(
+                values[3:6],
+                outlying[3:6],
+                slice_times,
+                outlying_cycles,
+                ax, False)
+        ax.set_xlabel('Time (seconds)')
+        ax.set_ylabel('Coordinates of bary centres (mm)')
+        ax.legend(loc='upper center', bbox_to_anchor=(0.5, 1.15),
+                  ncol=2, fancybox=True, shadow=True)
+
+        if verbose:
+            print('{}: Save figure to: {}'.format(name.name(), file4))
+        pt.savefig(file4, dpi=dpi)
+        pt.close()
+
+        fig, ax = pt.subplots()
+        qc_plot(
+                values[3:6],
+                outlying[3:6],
+                slice_times,
+                outlying_cycles,
+                ax, True)
+        ax.set_xlabel('Time (seconds)')
+        ax.set_ylabel('Coordinates of bary centres (studenised)')
+        ax.legend(loc='upper center', bbox_to_anchor=(0.5, 1.15),
+                  ncol=2, fancybox=True, shadow=True)
+        ax.set_ylim((-6,6))
+
+        if verbose:
+            print('{}: Save figure to: {}'.format(name.name(), file5))
+        pt.savefig(file5, dpi=dpi)
+        pt.close()
 
     ####################################################################
-    # Get slice times and outlying
+
+    if len(df) > 1 and ((args.cores is None) or (args.cores > 1)):
+        try:
+            pool = ThreadPool(args.cores)
+            for name, files, instances in study_iterator:
+                reference_maps  = instances['reference_maps']
+                wm
+                pool.apply_async(wm, args=(name, reference_maps))
+
+            pool.close()
+            pool.join()
+        except Exception as e:
+            pool.close()
+            pool.terminate()
+            print('Pool execution has been terminated')
+            print(e)
+        finally:
+            pass
+    else:
+        try:
+            print('Process protocol entries sequentially')
+            for name, instances in study_iterator:
+                reference_maps = instances['reference_maps']
+                wm(name, reference_maps)
+        finally:
+            pass
+
+    ####################################################################
+    # Write study to disk
     ####################################################################
 
-    slice_times     = reference_maps.slice_time[:,0]
-    outlying        = reference_maps.outlying
-    values          = reference_maps.values
-    outlying_cycles = reference_maps.outlying_cycles
+    if args.out is not None:
+        if args.epi_code is None:
+            print('Warning: study protocol has not been equipped with a valid EPI code')
 
-    #######################################################################
-    # Studenised Semi axis norms
-    #######################################################################
+        if args.verbose:
+            print('Save: {}'.format(args.out))
 
-    fig, ax = pt.subplots()
-    qc_plot(
-            values[:3],
-            outlying[:3],
-            slice_times,
-            outlying_cycles,
-            ax, True)
-    ax.set_xlabel('Time (seconds)')
-    ax.set_ylabel('Studenised semi axis length')
-    ax.legend(loc='upper center', bbox_to_anchor=(0.5, 1.15),
-              ncol=2, fancybox=True, shadow=True)
-    ax.set_ylim((-6,6))
+        dfile = os.path.dirname(args.out)
+        if dfile and not isdir(dfile):
+           os.makedirs(dfile)
 
-    figurename = join(directory, file_semiaxis)
-    if verbose:
-        print('{}: Save figure to: {}'.format(name.name(), figurename))
-    pt.savefig(figurename, dpi=dpi)
-    pt.close()
-
-    #######################################################################
-    # Calculate Euler angles for all head movements
-    #######################################################################
-
-    fig, ax = pt.subplots()
-    qc_plot(
-            np.degrees(values[6:]),
-            outlying[6:],
-            slice_times,
-            outlying_cycles,
-            ax, False)
-    ax.set_xlabel('Time (seconds)')
-    ax.set_ylabel('Euler angels (degrees)')
-    ax.legend(loc='upper center', bbox_to_anchor=(0.5, 1.15),
-              ncol=2, fancybox=True, shadow=True)
-    ax.axhline(0, c='k', ls='--', lw=0.5)
-
-    figurename = join(directory, file_euler)
-    if verbose:
-        print('{}: Save figure to: {}'.format(name.name(), figurename))
-    pt.savefig(figurename, dpi=dpi)
-    pt.close()
-
-    fig, ax = pt.subplots()
-    qc_plot(
-            values[6:],
-            outlying[6:],
-            slice_times,
-            outlying_cycles,
-            ax, True)
-    ax.set_xlabel('Time (seconds)')
-    ax.set_ylabel('Euler angels (studenised)')
-    ax.legend(loc='upper center', bbox_to_anchor=(0.5, 1.15),
-              ncol=2, fancybox=True, shadow=True)
-    ax.axhline(0, c='k', ls='--', lw=0.5)
-    ax.set_ylim((-6,6))
-
-    figurename = join(directory, file_euler_studenised)
-    if verbose:
-        print('{}: Save figure to: {}'.format(name.name(), figurename))
-    pt.savefig(figurename, dpi=dpi)
-    pt.close()
-
-    #######################################################################
-    # Plot barycentre of the head with respect to different references
-    #######################################################################
-
-    fig, ax = pt.subplots()
-    qc_plot(
-            values[3:6],
-            outlying[3:6],
-            slice_times,
-            outlying_cycles,
-            ax, False)
-    ax.set_xlabel('Time (seconds)')
-    ax.set_ylabel('Coordinates of bary centres (mm)')
-    ax.legend(loc='upper center', bbox_to_anchor=(0.5, 1.15),
-              ncol=2, fancybox=True, shadow=True)
-
-    figurename = join(directory, file_bary)
-    if verbose:
-        print('{}: Save figure to: {}'.format(name.name(), figurename))
-    pt.savefig(figurename, dpi=dpi)
-    pt.close()
-
-    fig, ax = pt.subplots()
-    qc_plot(
-            values[3:6],
-            outlying[3:6],
-            slice_times,
-            outlying_cycles,
-            ax, True)
-    ax.set_xlabel('Time (seconds)')
-    ax.set_ylabel('Coordinates of bary centres (studenised)')
-    ax.legend(loc='upper center', bbox_to_anchor=(0.5, 1.15),
-              ncol=2, fancybox=True, shadow=True)
-    ax.set_ylim((-6,6))
-
-    figurename = join(directory, file_bary_studenised)
-    if verbose:
-        print('{}: Save figure to: {}'.format(name.name(), figurename))
-    pt.savefig(figurename, dpi=dpi)
-    pt.close()
+        study.save(args.out)
