@@ -108,7 +108,7 @@ def create_argument_parser():
             help="""parameter""")
 
 ########################################################################
-# Arguments specific for the RSM Signal Model: irritation II
+# Arguments specific for the RSM Signal Model: stimulus II
 ########################################################################
 
     experimental_design = parser.add_argument_group(
@@ -603,7 +603,7 @@ def wrapper(name, df, index, remove_lock, ignore_lock, force, skip,
         reference_maps=reference_maps,
         population_map=population_map)
 
-    smodel.create_irritation_design(
+    smodel.create_stimulus_design(
             s=stimulus_block,
             c=control_block,
             offset=offset,

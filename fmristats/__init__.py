@@ -23,7 +23,7 @@ from .affines import Affine, Affines
 
 from .diffeomorphisms import Image, Diffeomorphism
 
-from .irritation import Irritation, Block
+from .stimulus import Stimulus, Block
 
 from .session import Session
 

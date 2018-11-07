@@ -19,7 +19,7 @@
 
 """
 
-Will convert MATLAB coded logfiles to irritation instances for fmristats
+Will convert MATLAB coded logfiles to stimulus instances for fmristats
 
 """
 
@@ -50,9 +50,9 @@ def create_argument_parser():
 # Output arguments
 ########################################################################
 
-    parser.add_argument('--irritation',
+    parser.add_argument('--stimulus',
             default='../data/irr/{2}/{0}-{1:04d}-{2}-{3}.irr',
-            help='input file;' + hp.irritation)
+            help='input file;' + hp.stimulus)
 
     parser.add_argument('-o' , '--protocol-log',
             default='logs/{}-mat2irr.pkl',
@@ -139,15 +139,15 @@ from ..df import get_df
 
 from ...lock import Lock
 
-from ...load import load_block_irritation
+from ...load import load_block_stimulus
 
 from ...name import Identifier
 
 from ...protocol import layout_dummy
 
-from ...irritation import Block
+from ...stimulus import Block
 
-from ...matlab import mat2irritation
+from ...matlab import mat2block
 
 import scipy.io
 
@@ -193,7 +193,7 @@ def call(args):
             )
 
     layout_dummy(df_layout, 'file',
-            template=args.irritation,
+            template=args.stimulus,
             strftime=args.strftime
             )
 
@@ -278,7 +278,7 @@ def wrapper(name, df, index, remove_lock, ignore_lock, force, skip,
         verbose, file, file_mat):
 
     if isfile(file):
-        instance = load_block_irritation(file, name, df, index, verbose)
+        instance = load_block_stimulus(file, name, df, index, verbose)
         if type(instance) is Lock:
             if remove_lock or ignore_lock:
                 if verbose:
@@ -329,11 +329,11 @@ def wrapper(name, df, index, remove_lock, ignore_lock, force, skip,
         return
 
     ####################################################################
-    # Create irritation instance
+    # Create stimulus instance
     ####################################################################
 
     try:
-        irr = mat2irritation(mat, name=name)
+        irr = mat2block(mat, name=name)
 
         if verbose:
             print('{}: Save {}'.format(name.name(), file))

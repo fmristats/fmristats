@@ -229,7 +229,7 @@ class ReferenceMaps:
         # 2. Do this with respect to each slice not with respect to a
         #    full scan cycle...
         # 3. Use as the reference distribution for grubbs only scans
-        #    within blocks of irritation
+        #    within blocks of stimulus
 
         # Look at the length of the semi axis norms
         w0 = self.semi_axis_norms[...,0]

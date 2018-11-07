@@ -19,7 +19,7 @@
 
 """
 
-Create a block irritation instances
+Create a block stimulus instances
 
 """
 
@@ -82,21 +82,21 @@ def define_parser():
 
     lock_handling.add_argument('-r', '--remove-lock',
             action='store_true',
-            help=hp.remove_lock.format('irritation'))
+            help=hp.remove_lock.format('stimulus'))
 
     lock_handling.add_argument('-i', '--ignore-lock',
             action='store_true',
-            help=hp.ignore_lock.format('irritation'))
+            help=hp.ignore_lock.format('stimulus'))
 
     skip_force = file_handling.add_mutually_exclusive_group()
 
     skip_force.add_argument('-f', '--force',
             action='store_true',
-            help=hp.force.format('irritation'))
+            help=hp.force.format('stimulus'))
 
     skip_force.add_argument('-s', '--skip',
             action='store_true',
-            help=hp.skip.format('irritation'))
+            help=hp.skip.format('stimulus'))
 
     ####################################################################
     # Verbosity
@@ -143,13 +143,13 @@ from .fmristudy import get_study
 
 from ...lock import Lock
 
-from ...load import load_block_irritation
+from ...load import load_block_stimulus
 
 from ...name import Identifier
 
 from ...study import Study
 
-from ...irritation import Block
+from ...stimulus import Block
 
 import pandas as pd
 
@@ -174,7 +174,7 @@ def call(args):
     if study is None:
         sys.exit()
 
-    study_iterator = study.iterate('irritation', new=['irritation'],
+    study_iterator = study.iterate('stimulus', new=['stimulus'],
             integer_index=True)
 
     ####################################################################
@@ -214,7 +214,7 @@ def call(args):
 
         if instance is not None and not force:
             if verbose:
-                print('{}: Irritation already exists. Use -f/--force to overwrite'.format(name.name()))
+                print('{}: Stimulus already exists. Use -f/--force to overwrite'.format(name.name()))
             return
 
         if skip:
@@ -223,7 +223,7 @@ def call(args):
         if verbose:
             print('{}: Lock: {}'.format(name.name(), filename))
 
-        lock = Lock(name, 'fmriirritation', filename)
+        lock = Lock(name, 'fmriblock', filename)
         df.ix[index, 'locked'] = True
 
         dfile = os.path.dirname(filename)
@@ -233,11 +233,11 @@ def call(args):
         lock.save(filename)
 
         ####################################################################
-        # Create irritation instance
+        # Create stimulus instance
         ####################################################################
 
         try:
-            irritation = Block(name=name,
+            stimulus = Block(name=name,
                     names=[namex, namey],
                     onsets={namex:onsetsx,namey:onsetsy},
                     durations={namex:durationsx,namey:durationsy})
@@ -245,7 +245,7 @@ def call(args):
             if verbose:
                 print('{}: Save: {}'.format(name.name(), filename))
 
-            irritation.save(filename)
+            stimulus.save(filename)
             df.ix[index,'locked'] = False
 
         except Exception as e:
@@ -261,9 +261,9 @@ def call(args):
         try:
             pool = ThreadPool(args.cores)
             for index, name, files, instances in study_iterator:
-                irritation = instances['irritation']
-                filename = files['irritation']
-                pool.apply_async(wm, args=(index, irritation, filename, name))
+                stimulus = instances['stimulus']
+                filename = files['stimulus']
+                pool.apply_async(wm, args=(index, stimulus, filename, name))
 
             pool.close()
             pool.join()
@@ -273,7 +273,7 @@ def call(args):
             print('Pool execution has been terminated')
             print(e)
         finally:
-            files = df.ix[df.locked, 'irritation'].values
+            files = df.ix[df.locked, 'stimulus'].values
             if len(files) > 0:
                 for f in files:
                     print('Unlock: {}'.format(f))
@@ -282,11 +282,11 @@ def call(args):
         try:
             print('Process protocol entries sequentially')
             for index, name, files, instances in study_iterator:
-                irritation = instances['irritation']
-                filename = files['irritation']
-                wm(index, irritation, filename, name)
+                stimulus = instances['stimulus']
+                filename = files['stimulus']
+                wm(index, stimulus, filename, name)
         finally:
-            files = df.ix[df.locked, 'irritation'].values
+            files = df.ix[df.locked, 'stimulus'].values
             if len(files) > 0:
                 for f in files:
                     print('Unlock: {}'.format(f))

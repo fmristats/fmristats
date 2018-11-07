@@ -19,7 +19,7 @@
 
 """
 
-Irritations, paradigms.
+Stimuluss, paradigms.
 
 """
 
@@ -33,9 +33,9 @@ from pandas import DataFrame
 
 import pickle
 
-class Irritation:
+class Stimulus:
     """
-    Irritation design
+    Stimulus design
 
     Parameters
     ----------
@@ -58,9 +58,9 @@ class Irritation:
 
     def save(self, file, **kwargs):
         """
-        Save irritation instance to disk
+        Save stimulus instance to disk
 
-        This will save the irritation instance to disk for later use.
+        This will save the stimulus instance to disk for later use.
 
         Parameters
         ----------
@@ -70,9 +70,9 @@ class Irritation:
         with open(file, 'wb') as output:
             pickle.dump(self, output, **kwargs)
 
-class Block(Irritation):
+class Block(Stimulus):
     """
-    Block irritation of the subject
+    Block stimulus of the subject
 
     Parameters
     ----------
@@ -119,7 +119,7 @@ class Block(Irritation):
 
     def design(self, slice_timing, s, c, offset=0, preset=0):
         """
-        Defines the irritation design vector
+        Defines the stimulus design vector
 
         Parameters
         ----------
@@ -132,14 +132,14 @@ class Block(Irritation):
         c : str
             name of the control block to be used
         offset : float
-            offset to apply at the beginning of an irritation phase
+            offset to apply at the beginning of an stimulus phase
         preset : float
-            offset to apply at the end of an irritation phase
+            offset to apply at the end of an stimulus phase
 
         Returns
         -------
         ndarray, shape_like(slice_timing), dtype: float
-            The irritation vector indicating the kind of irritation under
+            The stimulus vector indicating the kind of stimulus under
             which the subject was exposed while the particular slice has
             been measured.
         """
@@ -183,7 +183,7 @@ class Block(Irritation):
 
     def irritated_scans(self, slice_time, offset=0, preset=0):
         """
-        Test whether blocks have been aquired during blocks of irritation
+        Test whether blocks have been aquired during blocks of stimulus
 
         Parameters
         ----------
@@ -193,7 +193,7 @@ class Block(Irritation):
         -------
         ndarray, shape_like(slice_time), dtype: bool
             If True, this scan has been aquired during a block of subject
-            irritation.
+            stimulus.
         """
         onsets = self.onsets.items()
 
@@ -212,7 +212,7 @@ class Block(Irritation):
         Give a description of the instance
         """
         description = """
-        Type of irritation: block design
+        Type of stimulus: block design
         Block number: {}
         Block names:  {}
         Number of onsets per block: {}"""

@@ -29,7 +29,7 @@ from .name import Identifier
 
 from .affines import Affine, isinverse
 
-from .irritation import Irritation
+from .stimulus import Stimulus
 
 from .observations import create_slice_time_matrix
 
@@ -49,21 +49,21 @@ import pickle
 #######################################################################
 #######################################################################
 
-def fmrisetup(session, irritation):
+def fmrisetup(session, stimulus):
     """
 
     If a session instance was created using the basic information in a
     Nifti1 file, this will complete the set-up of the session by
     providing the rest of the necessary FMRI session information:
-    irritation design (a.k.a paradigm).
+    stimulus design (a.k.a paradigm).
 
     Parameters
     ----------
     session : Session
-    irritation : Irritation
+    stimulus : Stimulus
     """
     session.set_slice_time()
-    session.set_irritation(irritation)
+    session.set_stimulus(stimulus)
 
 #######################################################################
 
@@ -147,13 +147,13 @@ class Session:
 
         self.slice_time = slice_time
 
-    def set_irritation(self, irritation):
+    def set_stimulus(self, stimulus):
         """
-        Set up the irritation
+        Set up the stimulus
         """
-        assert issubclass(type(irritation), Irritation) or type(irritation) is Irritation, \
-                'type must be Irritation or a subclass if the same'
-        self.irritation = irritation
+        assert issubclass(type(stimulus), Stimulus) or type(stimulus) is Stimulus, \
+                'type must be Stimulus or a subclass if the same'
+        self.stimulus = stimulus
 
     ####################################################################
     # Foreground detection

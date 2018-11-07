@@ -25,7 +25,7 @@ Study Layout
 
 from .name import Identifier
 
-from .load import load, load_block_irritation, load_session, load_refmaps, \
+from .load import load, load_block_stimulus, load_session, load_refmaps, \
     load_population_map, load_result
 
 import pandas as pd
@@ -156,7 +156,7 @@ class Study:
 
         if single_subject is True:
             self.file_layout = {
-                'irritation'     : '{0}-{1:04d}-{2}-{3}.irr',
+                'stimulus'     : '{0}-{1:04d}-{2}-{3}.irr',
                 'session'        : '{0}-{1:04d}-{2}-{3}.ses',
                 'reference_maps' : '{0}-{1:04d}-{2}-{3}.ref',
                 'population_map' : '{0}-{1:04d}-{2}-{3}-{4}.pop',
@@ -164,7 +164,7 @@ class Study:
                 'strftime'       : '%Y-%m-%d-%H%M'}
         elif type(single_subject) is str:
             self.file_layout = {
-                'irritation'     : single_subject + '.irr',
+                'stimulus'     : single_subject + '.irr',
                 'session'        : single_subject + '.ses',
                 'reference_maps' : single_subject + '.ref',
                 'population_map' : single_subject + '.pop',
@@ -172,7 +172,7 @@ class Study:
                 'strftime'       : '%Y-%m-%d-%H%M'}
         else:
             self.file_layout = {
-                'irritation'     : 'data/irr/{2}/{0}-{1:04d}-{2}-{3}.irr',
+                'stimulus'     : 'data/irr/{2}/{0}-{1:04d}-{2}-{3}.irr',
                 'session'        : 'data/ses/{2}/{0}-{1:04d}-{2}-{3}.ses',
                 'reference_maps' : 'data/ref/{2}/{0}-{1:04d}-{2}-{3}.ref',
                 'population_map' : 'data/pop/{2}/{4}/{5}/{0}-{1:04d}-{2}-{3}-{4}.pop',

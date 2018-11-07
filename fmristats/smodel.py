@@ -35,7 +35,7 @@ from .diffeomorphisms import Image
 
 from .pmap import PopulationMap
 
-from .irritation import Irritation
+from .stimulus import Stimulus
 
 from .fit import fit_field, extract_field, model_at, data_at
 
@@ -76,7 +76,7 @@ class SignalModel:
         assert type(population_map) is PopulationMap, 'population_map must be of type PopulationMap'
 
         self.session = session
-        self.irritation = session.irritation
+        self.stimulus = session.stimulus
         self.reference_maps = reference_maps
         self.population_map = population_map
 
@@ -200,11 +200,11 @@ class SignalModel:
     def create_slice_timing_design(self):
         return self.slice_timing_design
 
-    def create_irritation_design(self, **kwargs):
+    def create_stimulus_design(self, **kwargs):
         assert hasattr(self, 'slice_timing_design'), 'first create the slice timing design'
-        self.irritation_design = self.irritation.design(
+        self.stimulus_design = self.stimulus.design(
                 slice_timing=self.slice_timing_design, **kwargs)
-        return self.irritation_design
+        return self.stimulus_design
 
     def observations(self, include_background=False):
         """
@@ -222,7 +222,7 @@ class SignalModel:
             [..., 8] = slice number
         """
         assert hasattr(self, 'slice_timing_design'), 'first set the slice time design'
-        assert hasattr(self, 'irritation_design'), 'first set the irritation design'
+        assert hasattr(self, 'stimulus_design'), 'first set the stimulus design'
         n,x,y,z = self.session.data.shape
 
         observations = np.zeros((n,x,y,z,9))
@@ -235,7 +235,7 @@ class SignalModel:
 
         tmp = np.moveaxis(observations, self.ep+1, 1)
         tmp[...,4]  = self.slice_timing_design[...,None,None]
-        tmp[...,5:7] = self.irritation_design[...,None,None,:]
+        tmp[...,5:7] = self.stimulus_design[...,None,None,:]
 
         x = np.mgrid[:self.shape[0], :self.shape[1]]
         x = np.moveaxis(x, 0, -1)

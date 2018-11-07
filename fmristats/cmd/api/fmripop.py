@@ -181,7 +181,7 @@ def call(args):
         args.diffeomorphism_name = args.vb_type
 
     layout = {
-        'irritation':args.irritation,
+        'stimulus':args.stimulus,
         'session':args.session,
         'reference_maps':args.reference_maps,
         'result':args.fit,

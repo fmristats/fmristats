@@ -35,7 +35,7 @@ setup(
             'fmriassessment = fmristats.cmd.api.fmriassessment:cmd',
             'fmriati        = fmristats.cmd.api.fmriati:cmd',
             'fmrifit        = fmristats.cmd.api.fmrifit:cmd',
-            'fmriirritation = fmristats.cmd.api.fmriirritation:cmd',
+            'fmriblock = fmristats.cmd.api.fmriblock:cmd',
             'fmririgid      = fmristats.cmd.api.fmririgid:cmd',
             'fmripop        = fmristats.cmd.api.fmripop:cmd',
             'fmriprune      = fmristats.cmd.api.fmriprune:cmd',
@@ -47,7 +47,7 @@ setup(
             'ants4pop   = fmristats.cmd.wrp.ants4pop:cmd',
 
             # import from third party formats
-            'mat2irritation = fmristats.cmd.imp.mat2irr:cmd',
+            'mat2block = fmristats.cmd.imp.mat2irr:cmd',
             'nii2image = fmristats.cmd.imp.nii2img:cmd',
             'nii2session = fmristats.cmd.imp.nii2ses:cmd',
             'csv2protocol = fmristats.cmd.imp.csv2protocol:cmd_pkl',

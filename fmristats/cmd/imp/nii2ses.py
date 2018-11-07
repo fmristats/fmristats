@@ -131,13 +131,13 @@ from ..df import get_df
 
 from ...lock import Lock
 
-from ...load import load_block_irritation, load_session
+from ...load import load_block_stimulus, load_session
 
 from ...name import Identifier
 
 from ...study import Study
 
-from ...irritation import Block
+from ...stimulus import Block
 
 from ...session import Session, fmrisetup
 
@@ -170,7 +170,7 @@ def call(args):
     # Parse protocol
     ####################################################################
 
-    df = get_df(args, fall_back=args.irritation)
+    df = get_df(args, fall_back=args.stimulus)
 
     if df is None:
         sys.exit()
@@ -185,7 +185,7 @@ it must be integer, within [-3,3], and not null.""")
     ####################################################################
 
     layout = {
-        'irritation':args.irritation,
+        'stimulus':args.stimulus,
         'session':args.session,
         'reference_maps':args.reference_maps,
         'result':args.fit,
@@ -198,7 +198,7 @@ it must be integer, within [-3,3], and not null.""")
 
     study = Study(df, df, layout=layout, strftime=args.strftime)
 
-    study_iterator = study.iterate('irritation', 'session',
+    study_iterator = study.iterate('stimulus', 'session',
             new=['session', 'nii', 'foreground'],
             vb_name=args.vb_name,
             diffeomorphism_name=args.diffeomorphism_name,
@@ -324,10 +324,10 @@ def wrapper(name, df, index, remove_lock, ignore_lock, force, skip,
     df.ix[index,'valid'] = True
 
     ####################################################################
-    # Load irritation instance from disk
+    # Load stimulus instance from disk
     ####################################################################
 
-    irritation = load_block_irritation(file_irr, name, df, index, verbose)
+    stimulus = load_block_stimulus(file_irr, name, df, index, verbose)
     if lock.conditional_unlock(df, index, verbose):
         return
 
@@ -357,7 +357,7 @@ def wrapper(name, df, index, remove_lock, ignore_lock, force, skip,
                 nii=img,
                 epi_code=epi_code)
 
-        fmrisetup(session = session, irritation = irritation)
+        fmrisetup(session = session, stimulus = stimulus)
 
         if detect_foreground:
             if verbose:

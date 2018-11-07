@@ -62,7 +62,7 @@ from ...affines import Affine
 
 from ...diffeomorphisms import Image, Diffeomorphism
 
-from ...irritation import Irritation, Block
+from ...stimulus import Stimulus, Block
 
 from ...session import Session
 
@@ -103,15 +103,15 @@ def print_info(x, f):
         print('{}: session file'.format(f))
         print(x.name.describe())
         print(x.describe())
-        print(x.irritation.describe())
+        print(x.stimulus.describe())
         print(x.reference.describe())
 
-    if type(x) is Irritation:
-        print('{}: irritation file'.format(f))
+    if type(x) is Stimulus:
+        print('{}: stimulus file'.format(f))
         print(x.describe())
 
     if type(x) is Block:
-        print('{}: block irritation file'.format(f))
+        print('{}: block stimulus file'.format(f))
         print(x.describe())
 
     if type(x) is ReferenceMaps:

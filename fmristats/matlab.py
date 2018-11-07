@@ -1,5 +1,5 @@
 """
-Will parse a the output of ... to a irritation.
+Will parse a the output of ... to a stimulus.
 """
 
 ########################################################################
@@ -10,11 +10,11 @@ Will parse a the output of ... to a irritation.
 
 from .name import Identifier
 
-from .irritation import Block
+from .stimulus import Block
 
-def mat2irritation(mat, name):
+def mat2block(mat, name):
     """
-    Will parse a the output of ... to a block irritation.
+    Will parse a the output of ... to a block stimulus.
 
     Parameters
     ----------

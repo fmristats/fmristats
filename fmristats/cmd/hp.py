@@ -17,7 +17,7 @@
 #
 # It is not allowed to remove this copy right statement.
 
-mat = """a Matlab coded irritation design of on- and offsets."""
+mat = """a Matlab coded stimulus design of on- and offsets."""
 
 ########################################################################
 # General arguments
@@ -62,8 +62,8 @@ population_space = vb
 
 population_map = """instance of a population map."""
 
-irritation = """irritation file.  File name containing the irritation
-instance for this session.  An irritation instance contains all
+stimulus = """stimulus file.  File name containing the stimulus
+instance for this session.  An stimulus instance contains all
 information of the paradigm of this session, i.e., whether the paradigm
 follows a block design, the names of the respective blocks, their
 respective onsets and respective durations."""
@@ -142,8 +142,8 @@ file is used, then this is the id of the subject in its cohort."""
 datetime = """only use entries which are stamped with this date and
 time."""
 
-paradigm = """only use entries which belong to this irritation design.
-The name of the irritation will appear as part of the default file names
+paradigm = """only use entries which belong to this stimulus design.
+The name of the stimulus will appear as part of the default file names
 produced by various fmristats command line tools.  Unless you are
 planing to provide custom file names to all of fmristats' command line
 tools, it is recommend not to use any special characters in this
@@ -174,29 +174,29 @@ plain, then set EP to 1.  Values in a protocol file will take precedence
 """
 
 onsetx = """times of onsets of condition x, which will be interpreted
-as the control irritation of the subject.  Should, e.g., be given in the
+as the control stimulus of the subject.  Should, e.g., be given in the
 form:
 
                 --onsetx 2 84 166 248 330
 
 to be parsed correctly.  If onsets are not given in order, they will be
-sorted automatically.  Must be specified if --irritation is not.
+sorted automatically.  Must be specified if --stimulus is not.
 """
 
 onsety = """times of onset of condition y, which will be interpreted as
-the stimulus irritation of the subject.  Should, e.g., be given in the
+the stimulus stimulus of the subject.  Should, e.g., be given in the
 form:
 
                 --onsety 37 119 201 283
 
 to be parsed correctly.  If onsets are not given in order, they will be
-sorted automatically.  Must be specified if --irritation is not.  """
+sorted automatically.  Must be specified if --stimulus is not.  """
 
-durationx = """duration of the irritation of the subject under condition
-x.  Must be specified if --irritation is not."""
+durationx = """duration of the stimulus of the subject under condition
+x.  Must be specified if --stimulus is not."""
 
-durationy = """duration of the irritation of the subject under condition
-y.  Must be specified if --irritation is not.  """
+durationy = """duration of the stimulus of the subject under condition
+y.  Must be specified if --stimulus is not.  """
 
 detect_foreground = """detect foreground."""
 
@@ -229,7 +229,7 @@ enter the model."""
 time_order = """degree of polynomial that models temporal fluctuation.
 Default is 1."""
 
-drop_irritation = """if irritation information is present in the model,
+drop_stimulus = """if stimulus information is present in the model,
 here, you may drop it."""
 
 ########################################################################
@@ -290,13 +290,13 @@ offset_beginning = """
 The haemodynamic response to stimulus is not immediate.  It is usually
 assumed that the HR-function spikes approximately five seconds after the
 first stimulus.  The value of OFFSET_BEGINNING is added to the onset
-times of the irritation phases to allow you to wait till the subject's
-brain is in the respected irritation modus.
+times of the stimulus phases to allow you to wait till the subject's
+brain is in the respected stimulus modus.
 """
 
 offset_end = """
 Similar to OFFSET_BEGINNING the value OFFSET_END is removed from the end
-of each irritation phase and not considered in the fitting.
+of each stimulus phase and not considered in the fitting.
 """
 
 

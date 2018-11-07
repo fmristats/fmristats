@@ -23,7 +23,7 @@ from .name import Identifier
 
 from .affines import isclose
 
-from .irritation import Block
+from .stimulus import Block
 
 from .session import Session
 
@@ -55,9 +55,9 @@ def load(file):
 
     return self
 
-def load_block_irritation(file, name, df, index, verbose=True):
+def load_block_stimulus(file, name, df, index, verbose=True):
     """
-    Load a irritation file
+    Load a stimulus file
 
     This will performe some tests whether the correct file has been
     loaded from disk.  This function is frequently used in the command
@@ -72,13 +72,13 @@ def load_block_irritation(file, name, df, index, verbose=True):
 
     Returns
     -------
-    Irritation
+    Stimulus
     """
     assert type(name) is Identifier, 'name must be Identifier'
     assert type(df) is DataFrame, 'df must be DataFrame'
 
     try:
-        irritation = load(file)
+        stimulus = load(file)
         if verbose:
             print('{}: Read: {}'.format(name.name(), file))
     except Exception as e:
@@ -86,18 +86,18 @@ def load_block_irritation(file, name, df, index, verbose=True):
         df.ix[index,'valid'] = False
         return
 
-    if type(irritation) is Block and name.is_equal(irritation.name):
-        return irritation
-    elif type(irritation) is Lock:
+    if type(stimulus) is Block and name.is_equal(stimulus.name):
+        return stimulus
+    elif type(stimulus) is Lock:
         df.ix[index,'valid'] = False
-        print('{}: Irritation is currently locked'.format(name.name(), file))
-        return irritation
+        print('{}: Stimulus is currently locked'.format(name.name(), file))
+        return stimulus
     else:
         df.ix[index,'valid'] = False
-        print("""{}: Irritation does not match:
+        print("""{}: Stimulus does not match:
         Expected: {}
-        Found:    {}""".format(name.name(), name.name(True), irritation.name.name(True)))
-        return irritation
+        Found:    {}""".format(name.name(), name.name(True), stimulus.name.name(True)))
+        return stimulus
 
 def load_session(file, name, df, index, verbose=True):
     """

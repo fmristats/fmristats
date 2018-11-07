@@ -66,8 +66,8 @@ def add_study_arguments(parser):
     study_parser.add_argument('--covariates-query',
             help="""query the covariates.""")
 
-    study_parser.add_argument('--irritation',
-        help="""Path to a irritation file or template for such a
+    study_parser.add_argument('--stimulus',
+        help="""Path to a stimulus file or template for such a
         file""")
 
     study_parser.add_argument('--session',
@@ -153,7 +153,7 @@ from ...name import Identifier
 
 from ...study import Study
 
-from ...irritation import Block
+from ...stimulus import Block
 
 import pandas as pd
 
@@ -214,7 +214,7 @@ def get_study(args):
             epi_code = None
 
         for f in [args.session, args.reference_maps,
-                args.population_map, args.fit, args.irritation]:
+                args.population_map, args.fit, args.stimulus]:
             if f is not None:
                 print('Read: {}'.format(f))
                 try:
@@ -293,7 +293,7 @@ def get_study(args):
         return
 
     file_layout = {
-        'irritation':args.irritation,
+        'stimulus':args.stimulus,
         'session':args.session,
         'reference_maps':args.reference_maps,
         'result':args.fit,
