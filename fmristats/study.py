@@ -95,21 +95,45 @@ class Study:
             vb=None,
             vb_background=None,
             vb_ati=None,
-            layout=None,
+            file_layout=None,
             strftime=None,
-            root_dir='.',
+            root_dir=None,
+            single_subject=False,
+            diffeomorphism_name=None,
+            scale_type=None,
             ):
         """
         Parameters
         ----------
         protocol : DataFrame
-        covariates : DataFrame
-        vb : Image
-        vb_background : Image
-        vb_ati : Image
-        layout : dict
-        strftime : str
-        root_dir : str
+            A data frame that contains information on the FMRI sessions
+            that a subject has been participated.
+        covariates : None or DataFrame
+            A data frame that contains potential covariates of the
+            subjects.
+        vb : None or Image
+            Template image in standard space.
+        vb_background : None or Image
+            Background template in standard space.
+        vb_ati : None or Image
+            ATI reference field.
+        file_layout : None or dict
+            A dictionary of the file layout.
+        strftime : None or str
+            Format of the date and time string.
+        root_dir : None or str
+            The root directory of the study. All paths will always be
+            expanded with respect to this root.
+        single_subject : False or True or str
+            The default is False. If False, a default file layout for
+            multiple subject is used. If True, a default file layout for
+            a single subject analysis is used. If string, then the
+            string is used.
+        diffeomorphism_name : str or None
+            Name or type of the family of diffeomorphisms that will map
+            from standard space to the respective subjects.
+        scale_type : str or float
+            Scale type to use.
 
         Notes
         -----
@@ -121,27 +145,60 @@ class Study:
         self.vb              = vb
         self.vb_background   = vb_background
         self.vb_ati          = vb_ati
-        self.root_dir        = root_dir
 
-        self.layout = {
-            'irritation'     : 'data/irr/{2}/{0}-{1:04d}-{2}-{3}.irr',
-            'session'        : 'data/ses/{2}/{0}-{1:04d}-{2}-{3}.ses',
-            'reference_maps' : 'data/ref/{2}/{0}-{1:04d}-{2}-{3}.ref',
-            'population_map' : 'data/pop/{2}/{4}/{5}/{0}-{1:04d}-{2}-{3}-{4}.pop',
-            'result'         : 'data/fit/{2}/{4}/{5}/{6}/{0}-{1:04d}-{2}-{3}-{4}.fit',
-            'strftime'       : '%Y-%m-%d-%H%M'}
+        self.diffeomorphism_name = diffeomorphism_name
+        self.scale_type = scale_type
 
-        if layout is not None:
-            self.update_layout(layout)
+        if root_dir is None:
+            self.root_dir = '.' # os.getcwd()
+        else:
+            self.root_dir = root_dir
+
+        if single_subject is True:
+            self.file_layout = {
+                'irritation'     : '{0}-{1:04d}-{2}-{3}.irr',
+                'session'        : '{0}-{1:04d}-{2}-{3}.ses',
+                'reference_maps' : '{0}-{1:04d}-{2}-{3}.ref',
+                'population_map' : '{0}-{1:04d}-{2}-{3}-{4}.pop',
+                'result'         : '{0}-{1:04d}-{2}-{3}-{4}.fit',
+                'strftime'       : '%Y-%m-%d-%H%M'}
+        elif type(single_subject) is str:
+            self.file_layout = {
+                'irritation'     : single_subject + '.irr',
+                'session'        : single_subject + '.ses',
+                'reference_maps' : single_subject + '.ref',
+                'population_map' : single_subject + '.pop',
+                'result'         : single_subject + '.fit',
+                'strftime'       : '%Y-%m-%d-%H%M'}
+        else:
+            self.file_layout = {
+                'irritation'     : 'data/irr/{2}/{0}-{1:04d}-{2}-{3}.irr',
+                'session'        : 'data/ses/{2}/{0}-{1:04d}-{2}-{3}.ses',
+                'reference_maps' : 'data/ref/{2}/{0}-{1:04d}-{2}-{3}.ref',
+                'population_map' : 'data/pop/{2}/{4}/{5}/{0}-{1:04d}-{2}-{3}-{4}.pop',
+                'result'         : 'data/fit/{2}/{4}/{5}/{6}/{0}-{1:04d}-{2}-{3}-{4}.fit',
+                'strftime'       : '%Y-%m-%d-%H%M'}
+
+        if file_layout is not None:
+            self.update_layout(file_layout)
 
         if strftime == 'short':
             strftime = '%Y-%m-%d'
 
         if strftime is not None:
-            self.layout.update({'strftime' : strftime})
+            self.file_layout.update({'strftime' : strftime})
 
-    def update_layout(self, layout):
-        self.layout.update( (k,v) for k,v in layout.items() if v is not None)
+    def update_layout(self, file_layout):
+        """
+        Update the file layout
+
+        Parameters
+        ----------
+        file_layout : dict
+            A dictionary of the file layout.
+        """
+        self.file_layout.update( (k,v) for k,v in file_layout.items() if
+                v is not None)
 
     def iterate(self, *keys, new=None,
             vb_name=None, diffeomorphism_name=None, scale_type=None,
@@ -150,7 +207,21 @@ class Study:
         If covariates in not None, then only subjects in the protocol are
         going to be processed which are also marked as valid in the
         covariates file.
+
+        Returns
+        -------
+        StudyIterator
         """
+        if diffeomorphism_name is None:
+            diffeomorphism_name = self.diffeomorphism_name
+
+        if scale_type is None:
+            if type(self.scale_type) is str:
+                scale_type = self.scale_type
+            elif type(scale_type) is float:
+                scale_type = '{:.2f}'.format(
+                        self.scale_type).replace('.', 'd')
+
         protocol = self.protocol[self.protocol.valid == True].copy()
 
         if self.covariates is not None:
@@ -167,11 +238,11 @@ class Study:
 
         for key in keys:
                 df [key] = Series(
-                        data = [join(self.root_dir, self.layout[key].format(
+                        data = [join(self.root_dir, self.file_layout[key].format(
                             r.cohort,
                             r.id,
                             r.paradigm,
-                            r.date.strftime(self.layout['strftime']),
+                            r.date.strftime(self.file_layout['strftime']),
                             vb_name,
                             diffeomorphism_name,
                             scale_type))
@@ -181,11 +252,11 @@ class Study:
             for n in new:
                 if n not in keys:
                     df [n] = Series(
-                            data = [join(self.root_dir, self.layout[n].format(
+                            data = [join(self.root_dir, self.file_layout[n].format(
                                 r.cohort,
                                 r.id,
                                 r.paradigm,
-                                r.date.strftime(self.layout['strftime']),
+                                r.date.strftime(self.file_layout['strftime']),
                                 vb_name,
                                 diffeomorphism_name,
                                 scale_type))
@@ -265,7 +336,7 @@ class Study:
             vb            = study.vb,
             vb_background = study.vb_background,
             vb_ati        = study.vb_ati,
-            layout        = study.layout,
+            file_layout   = study.file_layout,
             strftime      = study.strftime,
             )
 

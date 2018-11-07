@@ -51,7 +51,7 @@ def create_argument_parser():
 
     parser.add_argument('--vb-type',
             default='reference',
-            choices=['reference', 'scanner', 'scan', 'fit'],
+            choices=['reference', 'scanner', 'scan_cycle', 'fit'],
             #choices=['reference', 'scan', 'scanner'],
             help=hp.vb_name)
 
@@ -143,7 +143,7 @@ from ...reference import ReferenceMaps
 
 from ...smodel import SignalModel, Result
 
-from ...pmap import PopulationMap, pmap_scanner, pmap_reference, pmap_scan
+from ...pmap import PopulationMap, pmap_scanner, pmap_reference, pmap_scan_cycle
 
 import pandas as pd
 
@@ -176,6 +176,7 @@ def call(args):
     # Add file layout
     ####################################################################
 
+    # TODO: you should use diffeomorphism_name instead!
     if args.diffeomorphism_name is None:
         args.diffeomorphism_name = args.vb_type
 
@@ -278,7 +279,7 @@ def call(args):
         # map instance
         ####################################################################
 
-        if (vb_type == 'scan'):
+        if (vb_type == 'scan_cycle'):
 
             if (session is None) or (reference_maps is None) or (scan_cycle is None):
                 print('{}: No session or reference maps provided or CYCLE not defined'.format(name.name()))
@@ -286,7 +287,7 @@ def call(args):
                 lock.conditional_unlock(df, index, verbose)
                 return
 
-            population_map = pmap_scan(
+            population_map = pmap_scan_cycle(
                     reference_maps=reference_maps,
                     session=session,
                     scan_cycle=scan_cycle)

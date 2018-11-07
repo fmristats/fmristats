@@ -174,12 +174,6 @@ def call(args):
     if study is None:
         sys.exit()
 
-    if args.verbose:
-        print(study.protocol.head())
-
-        if study.covariates is not None:
-            print(study.covariates.head())
-
     study_iterator = study.iterate('irritation', new=['irritation'],
             integer_index=True)
 

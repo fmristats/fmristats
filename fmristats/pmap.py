@@ -465,7 +465,7 @@ def pmap_scanner(session):
     See also
     --------
     `pmap_reference`
-    `pmap_scan`
+    `pmap_scan_cycle`
     """
     diffeomorphism = Identity(
             reference=session.reference,
@@ -514,7 +514,7 @@ def pmap_reference(session, resolution=2.):
     See also
     --------
     :func:`pmap_scanner`
-    :func:`pmap_scan`
+    :func:`pmap_scan_cycle`
     """
 
     ref = session.reference
@@ -532,7 +532,7 @@ def pmap_reference(session, resolution=2.):
 
     return PopulationMap(diffeomorphism)
 
-def pmap_scan(session, reference_maps, scan_cycle):
+def pmap_scan_cycle(session, reference_maps, scan_cycle):
     """
     Pick a scan reference as the population map
 
@@ -571,6 +571,6 @@ def pmap_scan(session, reference_maps, scan_cycle):
             shape=session.shape,
             vb=session.name.name(),
             nb=session.name,
-            name='cycle{:d}'.format(scan_cycle))
+            name='scan_cycle_{:d}'.format(scan_cycle))
 
     return PopulationMap(diffeomorphism)

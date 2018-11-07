@@ -23,12 +23,6 @@ Handling studies
 
 """
 
-########################################################################
-#
-# Command line program
-#
-########################################################################
-
 import fmristats.cmd.hp as hp
 
 import argparse
@@ -41,6 +35,23 @@ def add_study_arguments(parser):
     study_parser.add_argument('--study',
         help="""A study.""")
 
+    study_parser.add_argument('--single-subject',
+        help="""If this is a study that only contains a single subject,
+        you may change the default file layout to name all files
+        starting with the string: SINGLE_SUBJECT.""")
+
+    study_parser.add_argument('--root_directory',
+        help="""Will overwrite the default and set the root directory of
+        the study to ROOT_DIRECTORY.""")
+
+    study_parser.add_argument('--traverse-upwards',
+        type=int,
+        default=6,
+        help="""When looking for a valid study file, traverse upwards
+        TRAVERSE_UPWARDS number of directories. Note that the search
+        will never traverse further upwards than your home
+        directory.""")
+
     study_parser.add_argument('--protocol',
         help="""A protocol. The protocol file contains basic information
         about the FMRI sessions in a study.""")
@@ -49,10 +60,10 @@ def add_study_arguments(parser):
         help="""The covariates. The covariates file information about
         the subjects in the study.""")
 
-    parser.add_argument('--protocol-query',
+    study_parser.add_argument('--protocol-query',
             help="""query the protocol.""")
 
-    parser.add_argument('--covariates-query',
+    study_parser.add_argument('--covariates-query',
             help="""query the covariates.""")
 
     study_parser.add_argument('--irritation',
@@ -154,6 +165,8 @@ import os
 
 from os.path import isfile, isdir, join
 
+from pathlib import Path
+
 from multiprocessing.dummy import Pool as ThreadPool
 
 import numpy as np
@@ -223,7 +236,45 @@ def get_study(args):
     else:
         covariates = None
 
-    # Parse or create the protocol file
+    if args.single_subject:
+        if args.single_subject == 'yes':
+            single_subject = True
+        else:
+            single_subject = args.single_subject
+    else:
+        single_subject = False
+
+    # Find study file
+    if (args.study is None) and not single_subject:
+        dir_home = str(Path.home())
+        dir_curr = '.'
+        dir_n = args.traverse_upwards
+
+        for n in range(dir_n):
+            if args.verbose > 1:
+                print('Search for study file in: {}'.format(dir_curr))
+            x = [f for f in os.listdir(dir_curr) if f.endswith(".study")]
+            if x != []:
+                break
+            else:
+                if os.path.abspath(dir_curr) == dir_home:
+                    break
+                else:
+                    dir_curr = join('..', dir_curr)
+
+        if len(x) > 1:
+            print('Found more than one study: {}'.format(x))
+            return
+        elif len(x) == 1:
+            study_dir = dir_curr
+            study_file = x[0]
+            print('Found study: {}'.format(os.path.join(study_dir, study_file)))
+
+            os.chdir(study_dir)
+            args.study = study_file
+            print('Working directory has been changed to: {}'.format(os.getcwd()))
+
+    # Parse or create the study file
     if args.study:
         try:
             study = pd.read_pickle(args.study)
@@ -236,11 +287,12 @@ def get_study(args):
     else:
         study = None
 
+    # Exit if nothing to do
     if (study is None) and (protocol is None):
         print('Unable to find a valid protocol.')
         return
 
-    layout = {
+    file_layout = {
         'irritation':args.irritation,
         'session':args.session,
         'reference_maps':args.reference_maps,
@@ -250,11 +302,13 @@ def get_study(args):
         'scale_type':args.scale_type,
         }
 
-    if study is None:
+    if (study is None) or single_subject:
         study = Study(protocol=protocol, covariates=covariates,
-                layout=layout, strftime=args.strftime)
+                file_layout=file_layout, strftime=args.strftime,
+                single_subject=single_subject)
+
     else:
-        study.update_layout(layout)
+        study.update_layout(file_layout)
         if protocol is not None:
             study.protocol = protocol
         if covariates is not None:
@@ -277,11 +331,14 @@ def call(args):
     if study is None:
         sys.exit()
 
-    if args.verbose:
-        print(study.protocol.head())
+    if args.verbose > 1:
+        #print(study.protocol.head())
 
-        if study.covariates is not None:
-            print(study.covariates.head())
+        #if study.covariates is not None:
+        #    print(study.covariates.head())
+
+        for k, v in study.file_layout.items():
+            print('{:<24}: {}'.format(k,v))
 
     if args.out is not None:
         if args.verbose:

@@ -145,6 +145,8 @@ def print_info(x, f):
         if x.covariates is not None:
             print(x.covariates.head())
 
+        print(x.file_layout)
+
     if type(x) is DataFrame:
         if 'id' in x.columns:
             del x['id']
