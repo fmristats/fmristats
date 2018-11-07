@@ -155,24 +155,6 @@ strftime = """convert time to string according to this format specification."""
 # Arguments specific for the setup of a session instances
 ########################################################################
 
-nii = """
-the output of a fMRI session.  The file should contain a 4D-image of a
-fMRI session in any file format understood by the NiBabel project, e.g,
-any of ANALYZE (plain, SPM99, SPM2 and later), GIFTI, NIfTI1, NIfTI2,
-MINC1, MINC2, MGH and ECAT as well as Philips PAR/REC.  For more details
-see http://nipy.org/nibabel/.  Please note that fmristats has only been
-tested with Nifti1 files.
-"""
-
-epi_code = """
-code for the direction of the normal vector of the EPIs assuming the
-data is in RAS+. For example, if the EPIs have been measured inferior to
-superior, then set EP to 2, if they have been measured superior to
-inferior, set EP to -2, if they have been measured posterior to
-anterior, i.e., they are parallel to the left--right-inferior--superior
-plain, then set EP to 1.  Values in a protocol file will take precedence
-"""
-
 onsetx = """times of onsets of condition x, which will be interpreted
 as the control stimulus of the subject.  Should, e.g., be given in the
 form:

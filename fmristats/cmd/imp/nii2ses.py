@@ -29,93 +29,115 @@ Command line tool to create a fmristats session instance
 #
 ########################################################################
 
-import fmristats.cmd.hp as hp
+from ...epilog import epilog
 
 import argparse
 
-from ...study import add_study_parser
-
-def create_argument_parser():
+def define_parser():
     parser = argparse.ArgumentParser(
             description=__doc__,
-            epilog=hp.epilog)
+            epilog=epilog)
 
-    add_study_parser(parser)
+    ####################################################################
+    # Specific arguments
+    ####################################################################
 
-    parser.add_argument('-o', '--out',
-            help="""Save (new) study instance to OUT""")
-
-########################################################################
-# Input arguments
-########################################################################
-
-    parser.add_argument('--nii',
+    specific.add_argument('--nii',
             default='../raw/nii/{2}/{0}-{1:04d}-{2}-{3}.nii',
-            help='input file;' + hp.nii)
+            help="""The file should contain a 4D-image of a fMRI session
+            in any file format understood by the NiBabel project, e.g,
+            any of ANALYZE (plain, SPM99, SPM2 and later), GIFTI,
+            NIfTI1, NIfTI2, MINC1, MINC2, MGH and ECAT as well as
+            Philips PAR/REC.  For more details see
+            http://nipy.org/nibabel/.  Please note that fmristats has
+            only been tested with Nifti1 files.""")
 
-########################################################################
-# Arguments specific for the setup of a session instance
-########################################################################
-
-    parser.add_argument('--epi-code',
+    specific.add_argument('--epi-code',
             type=int,
-            help=hp.epi_code)
+            help="""Code for the direction of the normal vector of the
+            EPIs; assuming the data is in RAS+. For example, if the EPIs
+            have been measured inferior to superior, then set EP to 2,
+            if they have been measured superior to inferior, set EP to
+            -2, if they have been measured posterior to anterior, i.e.,
+            they are parallel to the left--right-inferior--superior
+            plain, then EP is 1.  Values in a protocol file will take
+            precedence""")
 
-    foreground_handling = parser.add_mutually_exclusive_group()
+    foreground_handling = specific.add_mutually_exclusive_group()
 
     foreground_handling.add_argument('--detect-foreground',
             action='store_true',
-            help=hp.detect_foreground)
+            help="""Detect the foreground in the FMRI""")
 
     foreground_handling.add_argument('--set-foreground',
             action='store_true',
-            help=hp.set_foreground)
+            help="""Set the foreground to the image in FOREGROUND""")
 
-    parser.add_argument('--foreground',
+    specific.add_argument('--foreground',
             default='../raw/foreground/{2}/{0}-{1:04d}-{2}-{3}-foreground.nii.gz',
-            help=hp.set_foreground)
+            help="""A 4D-image that contains a mask for the foreground
+            in the FMRI""")
 
-########################################################################
-# Miscellaneous
-########################################################################
+    ####################################################################
+    # File handling
+    ####################################################################
 
-    lock_handling = parser.add_mutually_exclusive_group()
+    file_handling = parser.add_argument_group(
+            """File handling""")
+
+    lock_handling = file_handling.add_mutually_exclusive_group()
 
     lock_handling.add_argument('-r', '--remove-lock',
             action='store_true',
-            help=hp.remove_lock.format('session'))
+            help="""Remove lock, if file is locked. This is useful, if
+            used together with -s/--skip to remove orphan locks.""")
 
     lock_handling.add_argument('-i', '--ignore-lock',
             action='store_true',
-            help=hp.ignore_lock.format('session'))
+            help="""Ignore lock, if file is locked. Together with
+            -s/--skip this will also remove orphan locks.""")
 
-    file_handling = parser.add_mutually_exclusive_group()
+    skip_force = file_handling.add_mutually_exclusive_group()
 
-    file_handling.add_argument('-f', '--force',
+    skip_force.add_argument('-f', '--force',
             action='store_true',
-            help=hp.force.format('session'))
+            help="""Force re-writing any files""")
 
-    file_handling.add_argument('-s', '--skip',
+    skip_force.add_argument('-s', '--skip',
             action='store_true',
-            help=hp.skip.format('session'))
+            help="""Do not perform any calculations.""")
 
-    parser.add_argument('-v', '--verbose',
+    ####################################################################
+    # Verbosity
+    ####################################################################
+
+    control_verbosity  = parser.add_argument_group(
+            """Control the level of verbosity""")
+
+    control_verbosity.add_argument('-v', '--verbose',
             action='count',
             default=0,
-            help=hp.verbose)
+            help="""Increase output verbosity""")
 
-########################################################################
-# Multiprocessing
-########################################################################
+    ####################################################################
+    # Multiprocessing
+    ####################################################################
 
-    parser.add_argument('-j', '--cores',
+    control_multiprocessing  = parser.add_argument_group(
+            """Multiprocessing""")
+
+    control_multiprocessing.add_argument('-j', '--cores',
             type=int,
-            help=hp.cores)
+            help="""Number of cores to use. Default is the number of
+            cores on the machine."""
 
     return parser
 
+from .fmristudy import add_study_arguments
+
 def cmd():
-    parser = create_argument_parser()
+    parser = define_parser()
+    add_study_arguments(parser)
     args = parser.parse_args()
     call(args)
 
@@ -127,28 +149,6 @@ cmd.__doc__ = __doc__
 #
 ########################################################################
 
-from ..df import get_df
-
-from ...lock import Lock
-
-from ...load import load_block_stimulus, load_session
-
-from ...name import Identifier
-
-from ...study import Study
-
-from ...stimulus import Block
-
-from ...session import Session, fmrisetup
-
-from ...nifti import nii2session
-
-import nibabel as ni
-
-import pandas as pd
-
-import datetime
-
 import sys
 
 import os
@@ -157,142 +157,55 @@ from os.path import isfile, isdir, join
 
 from multiprocessing.dummy import Pool as ThreadPool
 
+import numpy as np
+
+from ..api.fmristudy import get_study
+
+from ...lock import Lock
+
+from ...name import Identifier
+
+from ...study import Study
+
+from ...session import Session, fmrisetup
+
+from ...nifti import nii2session
+
+import nibabel as ni
+
 ########################################################################
 
 def call(args):
-    output = args.protocol_log.format(
-            datetime.datetime.now().strftime('%Y-%m-%d-%H%M'))
 
-    if args.strftime == 'short':
-        args.strftime = '%Y-%m-%d'
+    study = get_study(args)
 
-    ####################################################################
-    # Parse protocol
-    ####################################################################
-
-    df = get_df(args, fall_back=args.stimulus)
-
-    if df is None:
+    if study is None:
         sys.exit()
 
-    if not 'epi' in df.columns:
-        print("""
-No epi column found. You need to provide an EPI code via --epi-code,
-it must be integer, within [-3,3], and not null.""")
+    study.update_layout({
+        'nii' : args.nii,
+        'foreground' : args.foreground,
+        })
 
-    ####################################################################
-    # Add file layout
-    ####################################################################
-
-    layout = {
-        'stimulus':args.stimulus,
-        'session':args.session,
-        'reference_maps':args.reference_maps,
-        'result':args.fit,
-        'population_map':args.population_map,
-        'diffeomorphism_name':args.diffeomorphism_name,
-        'scale_type':args.scale_type,
-        'foreground':args.foreground,
-        'nii':args.nii,
-        }
-
-    study = Study(df, df, layout=layout, strftime=args.strftime)
-
-    study_iterator = study.iterate('stimulus', 'session',
+    study_iterator = study.iterate('session', 'stimulus',
             new=['session', 'nii', 'foreground'],
-            vb_name=args.vb_name,
-            diffeomorphism_name=args.diffeomorphism_name,
-            scale_type=args.scale_type)
+            integer_index=True)
 
-    ####################################################################
-    # Apply wrapper
-    ####################################################################
+    df = study_iterator.df.copy()
 
     df['locked'] = False
 
-    def wm(r):
-        name = Identifier(cohort=r.cohort, j=r.id, datetime=r.date, paradigm=r.paradigm)
+    remove_lock       = args.remove_lock
+    ignore_lock       = args.ignore_lock
+    force             = args.force
+    skip              = args.skip
+    verbose           = args.verbose
 
-        try:
-            dfile = os.path.dirname(r.file)
-            if dfile and not isdir(dfile):
-                os.makedirs(dfile)
-        except Exception as e:
-            print('{}: {}'.format(name.name(), e))
+    detect_foreground = args.detect_foreground,
+    set_foreground    = args.set_foreground,
 
-        wrapper(name              = name,
-                df                = df,
-                index             = r.Index,
-                remove_lock       = args.remove_lock,
-                ignore_lock       = args.ignore_lock,
-                force             = args.force,
-                skip              = args.skip,
-                verbose           = args.verbose,
-                file              = r.file,
+    def wm(index, name, session, stimulus, file_session, file_nii, file_foreground):
 
-                file_nii = r.nii,
-                file_irr = r.irr,
-
-                epi_code = r.epi,
-                detect_foreground = args.detect_foreground,
-                set_foreground = args.set_foreground,
-                foreground = r.foreground,
-                )
-
-    it =  df_layout.itertuples()
-
-    if len(df_layout) > 1 and ((args.cores is None) or (args.cores > 1)):
-        try:
-            pool = ThreadPool(args.cores)
-            results = pool.map(wm, it)
-            pool.close()
-            pool.join()
-        except Exception as e:
-            pool.close()
-            pool.terminate()
-            print('Pool execution has been terminated')
-            print(e)
-        finally:
-            files = df_layout.ix[df.locked, 'file'].values
-            if len(files) > 0:
-                for f in files:
-                    print('Unlock: {}'.format(f))
-                    os.remove(f)
-            del df['locked']
-    else:
-        try:
-            print('Process protocol entries sequentially')
-            for r in it:
-                wm(r)
-        finally:
-            files = df_layout.ix[df.locked, 'file'].values
-            if len(files) > 0:
-                for f in files:
-                    print('Unlock: {}'.format(f))
-                    os.remove(f)
-            del df['locked']
-
-    ####################################################################
-    # Write protocol
-    ####################################################################
-
-    if args.verbose:
-        print('Save: {}'.format(output))
-
-    dfile = os.path.dirname(output)
-    if dfile and not isdir(dfile):
-       os.makedirs(dfile)
-
-    df.to_pickle(output)
-
-########################################################################
-
-def wrapper(name, df, index, remove_lock, ignore_lock, force, skip,
-        verbose, file, file_nii , file_irr, epi_code,
-        detect_foreground, set_foreground, foreground):
-
-    if isfile(file):
-        instance = load_session(file, name, df, index, verbose)
         if type(instance) is Lock:
             if remove_lock or ignore_lock:
                 if verbose:
@@ -304,82 +217,138 @@ def wrapper(name, df, index, remove_lock, ignore_lock, force, skip,
                 if verbose:
                     print('{}: Locked'.format(name.name()))
                 return
-        else:
-            if df.ix[index,'valid'] and not force:
+
+        if instance is not None and not force:
+            if verbose:
+                print('{}: Session already exists. Use -f/--force to overwrite'.format(name.name()))
+            return
+
+        if skip:
+            return
+
+        if verbose:
+            print('{}: Lock: {}'.format(name.name(), file_session))
+
+        lock = Lock(name, 'nii2session', file_session)
+        df.ix[index, 'locked'] = True
+
+        dfile = os.path.dirname(file_session)
+        if dfile and not isdir(dfile):
+           os.makedirs(dfile)
+
+        lock.save(file_session)
+
+        ################################################################
+        # Load image data
+        ################################################################
+
+        try:
+            img = ni.load(file_nii)
+            if verbose:
+                print('{}: Read: {}'.format(name.name(), file_nii))
+        except Exception as e:
+            df.ix[index,'valid'] = False
+            print('{}: Unable to read: {}'.format(name.name(), file_nii))
+            print('{}: Exception: {}'.format(name.name(), e))
+
+        if lock.conditional_unlock(df, index, verbose):
+            return
+
+        ####################################################################
+        # Create session instance
+        ####################################################################
+
+        try:
+            session = nii2session(
+                    name=name,
+                    nii=img,
+                    epi_code=df['epi_code'])
+
+            fmrisetup(session = session, stimulus = stimulus)
+
+            if detect_foreground:
                 if verbose:
-                    print('{}: Valid'.format(name.name()))
-                return
-            else:
-                if skip:
-                    if verbose:
-                        print('{}: Invalid'.format(name.name()))
-                    return
+                    print('{}: Detect foreground'.format(name.name()))
+                session.fit_foreground()
+            elif set_foreground:
+                foreground_nii = ni.load(file_foreground)
+                if verbose:
+                    print('{}: Set foreground: {}'.format(name.name(),
+                        foreground_nii))
+                session.set_foreground(foreground_nii.get_data())
 
-    if verbose:
-        print('{}: Lock: {}'.format(name.name(), file))
-
-    lock = Lock(name, 'fmrifit', file)
-    df.ix[index, 'locked'] = True
-    lock.save(file)
-    df.ix[index,'valid'] = True
-
-    ####################################################################
-    # Load stimulus instance from disk
-    ####################################################################
-
-    stimulus = load_block_stimulus(file_irr, name, df, index, verbose)
-    if lock.conditional_unlock(df, index, verbose):
-        return
-
-    ################################################################
-    # Load image data
-    ################################################################
-
-    try:
-        img = ni.load(file_nii)
-        if verbose:
-            print('{}: Read: {}'.format(name.name(), file_nii))
-    except Exception as e:
-        df.ix[index,'valid'] = False
-        print('{}: Unable to read: {}'.format(name.name(), file_nii))
-        print('{}: Exception: {}'.format(name.name(), e))
-
-    if lock.conditional_unlock(df, index, verbose):
-        return
-
-    ####################################################################
-    # Create session instance
-    ####################################################################
-
-    try:
-        session = nii2session(
-                name=name,
-                nii=img,
-                epi_code=epi_code)
-
-        fmrisetup(session = session, stimulus = stimulus)
-
-        if detect_foreground:
             if verbose:
-                print('{}: Detect foreground'.format(name.name()))
-            session.fit_foreground()
-        elif set_foreground:
-            foreground = ni.load(foreground)
-            if verbose:
-                print('{}: Set foreground: {}'.format(name.name(), foreground))
-            session.set_foreground(foreground.data)
+                print('{}: Save: {}'.format(name.name(), file))
 
-        if verbose:
-            print('{}: Save: {}'.format(name.name(), file))
+            session.save(file)
+            df.ix[index,'locked'] = False
 
-        session.save(file)
-        df.ix[index,'locked'] = False
+        except Exception as e:
+            df.ix[index,'valid'] = False
+            print('{}: Unable to create: {}'.format(name.name(), file))
+            print('{}: Exception: {}'.format(name.name(), e))
+            lock.conditional_unlock(df, index, verbose, True)
+            return
 
-    except Exception as e:
-        df.ix[index,'valid'] = False
-        print('{}: Unable to create: {}'.format(name.name(), file))
-        print('{}: Exception: {}'.format(name.name(), e))
-        lock.conditional_unlock(df, index, verbose, True)
-        return
+    ####################################################################
 
-    return
+    if len(df) > 1 and ((args.cores is None) or (args.cores > 1)):
+        try:
+            pool = ThreadPool(args.cores)
+            for index, name, files, instances in study_iterator:
+                session         = instances['session']
+                stimulus        = instances['stimulus']
+                file_session    = files['session']
+                file_nii        = files['nii']
+                file_foreground = files['foreground']
+                wm
+                pool.apply_async(wm, args=\
+                    (index, name, session, stimulus, file_session, file_nii, file_foreground)
+                    )
+
+            pool.close()
+            pool.join()
+        except Exception as e:
+            pool.close()
+            pool.terminate()
+            print('Pool execution has been terminated')
+            print(e)
+        finally:
+            files = df.ix[df.locked, 'stimulus'].values
+            if len(files) > 0:
+                for f in files:
+                    print('Unlock: {}'.format(f))
+                    os.remove(f)
+    else:
+        try:
+            print('Process protocol entries sequentially')
+            for index, name, files, instances in study_iterator:
+                session         = instances['session']
+                stimulus        = instances['stimulus']
+                file_session    = files['session']
+                file_nii        = files['nii']
+                file_foreground = files['foreground']
+                wm(index, name, session, stimulus, file_session, file_nii, file_foreground)
+        finally:
+            files = df.ix[df.locked, 'stimulus'].values
+            if len(files) > 0:
+                for f in files:
+                    print('Unlock: {}'.format(f))
+                    os.remove(f)
+
+    ####################################################################
+    # Write study to disk
+    ####################################################################
+
+    if args.out is not None:
+        if args.epi_code is None:
+            print('Warning: study protocol has not been equipped with a valid EPI code')
+
+        if args.verbose:
+            print('Save: {}'.format(args.out))
+
+        dfile = os.path.dirname(args.out)
+        if dfile and not isdir(dfile):
+           os.makedirs(dfile)
+
+        study.save(args.out)

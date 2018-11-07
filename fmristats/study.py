@@ -140,6 +140,9 @@ class Study:
         The covariates data frame can also be empty (None). If not None,
         though, it will never be allowed to be empty again.
         """
+        # TODO: check if protocol has an epi_code column
+        # TODO: check if protocol has valid index
+        # TODO: check if covariates have valid index
         self.protocol        = protocol
         self.covariates      = covariates
         self.vb              = vb
@@ -156,7 +159,7 @@ class Study:
 
         if single_subject is True:
             self.file_layout = {
-                'stimulus'     : '{0}-{1:04d}-{2}-{3}.irr',
+                'stimulus'     : '{0}-{1:04d}-{2}-{3}.stm',
                 'session'        : '{0}-{1:04d}-{2}-{3}.ses',
                 'reference_maps' : '{0}-{1:04d}-{2}-{3}.ref',
                 'population_map' : '{0}-{1:04d}-{2}-{3}-{4}.pop',
@@ -164,7 +167,7 @@ class Study:
                 'strftime'       : '%Y-%m-%d-%H%M'}
         elif type(single_subject) is str:
             self.file_layout = {
-                'stimulus'     : single_subject + '.irr',
+                'stimulus'     : single_subject + '.stm',
                 'session'        : single_subject + '.ses',
                 'reference_maps' : single_subject + '.ref',
                 'population_map' : single_subject + '.pop',
@@ -172,7 +175,7 @@ class Study:
                 'strftime'       : '%Y-%m-%d-%H%M'}
         else:
             self.file_layout = {
-                'stimulus'     : 'data/irr/{2}/{0}-{1:04d}-{2}-{3}.irr',
+                'stimulus'     : 'data/irr/{2}/{0}-{1:04d}-{2}-{3}.stm',
                 'session'        : 'data/ses/{2}/{0}-{1:04d}-{2}-{3}.ses',
                 'reference_maps' : 'data/ref/{2}/{0}-{1:04d}-{2}-{3}.ref',
                 'population_map' : 'data/pop/{2}/{4}/{5}/{0}-{1:04d}-{2}-{3}-{4}.pop',

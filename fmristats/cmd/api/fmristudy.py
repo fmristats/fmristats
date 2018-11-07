@@ -27,6 +27,9 @@ import fmristats.cmd.hp as hp
 
 import argparse
 
+# TODO: --protocol_from_csv
+# TODO: --covariates_from_csv
+
 def add_study_arguments(parser):
 
     study_parser = parser.add_argument_group(

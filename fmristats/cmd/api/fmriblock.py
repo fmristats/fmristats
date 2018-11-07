@@ -29,14 +29,14 @@ Create a block stimulus instances
 #
 ########################################################################
 
-import fmristats.cmd.hp as hp
+from ...epilog import epilog
 
 import argparse
 
 def define_parser():
     parser = argparse.ArgumentParser(
             description=__doc__,
-            epilog=hp.epilog)
+            epilog=epilog)
 
     ####################################################################
     # Specific arguments
@@ -82,21 +82,23 @@ def define_parser():
 
     lock_handling.add_argument('-r', '--remove-lock',
             action='store_true',
-            help=hp.remove_lock.format('stimulus'))
+            help="""Remove lock, if file is locked. This is useful, if
+            used together with -s/--skip to remove orphan locks.""")
 
     lock_handling.add_argument('-i', '--ignore-lock',
             action='store_true',
-            help=hp.ignore_lock.format('stimulus'))
+            help="""Ignore lock, if file is locked. Together with
+            -s/--skip this will also remove orphan locks.""")
 
     skip_force = file_handling.add_mutually_exclusive_group()
 
     skip_force.add_argument('-f', '--force',
             action='store_true',
-            help=hp.force.format('stimulus'))
+            help="""Force re-writing any files""")
 
     skip_force.add_argument('-s', '--skip',
             action='store_true',
-            help=hp.skip.format('stimulus'))
+            help="""Do not perform any calculations.""")
 
     ####################################################################
     # Verbosity
@@ -108,18 +110,19 @@ def define_parser():
     control_verbosity.add_argument('-v', '--verbose',
             action='count',
             default=0,
-            help=hp.verbose)
+            help="""Increase output verbosity""")
 
     ####################################################################
     # Multiprocessing
     ####################################################################
 
     control_multiprocessing  = parser.add_argument_group(
-            """Control the level of verbosity""")
+            """Multiprocessing""")
 
     control_multiprocessing.add_argument('-j', '--cores',
             type=int,
-            help=hp.cores)
+            help="""Number of cores to use. Default is the number of
+            cores on the machine."""
 
     return parser
 
@@ -139,22 +142,6 @@ cmd.__doc__ = __doc__
 #
 ########################################################################
 
-from .fmristudy import get_study
-
-from ...lock import Lock
-
-from ...load import load_block_stimulus
-
-from ...name import Identifier
-
-from ...study import Study
-
-from ...stimulus import Block
-
-import pandas as pd
-
-import datetime
-
 import sys
 
 import os
@@ -164,6 +151,16 @@ from os.path import isfile, isdir, join
 from multiprocessing.dummy import Pool as ThreadPool
 
 import numpy as np
+
+from ..api.fmristudy import get_study
+
+from ...lock import Lock
+
+from ...name import Identifier
+
+from ...study import Study
+
+from ...stimulus import Block
 
 ########################################################################
 
@@ -177,28 +174,24 @@ def call(args):
     study_iterator = study.iterate('stimulus', new=['stimulus'],
             integer_index=True)
 
-    ####################################################################
-    # Apply wrapper
-    ####################################################################
-
     df = study_iterator.df.copy()
 
     df['locked'] = False
 
+    remove_lock       = args.remove_lock
+    ignore_lock       = args.ignore_lock
+    force             = args.force
+    skip              = args.skip
+    verbose           = args.verbose
+
+    namex    = args.namex
+    namey    = args.namey
+    onsetsx  = np.asarray(args.onsetsx)
+    onsetsy  = np.asarray(args.onsetsy)
+    durationsx = np.asarray(args.durationsx)
+    durationsy = np.asarray(args.durationsy)
+
     def wm(index, instance, filename, name):
-
-        remove_lock       = args.remove_lock
-        ignore_lock       = args.ignore_lock
-        force             = args.force
-        skip              = args.skip
-        verbose           = args.verbose
-
-        namex    = args.namex
-        namey    = args.namey
-        onsetsx  = np.asarray(args.onsetsx)
-        onsetsy  = np.asarray(args.onsetsy)
-        durationsx = np.asarray(args.durationsx)
-        durationsy = np.asarray(args.durationsy)
 
         if type(instance) is Lock:
             if remove_lock or ignore_lock:
