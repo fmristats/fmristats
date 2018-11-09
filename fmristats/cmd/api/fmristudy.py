@@ -97,27 +97,27 @@ def add_study_arguments(parser):
         help="""Format of date and time""")
 
     study_parser.add_argument('--cohort',
-        help="""Cohort""")
+        help="""Cohort to be processed.""")
 
     study_parser.add_argument('--id',
         type=int,
         nargs='+',
-        help="""id""")
+        help="""ID of the subject to be processed.""")
 
     study_parser.add_argument('--datetime',
         help="""Datetime""")
 
     study_parser.add_argument('--paradigm',
-        help="""Paradigm""")
+        help="""Stimulus design to be processed.""")
 
     study_parser.add_argument('--vb-name',
         default='self',
-        help="""Name of the population space""")
+        help="""Name of the population space.""")
 
     study_parser.add_argument('--diffeomorphism-name',
         default='identity',
         help="""Name of the diffeomorphism between population space and
-        subject space""")
+        subject space.""")
 
     study_parser.add_argument('--scale-type',
         default='max',
@@ -125,7 +125,7 @@ def add_study_arguments(parser):
         help="""Scale type""")
 
     study_parser.add_argument('-o', '--out',
-            help="""Save possibly modified study instance to OUT""")
+            help="""Save possibly modified study instance to OUT.""")
 
 from ...epilog import epilog
 
@@ -224,6 +224,7 @@ def get_study(args):
                 datetime=date, paradigm=args.paradigm)
         protocol = name.to_data_frame(epi_code)
 
+    force_single_subject = False
     if protocol is None:
         if hasattr(args, 'epi_code'):
             epi_code = args.epi_code
@@ -239,6 +240,7 @@ def get_study(args):
                     protocol = instance.name.to_data_frame(epi_code)
                     print('Processing subject: {}'.format(
                         instance.name.name()))
+                    force_single_subject = True
                     break
                 except Exception as e:
                     pass
@@ -262,6 +264,8 @@ def get_study(args):
             single_subject = True
         else:
             single_subject = args.single_subject
+    elif force_single_subject:
+        single_subject = True
     else:
         single_subject = False
 

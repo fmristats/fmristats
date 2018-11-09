@@ -47,8 +47,15 @@ def define_parser():
 
     specific.add_argument('--cycle',
         type=int,
+        nargs='+',
         help="""Use the data in scan cycle CYCLE as a template for
-        the subject reference space.""")
+        the subject reference space. Enumeration starts at 0 (i.e. the
+        first scan cycle is cycle 0). It will be checked whether the
+        specified cycle has been marked as a potential outlier (i.e. a
+        scan cycle that shows more head movements that usual). You won't
+        be able to set an outlying scan cycle as reference. More than
+        one cycle can be specified, though, and the list will be used as
+        fall backs.""")
 
     specific.add_argument('--grubbs',
         type=float,
@@ -180,6 +187,10 @@ def call(args):
     grubbs = args.grubbs
 
     def wm(index, name, session, reference_maps, file_reference_maps):
+        if session is None:
+            df.ix[index,'valid'] = False
+            print('{}: Unable to open session.'.format(name.name()))
+            return
 
         if type(reference_maps) is Lock:
             if remove_lock or ignore_lock:
@@ -195,7 +206,8 @@ def call(args):
 
         elif reference_maps is not None and not force:
             if verbose:
-                print('{}: ReferenceMaps already exists. Use -f/--force to overwrite'.format(name.name()))
+                print('{}: ReferenceMaps already exists. Use -f/--force to overwrite'.format(
+                    name.name()))
             return
 
         if skip:
@@ -217,19 +229,46 @@ def call(args):
         # Fit rigid body transformations
         ####################################################################
 
-        try:
+        if verbose:
+            print('{}: Start fit of rigid body transformations'.format(name.name()))
+
+        reference_maps = ReferenceMaps(name)
+        reference_maps.fit(session)
+        reference_maps.reset_reference_space()
+
+        if not np.isclose(grubbs, 1):
             if verbose:
-                print('{}: Start fit of rigid body transformations'.format(name.name()))
+                print('{}: Detect outlying scans'.format(name.name()))
+            reference_maps.detect_outlying_scans(grubbs)
+            outlying_cycles = reference_maps.outlying_cycles
+        else:
+            outlying_cycles = None
 
-            reference_maps = ReferenceMaps(name)
-            reference_maps.fit(session)
+        if (outlying_cycles is None) or (cycle is None):
             reference_maps.reset_reference_space(cycle=cycle)
+        else:
+            if outlying_cycles[cycle].all():
+                df.ix[index,'valid'] = False
+                print("""{}: All suggested reference cycles have been
+                marked as outlying. Unable to proceed. Please specify a
+                different scan cycle (using --cycle) as reference.""".format(name.name()))
+                lock.conditional_unlock(df, index, verbose, True)
+                return
+            elif outlying_cycles[cycle].any():
+                for c, co in zip (cycle, outlying_cycles[cycle]):
+                    if co:
+                        print("""{}: Suggested cycle    {:>4d} marked as outlying, using fallback.""".format(
+                            name.name(), c))
+                    else:
+                        print("""{}: Reference cycle is {:>4d}.""".format(
+                            name.name(), c))
+                        reference_maps.reset_reference_space(cycle=c)
+                        break
+            else:
+                print("""{}: Reference cycle is {:d}.""".format(name.name(), cycle[0]))
+                reference_maps.reset_reference_space(cycle=cycle[0])
 
-            if not np.isclose(grubbs, 1):
-                if verbose:
-                    print('{}: Detect outlying scans'.format(name.name()))
-                reference_maps.detect_outlying_scans(grubbs)
-
+        try:
             if verbose:
                 print('{}: Save: {}'.format(name.name(), file_reference_maps))
 

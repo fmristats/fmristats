@@ -153,7 +153,7 @@ class Study:
         self.scale_type = scale_type
 
         if root_dir is None:
-            self.root_dir = '.' # os.getcwd()
+            self.root_dir = ''
         else:
             self.root_dir = root_dir
 
