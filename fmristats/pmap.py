@@ -111,8 +111,7 @@ class PopulationMap:
                 'nb of diffeomorphism must be Identifier'
 
         self.diffeomorphism = diffeomorphism
-
-        self.name = self.diffeomorphism.nb.name
+        self.name = self.diffeomorphism.nb
 
         if vb:
             self.set_vb(image=vb)
@@ -364,7 +363,10 @@ class PopulationMap:
         try:
             nb = self.nb.name.name()
         except:
-            nb = '--'
+            try:
+                nb = self.nb.name
+            except:
+                nb = '--'
 
         try:
             vb_background = self.vb_background.name
@@ -402,7 +404,7 @@ class PopulationMap:
             vb_ati = '--'
 
         return description.format(
-                self.name,
+                self.name.name(),
                 vb, nb, vb_background, nb_background,
                 vb_estimate, nb_estimate,
                 vb_mask, nb_mask, vb_ati,
@@ -426,7 +428,7 @@ class PopulationMap:
 #
 #######################################################################
 
-def pmap_scanner(session):
+def pmap_scanner(session, name='session'):
     """
     The identity map
 
@@ -472,11 +474,11 @@ def pmap_scanner(session):
             shape=session.shape,
             vb=session.name.name(),
             nb=session.name,
-            name='scanner')
+            name=name)
 
     return PopulationMap(diffeomorphism)
 
-def pmap_reference(session, resolution=2.):
+def pmap_reference(session, resolution=2., name='reference'):
     """
     The identity map
 
@@ -528,11 +530,12 @@ def pmap_reference(session, resolution=2.):
             shape=shape,
             vb=session.name.name(),
             nb=session.name,
-            name='reference')
+            name=name)
 
     return PopulationMap(diffeomorphism)
 
-def pmap_scan_cycle(session, reference_maps, scan_cycle):
+def pmap_scan_cycle(session, reference_maps, scan_cycle,
+        name='scan_cycle'):
     """
     Pick a scan reference as the population map
 
@@ -571,6 +574,6 @@ def pmap_scan_cycle(session, reference_maps, scan_cycle):
             shape=session.shape,
             vb=session.name.name(),
             nb=session.name,
-            name='scan_cycle_{:d}'.format(scan_cycle))
+            name=name)
 
     return PopulationMap(diffeomorphism)

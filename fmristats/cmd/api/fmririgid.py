@@ -1,4 +1,4 @@
-# Copyright 2016-2017 Thomas W. D. Möbius
+# Copyright 2016-2018 Thomas W. D. Möbius
 #
 # This file is part of fmristats.
 #

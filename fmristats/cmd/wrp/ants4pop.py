@@ -1,6 +1,6 @@
-# Copyright 2016-2017 Thomas W. D. Möbius
+# Copyright 2016-2018 Thomas W. D. Möbius
 #
-# This filename is part of fmristats.
+# This file is part of fmristats.
 #
 # fmristats is free software; you can redistribute it and/or modify it
 # under the terms of the GNU General Public License as published by the
@@ -19,12 +19,13 @@
 
 """
 
-Wrapper to ANT's RegistrationSyNQuick
+Set the standard space to the given image and fit a diffeomorphism from
+standard space to subject space using a wrapper to ANTS
 
 """
 
-import warnings
-warnings.simplefilter(action='ignore', category=FutureWarning)
+#import warnings
+#warnings.simplefilter(action='ignore', category=FutureWarning)
 
 ########################################################################
 #
@@ -32,175 +33,117 @@ warnings.simplefilter(action='ignore', category=FutureWarning)
 #
 ########################################################################
 
-import fmristats.cmd.hp as hp
+from ...epilog import epilog
 
 import argparse
 
-def create_argument_parser():
+def define_parser():
     parser = argparse.ArgumentParser(
             description=__doc__,
-            epilog=hp.epilog)
+            epilog=epilog)
 
-########################################################################
-# Input arguments
-########################################################################
+    ####################################################################
+    # Specific arguments
+    ####################################################################
 
-    parser.add_argument('--vb',
-            default='mni152',
-            help=hp.vb_name)
+    specific = parser.add_argument_group(
+        """Creating a standard space isometric to the reference space.""")
 
-    parser.add_argument('--vb-image',
-            help=hp.vb)
+    specific.add_argument('--diffeomorphism-type',
+        default='reference',
+        choices=['reference', 'scanner', 'scan_cycle', 'fit'],
+        help="""Type of diffeomorphism.""")
 
-    parser.add_argument('--vb-nii',
-            default='/usr/share/data/fsl-mni152-templates/MNI152_T1_2mm_brain.nii.gz',
-            help=hp.vb_nii)
+    specific.add_argument('--resolution',
+        default=2.,
+        type=float,
+        help="""The resolution of the template in standard
+        space.""")
 
-    parser.add_argument('--vb-name',
-            default='MNI152_T1_2mm_brain',
-            help=hp.vb_name)
+    specific.add_argument('--cycle',
+        type=int,
+        nargs='+',
+        help="""Use the data in scan cycle CYCLE as a template for
+        the subject reference space. Enumeration starts at 0 (i.e. the
+        first scan cycle is cycle 0). It will be checked whether the
+        specified cycle has been marked as a potential outlier (i.e. a
+        scan cycle that shows more head movements that usual). You won't
+        be able to set an outlying scan cycle as reference. More than
+        one cycle can be specified, though, and the list will be used as
+        fall backs.""")
 
-    parser.add_argument('--vb-path',
-            default='../data/vbs/{}.image',
-            help=hp.vb_path)
-
-    parser.add_argument('--vb-background-image',
-            help=hp.vb_background)
-
-    parser.add_argument('--vb-background-nii',
-            default='/usr/share/data/fsl-mni152-templates/MNI152_T1_2mm.nii.gz',
-            help=hp.vb_background_nii)
-
-    parser.add_argument('--vb-background-name',
-            default='MNI152_T1_2mm',
-            help=hp.vb_background_name)
-
-    parser.add_argument('--vb-background-path',
-            default='../data/vbs/{}.image',
-            help=hp.vb_background_path)
-
-    parser.add_argument('--diffeomorphism',
+    specific.add_argument('--new-diffeomorphism',
             default='ants',
             help="""Name to use for the fitted diffeomorphisms.""")
 
-########################################################################
-# Output arguments
-########################################################################
+    specific.add_argument('--ants4pop-prefix',
+            default='ants/vb/{}.nii.gz'
+            help="""Prefix for temporary files.""")
 
-    parser.add_argument('--population-map',
-            default='../data/pop/{2}/{4}/{5}/{0}-{1:04d}-{2}-{3}-{4}.pop',
-            help=hp.population_map)
+    specific.add_argument('--ants-prefix',
+            default='ants/tmp/{2}/{4}/{1:04d}/{0}-{1:04d}-{2}-{3}-{4}-',
+            help="""Prefix for temporary ANTS' files.""")
 
-    parser.add_argument('-o', '--protocol-log',
-            default='logs/{}-ants4pop.pkl',
-            help=hp.protocol_log)
+    ####################################################################
+    # File handling
+    ####################################################################
 
-########################################################################
-# Additional input arguments when warp coefficient files provided
-########################################################################
+    file_handling = parser.add_argument_group(
+        """File handling""")
 
-    parser.add_argument('--output-prefix',
-            default='ants/{2}/{4}/{1:04d}/{0}-{1:04d}-{2}-{3}-{4}-',
-            help="""Prefix for temporary files from ANTS""")
+    lock_handling = file_handling.add_mutually_exclusive_group()
 
-########################################################################
-# Additional input arguments when no warp coefficient files provided
-########################################################################
+    lock_handling.add_argument('-r', '--remove-lock',
+        action='store_true',
+        help="""Remove lock, if file is locked. This is useful, if used
+        together with -s/--skip to remove orphan locks.""")
 
-    parser.add_argument('--session',
-            default='../data/ses/{2}/{0}-{1:04d}-{2}-{3}.ses',
-            help=hp.session)
+    lock_handling.add_argument('-i', '--ignore-lock',
+        action='store_true',
+        help="""Ignore lock, if file is locked. Together with -s/--skip
+        this will also remove orphan locks.""")
 
-    parser.add_argument('--cycle',
-            type=int,
-            help="""cycle to pick as reference""")
+    skip_force = file_handling.add_mutually_exclusive_group()
 
-    parser.add_argument('--fit',
-            default='../data/fit/{2}/{4}/{5}/{0}-{1:04d}-{2}-{3}-{4}-{5}.fit',
-            help="""if working with session files, you don't need this""" + hp.sfit)
+    skip_force.add_argument('-f', '--force',
+        action='store_true',
+        help="""Force re-writing any files""")
 
-    parser.add_argument('--scale-type',
-            default='max',
-            choices=['diagonal','max','min'],
-            help="""only needed if part of the template for --fit""" + hp.scale_type)
+    skip_force.add_argument('-s', '--skip',
+        action='store_true',
+        help="""Do not perform any calculations.""")
 
-    parser.add_argument('--nb-name',
-            default='self',
-            help="""name of the population space that was originally
-            used for the fit"""  + hp.nb_name)
+    ####################################################################
+    # Verbosity
+    ####################################################################
 
-########################################################################
-# Arguments specific for using the protocol API
-########################################################################
+    control_verbosity  = parser.add_argument_group(
+        """Control the level of verbosity""")
 
-    to_process = parser.add_argument_group(
-            """specifying the protocol entries to process""",
-            """Arguments which give control which protocol entries to
-            process. If no protocol filename is given, it will be checked
-            if files being processed comply to the given information.""")
+    control_verbosity.add_argument('-v', '--verbose',
+        action='count',
+        default=0,
+        help="""Increase output verbosity""")
 
-    to_process.add_argument('--protocol',
-            help=hp.protocol)
+    ####################################################################
+    # Multiprocessing
+    ####################################################################
 
-    to_process.add_argument('--cohort',
-            help=hp.cohort)
+    control_multiprocessing  = parser.add_argument_group(
+        """Multiprocessing""")
 
-    to_process.add_argument('--id',
-            type=int,
-            nargs='+',
-            help=hp.j)
-
-    to_process.add_argument('--datetime',
-            help=hp.datetime)
-
-    to_process.add_argument('--paradigm',
-            help=hp.paradigm)
-
-    to_process.add_argument('--strftime',
-            default='%Y-%m-%d-%H%M',
-            help=hp.strftime)
-
-########################################################################
-# Miscellaneous
-########################################################################
-
-    lock_handling = parser.add_mutually_exclusive_group()
-
-    lock_handling.add_argument('--remove-lock',
-            action='store_true',
-            help=hp.remove_lock.format('population space'))
-
-    lock_handling.add_argument('--ignore-lock',
-            action='store_true',
-            help=hp.ignore_lock.format('population space'))
-
-    file_handling = parser.add_mutually_exclusive_group()
-
-    file_handling.add_argument('-f', '--force',
-            action='store_true',
-            help=hp.force.format('population space'))
-
-    file_handling.add_argument('-s', '--skip',
-            action='store_true',
-            help=hp.skip.format('population space'))
-
-    parser.add_argument('-v', '--verbose',
-            action='count',
-            default=0,
-            help=hp.verbose)
-
-########################################################################
-# Multiprocessing
-########################################################################
-
-    parser.add_argument('-j', '--cores',
-            type=int,
-            help=hp.cores)
+    control_multiprocessing.add_argument('-j', '--cores',
+        type=int,
+        help="""Number of cores to use. Default is the number of cores
+        on the machine.""")
 
     return parser
 
+from ..api.fmristudy import add_study_arguments
+
 def cmd():
-    parser = create_argument_parser()
+    parser = define_parser()
+    add_study_arguments(parser)
     args = parser.parse_args()
     call(args)
 
@@ -212,26 +155,6 @@ cmd.__doc__ = __doc__
 #
 ########################################################################
 
-from ..df import get_df
-
-from ...lock import Lock
-
-from ...load import load_session, load_result, load_population_map
-
-from ...name import Identifier
-
-from ...protocol import layout_sdummy, layout_dummy
-
-from ...diffeomorphisms import Image
-
-from ...nifti import image2nii, nii2image
-
-from ...ants import fit_population_map
-
-import pandas as pd
-
-import datetime
-
 import sys
 
 import os
@@ -240,165 +163,224 @@ from os.path import isfile, isdir, join
 
 from multiprocessing.dummy import Pool as ThreadPool
 
+import numpy as np
+
+from ..api.fmristudy import get_study
+
+from ...lock import Lock
+
+from ...study import Study
+
+from ...session import Session
+
+from ...reference import ReferenceMaps
+
+from ...pmap import PopulationMap
+
+from ...nifti import image2nii, nii2image
+
+from ...ants import fit_population_map
+
 import nibabel as ni
 
 ########################################################################
 
 def call(args):
 
-    if args.verbose:
-        print('-------------------------------------')
+    study = get_study(args)
 
-    if args.vb_image:
-        try:
-            if args.verbose:
-                print('Read: {}'.format(args.vb_image))
-            vb = load(args.vb_image)
-        except Exception as e:
-            print('Unable to read vb filename: {}'.format(args.vb_image))
-            print('Fall back to --vb-nii: {}'.format(e))
-    else:
-        try:
-            if args.verbose:
-                print('Read: {}'.format(args.vb_nii))
-            vb = nii2image(ni.load(args.vb_nii), name=args.vb_name)
-
-            fname = args.vb_path.format(args.vb_name)
-
-            dfile = os.path.dirname(fname)
-            if dfile and not isdir(dfile):
-               os.makedirs(dfile)
-
-            if args.verbose:
-                print('Save: {}'.format(fname))
-            vb.save(fname)
-        except Exception as e:
-            print('Unable to read or write vb files')
-            print('Exception: {}'.format(e))
-            exit()
-
-    if args.vb_background_image:
-        try:
-            if args.verbose:
-                print('Read: {}'.format(args.vb_background_image))
-            vb_background = load(args.vb_background_image)
-        except Exception as e:
-            print('Unable to read vb-background: {}'.format(args.vb_background_image))
-            print('Fall back to --vb-background-nii: {}'.format(e))
-    else:
-        try:
-            if args.verbose:
-                print('Read: {}'.format(args.vb_background_nii))
-            vb_background = nii2image(ni.load(args.vb_background_nii), name=args.vb_background_name)
-
-            fname = args.vb_background_path.format(args.vb_background_name)
-
-            dfile = os.path.dirname(fname)
-            if dfile and not isdir(dfile):
-               os.makedirs(dfile)
-
-            if args.verbose:
-                print('Save: {}'.format(fname))
-            vb_background.save(fname)
-        except Exception as e:
-            print('Unable to read or write vb-background files')
-            print('Exception: {}'.format(e))
-            exit()
-
-    ####################################################################
-
-    output = args.protocol_log.format(
-            datetime.datetime.now().strftime('%Y-%m-%d-%H%M'))
-
-    if args.strftime == 'short':
-        args.strftime = '%Y-%m-%d'
-
-    ####################################################################
-    # Parse protocol
-    ####################################################################
-
-    df = get_df(args, fall_back=[args.session, args.fit])
-
-    if df is None:
+    if study is None:
         sys.exit()
 
-    ####################################################################
-    # Add filename layout
-    ####################################################################
+    study_iterator = study.iterate(
+            'session',
+            'reference_maps',
+            'result',
+            'population_map',
+            new=['population_map', 'ants_prefix'],
+            integer_index=True)
 
-    df_layout = df.copy()
-
-    layout_dummy(df_layout, 'ses',
-            template=args.session,
-            strftime=args.strftime
-            )
-
-    layout_sdummy(df_layout, 'output_prefix',
-            template=args.output_prefix,
-            urname=args.nb_name,
-            scale_type=args.scale_type,
-            strftime=args.strftime
-            )
-
-    layout_sdummy(df_layout, 'fit',
-            template=args.fit,
-            urname=args.nb_name,
-            scale_type=args.scale_type,
-            strftime=args.strftime
-            )
-
-    layout_sdummy(df_layout, 'filename',
-            template=args.population_map,
-            urname=args.vb,
-            scale_type=args.diffeomorphism,
-            strftime=args.strftime
-            )
-
-    ####################################################################
-    # Apply wrapper
-    ####################################################################
+    df = study_iterator.df.copy()
 
     df['locked'] = False
 
-    def wm(r):
-        name = Identifier(cohort=r.cohort, j=r.id, datetime=r.date, paradigm=r.paradigm)
+    remove_lock       = args.remove_lock
+    ignore_lock       = args.ignore_lock
+    force             = args.force
+    skip              = args.skip
+    verbose           = args.verbose
+
+    diffeomorphism_type = args.diffeomorphism_type
+    resolution          = args.resolution
+    cycle               = args.cycle
+
+    def wm(index, name, session, reference_maps, population_map, result,
+            file_population_map):
+
+        if type(population_map) is Lock:
+            if remove_lock or ignore_lock:
+                if verbose:
+                    print('{}: Remove lock'.format(name.name()))
+                population_map.unlock()
+                if remove_lock:
+                    return
+            else:
+                if verbose:
+                    print('{}: Locked'.format(name.name()))
+                return
+
+        elif population_map is not None and not force:
+            if verbose:
+                print('{}: PopulationMap already exists. Use -f/--force to overwrite'.format(
+                    name.name()))
+            return
+
+        if skip:
+            return
+
+        if verbose:
+            print('{}: Lock: {}'.format(name.name(), file_population_map))
+
+        lock = Lock(name, 'fmripop', file_population_map)
+        df.ix[index, 'locked'] = True
+
+        dfile = os.path.dirname(file_population_map)
+        if dfile and not isdir(dfile):
+           os.makedirs(dfile)
+
+        lock.save(file_population_map)
+
+        ####################################################################
+        # Create population map instance from a result instance
+        ####################################################################
+
+        if cycle is None:
+
+            result.mask()
+            nb = result.get_field('intercept', 'point')
+            nb.name = name.name()
+
+        ####################################################################
+        # Create population map instance from a session instance
+        ####################################################################
+
+        else:
+
+            if reference_maps is None:
+                scan_cycle_to_use = cycle[0]
+            else:
+                try:
+                    outlying_cycles = reference_maps.outlying_cycles
+                except:
+                    if verbose:
+                        print('{}: I have found no information about outlying scan cycles!'.format(
+                            name.name()))
+                    outlying_cycles = None
+
+                if outlying_cycles is None:
+                    scan_cycle_to_use = cycle[0]
+                else:
+                    if outlying_cycles[cycle].all():
+                        df.ix[index,'valid'] = False
+                        print("""{}:
+                        All suggested reference cycles have been marked as
+                        outlying. Unable to proceed. Please specify a
+                        different scan cycle (using --cycle) as
+                        reference.""".format(name.name()))
+                        lock.conditional_unlock(df, index, verbose, True)
+                        return
+                    elif outlying_cycles[cycle].any():
+                        for c, co in zip (cycle, outlying_cycles[cycle]):
+                            if co:
+                                if verbose:
+                                    print("""{}: Suggested cycle {:>4d} marked as outlying, using fallback.""".format(
+                                        name.name(), c))
+                            else:
+                                scan_cycle_to_use = c
+                                break
+                    else:
+                        scan_cycle_to_use = cycle[0]
+
+            if verbose:
+                print('{}: NB equals subject position during scan cycle: {:d}'.format(
+                    name.name(), scan_cycle_to_use))
+
+            nb = Image(
+                reference=session.reference,
+                data=session.data[scan_cycle_to_use],
+                name=name.name())
+
+        if verbose:
+            print('{}: Population space: {}'.format(name.name(), vb.name))
+            print('{}: Subject space: {}'.format(name.name(), nb.name))
+            print('{}: Fit diffeomorphism'.format(name.name()))
 
         try:
-            dfile = os.path.dirname(r.filename)
-            if dfile and not isdir(dfile):
-                os.makedirs(dfile)
+            population_map = fit_population_map(
+                    vb_image=vb,
+                    nb_image=nb,
+                    output_prefix = output_prefix,
+                    vb=vb_token,
+                    name=diffeomorphism_new)
         except Exception as e:
-            print('{}: {}'.format(name.name(), e))
+            df.ix[index,'valid'] = False
+            print('{}: Unable to fit diffeomorphism'.format(name.name()))
+            print('{}: Exception: {}'.format(name.name(), e))
+            return
 
-        wrapper(name              = name,
-                df                = df,
-                index             = r.Index,
-                remove_lock       = args.remove_lock,
-                ignore_lock       = args.ignore_lock,
-                force             = args.force,
-                skip              = args.skip,
-                verbose           = args.verbose,
-                filename          = r.filename,
+        population_map.set_vb_background(study.vb_background)
 
-                file_res          = r.fit,
-                file_ses          = r.ses,
+        if verbose:
+            print('{}: Save: {}'.format(name.name(), file_population_map))
 
-                output_prefix     = r.output_prefix,
+        try:
+            population_map.save(file_population_map)
+            df.ix[index,'locked'] = False
+        except Exception as e:
+            df.ix[index,'valid'] = False
+            print('{}: Unable to write: {}'.format(name.name(), file_population_map))
+            print('{}: Exception: {}'.format(name.name(), e))
+            lock.conditional_unlock(df, index, verbose, True)
 
-                vb                = vb,
-                vb_token          = args.vb,
-                vb_background     = vb_background,
-                nb_name           = args.nb_name,
-                cycle             = args.cycle,
-                diffeomorphism_name = args.diffeomorphism,
-                )
+        if verbose > 2:
+            print("""{}:
+                {}
+                {}""".format(name.name(),
+                    population_map.diffeomorphism.describe(),
+                    population_map.describe()))
 
-    it =  df_layout.itertuples()
+        try:
+            if verbose:
+                print('{}: Save: {}'.format(name.name(),
+                    file_population_map))
 
-    if len(df_layout) > 1 and ((args.cores is None) or (args.cores > 1)):
+            population_map.save(file_population_map)
+            df.ix[index,'locked'] = False
+
+        except Exception as e:
+            df.ix[index,'valid'] = False
+            print('{}: Unable to create: {}, {}'.format(name.name(),
+                file_population_map, e))
+            lock.conditional_unlock(df, index, verbose, True)
+            return
+
+        return
+
+    ####################################################################
+
+    if len(df) > 1 and ((args.cores is None) or (args.cores > 1)):
         try:
             pool = ThreadPool(args.cores)
-            results = pool.map(wm, it)
+            for index, name, files, instances in study_iterator:
+                session         = instances['session']
+                reference_maps  = instances['reference_maps']
+                population_map  = instances['population_map']
+                result          = instances['result']
+                file_population_map = files['population_map']
+                wm
+                pool.apply_async(wm, args=(index, name, session,
+                    reference_maps, population_map, result,
+                    file_population_map))
             pool.close()
             pool.join()
         except Exception as e:
@@ -407,131 +389,39 @@ def call(args):
             print('Pool execution has been terminated')
             print(e)
         finally:
-            files = df_layout.ix[df.locked, 'filename'].values
+            files = df.ix[df.locked, 'population_map'].values
             if len(files) > 0:
                 for f in files:
                     print('Unlock: {}'.format(f))
                     os.remove(f)
-            del df['locked']
     else:
         try:
-            print('-------------------------------------')
             print('Process protocol entries sequentially')
-            for r in it:
-                wm(r)
+            for index, name, files, instances in study_iterator:
+                session         = instances['session']
+                reference_maps  = instances['reference_maps']
+                population_map  = instances['population_map']
+                result          = instances['result']
+                file_population_map = files['population_map']
+                wm(index, name, session, reference_maps, population_map,
+                        result, file_population_map)
         finally:
-            files = df_layout.ix[df.locked, 'filename'].values
+            files = df.ix[df.locked, 'population_map'].values
             if len(files) > 0:
                 for f in files:
                     print('Unlock: {}'.format(f))
                     os.remove(f)
-            del df['locked']
 
     ####################################################################
-    # Write protocol
+    # Write study to disk
     ####################################################################
 
-    if args.verbose:
-        print('-------------------------------------')
-        print('Save: {}'.format(output))
+    if args.out is not None:
+        if args.verbose:
+            print('Save: {}'.format(args.out))
 
-    dfile = os.path.dirname(output)
-    if dfile and not isdir(dfile):
-       os.makedirs(dfile)
+        dfile = os.path.dirname(args.out)
+        if dfile and not isdir(dfile):
+           os.makedirs(dfile)
 
-    df.to_pickle(output)
-
-########################################################################
-
-def wrapper(name, df, index, remove_lock, ignore_lock, force, skip,
-        verbose, filename, file_res, file_ses, output_prefix, vb,
-        vb_token, vb_background, nb_name, cycle, diffeomorphism_name):
-
-    if isfile(filename):
-        instance = load_population_map(filename, name, df, index, vb.name, verbose)
-        if type(instance) is Lock:
-            if remove_lock or ignore_lock:
-                if verbose:
-                    print('{}: Remove lock'.format(name.name()))
-                instance.unlock()
-                if remove_lock:
-                    return
-            else:
-                if verbose:
-                    print('{}: Locked'.format(name.name()))
-                return
-        else:
-            if df.ix[index,'valid'] and not force:
-                if verbose:
-                    print('{}: Valid'.format(name.name()))
-                return
-            else:
-                if skip:
-                    if verbose:
-                        print('{}: Invalid'.format(name.name()))
-                    return
-
-    if skip:
-        return
-
-    if verbose:
-        print('{}: Lock: {}'.format(name.name(), filename))
-
-    lock = Lock(name, 'ants4pop', filename)
-    df.ix[index, 'locked'] = True
-    lock.save(filename)
-    df.ix[index,'valid'] = True
-
-    ####################################################################
-
-    if cycle is None:
-
-        result = load_result(file_res, name, df, index, nb_name, verbose)
-        if lock.conditional_unlock(df, index, verbose):
-            return
-
-        result.mask()
-        nb = result.get_field('intercept', 'point')
-
-    else:
-
-        session = load_session(file_ses, name, df, index, verbose)
-        if lock.conditional_unlock(df, index, verbose):
-            return
-
-        nb = Image(
-            reference=session.reference,
-            data=session.data[cycle],
-            name=session.name) #.name()+'-{:d}'.format(cycle))
-
-    if verbose:
-        print('{}: Population space: {}'.format(name.name(), vb.name))
-        print('{}: Subject space: {}'.format(name.name(), nb.name))
-        print('{}: Fit diffeomorphism'.format(name.name()))
-
-    try:
-        population_map = fit_population_map(
-                vb_image=vb,
-                nb_image=nb,
-                output_prefix = output_prefix,
-                vb=vb_token,
-                name=diffeomorphism_name)
-    except Exception as e:
-        df.ix[index,'valid'] = False
-        print('{}: Unable to fit diffeomorphism'.format(name.name()))
-        print('{}: Exception: {}'.format(name.name(), e))
-        return
-
-    population_map.set_vb_background(vb_background)
-
-    if verbose:
-        print('{}: Save: {}'.format(name.name(), filename))
-
-    try:
-        population_map.save(filename)
-        df.ix[index,'locked'] = False
-    except Exception as e:
-        df.ix[index,'valid'] = False
-        print('{}: Unable to write: {}'.format(name.name(), filename))
-        print('{}: Exception: {}'.format(name.name(), e))
-        lock.conditional_unlock(df, index, verbose, True)
+        study.save(args.out)

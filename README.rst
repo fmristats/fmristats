@@ -38,6 +38,10 @@ Citing the MB estimator and this software:
 
 Thank you for citing this project.
 
+.. changelog:: 0.0.7
+
+    * Added ability for fall back scan cycles in fmririgid.
+
 .. changelog:: 0.0.6
 
     * Added .ravel to Image: image.ravel() will return a copy of the 1-D

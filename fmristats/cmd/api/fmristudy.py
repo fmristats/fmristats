@@ -110,14 +110,41 @@ def add_study_arguments(parser):
     study_parser.add_argument('--paradigm',
         help="""Stimulus design to be processed.""")
 
-    study_parser.add_argument('--vb-name',
-        default='self',
-        help="""Name of the population space.""")
+    study_parser.add_argument('--vb-image',
+        help="""A template in standard space""")
 
-    study_parser.add_argument('--diffeomorphism-name',
+    study_parser.add_argument('--vb-nii',
+        help="""A template in standard space""")
+
+    study_parser.add_argument('--vb-name',
+        help="""The name of the standard space that shall be used in the
+        analysis.""")
+
+    study_parser.add_argument('--vb-background-image',
+        help="""Image file with a background image in VB""")
+
+    study_parser.add_argument('--vb-background-nii',
+        help="""Image file with a background image in VB""")
+
+    study_parser.add_argument('--vb-background-name',
+        help="""Name of the background image in VB""")
+
+    study_parser.add_argument('--vb-ati-image',
+        help="""A template for the ATI reference field in standard
+        space""")
+
+    study_parser.add_argument('--vb-ati-nii',
+        help="""A template for the ATI reference field in standard
+        space""")
+
+    study_parser.add_argument('--vb-ati-name',
+        help="""A name for the template for the ATI reference field in
+        standard space""")
+
+    study_parser.add_argument('--diffeomorphism',
         default='identity',
-        help="""Name of the diffeomorphism between population space and
-        subject space.""")
+        help="""Name of the diffeomorphism that maps between standard
+        space and subject reference space.""")
 
     study_parser.add_argument('--scale-type',
         default='max',
@@ -190,6 +217,66 @@ import numpy as np
 ########################################################################
 
 def get_study(args):
+
+    # Parse template image in VB
+    if args.vb_image:
+        try:
+            if args.verbose:
+                print('Read: {}'.format(args.vb_image))
+            vb = load(args.vb_image)
+            if args.vb_name is not None:
+                vb.name = args.vb_name
+        except Exception as e:
+            print('Unable to read --vb-image: {}'.format(args.vb_image))
+            print('Using fallback --vb-nii: {}'.format(e))
+    elif args.vb_nii:
+        try:
+            if args.verbose:
+                print('Read: {}'.format(args.vb_nii))
+            vb = nii2image(ni.load(args.vb_nii), name=args.vb_name)
+        except Exception as e:
+            print('Unable to read --vb-nii: {}, {}'.format(args.vb_image, e))
+            sys.exit()
+
+    # Parse background template image in VB
+    if args.vb_background_image:
+        try:
+            if args.verbose:
+                print('Read: {}'.format(args.vb_background_image))
+            vb = load(args.vb_background_image)
+            if args.vb_background_name is not None:
+                vb.name = args.vb_background_name
+        except Exception as e:
+            print('Unable to read --vb-background-image: {}'.format(args.vb_background_image))
+            print('Using fallback --vb-background-nii: {}'.format(e))
+    elif args.vb_background_nii:
+        try:
+            if args.verbose:
+                print('Read: {}'.format(args.vb_background_nii))
+            vb = nii2image(ni.load(args.vb_background_nii), name=args.vb_background_name)
+        except Exception as e:
+            print('Unable to read --vb-background-nii: {}, {}'.format(args.vb_background_image, e))
+            sys.exit()
+
+    # Parse ATI reference template image in VB
+    if args.vb_ati_image:
+        try:
+            if args.verbose:
+                print('Read: {}'.format(args.vb_ati_image))
+            vb = load(args.vb_ati_image)
+            if args.vb_ati_name is not None:
+                vb.name = args.vb_ati_name
+        except Exception as e:
+            print('Unable to read --vb-ati-image: {}'.format(args.vb_ati_image))
+            print('Using fallback --vb-ati-nii: {}'.format(e))
+    elif args.vb_ati_nii:
+        try:
+            if args.verbose:
+                print('Read: {}'.format(args.vb_ati_nii))
+            vb = nii2image(ni.load(args.vb_ati_nii), name=args.vb_ati_name)
+        except Exception as e:
+            print('Unable to read --vb-ati-nii: {}, {}'.format(args.vb_ati_image, e))
+            sys.exit()
 
     # Parse or create the protocol file
     if args.protocol:
@@ -323,7 +410,7 @@ def get_study(args):
         'reference_maps':args.reference_maps,
         'result':args.fit,
         'population_map':args.population_map,
-        'diffeomorphism_name':args.diffeomorphism_name,
+        'diffeomorphism':args.diffeomorphism,
         'scale_type':args.scale_type,
         }
 
