@@ -1,4 +1,4 @@
-# Copyright 2016-2017 Thomas W. D. Möbius
+# Copyright 2016-2018 Thomas W. D. Möbius
 #
 # This file is part of fmristats.
 #
@@ -19,9 +19,13 @@
 
 """
 
-Prune
+Prune statistic field from non-brain areas
 
 """
+
+    # TODO: also give the option --reference-maps None or none,
+    # which will assume no movement. This is useful for analysing
+    # phantom data.
 
 ########################################################################
 #
@@ -29,28 +33,24 @@ Prune
 #
 ########################################################################
 
-import fmristats.cmd.hp as hp
+from ...epilog import epilog
 
 import argparse
 
-from ...study import add_study_parser
-
-def create_argument_parser():
+def define_parser():
     parser = argparse.ArgumentParser(
             description=__doc__,
-            epilog=hp.epilog)
+            epilog=epilog)
 
-    add_study_parser(parser)
-
-########################################################################
-# Arguments specific for the application of masks
-########################################################################
+    ####################################################################
+    # Handling cut-offs
+    ####################################################################
 
     handling_df_cutoff = parser.add_mutually_exclusive_group()
 
     handling_df_cutoff.add_argument('-p', '--proportion',
             type=float,
-            default=.6,
+            default=.6842,
             help="""estimates which degrees of freedom are below the
             proportional threshold of the degrees of freedom in the
             effect field estimate are set to null.""")
@@ -61,31 +61,45 @@ def create_argument_parser():
             threshold of the degrees of freedom in the effect field
             estimate are set to null.""")
 
-########################################################################
-# Miscellaneous
-########################################################################
+    ####################################################################
+    # Miscellaneous
+    ####################################################################
 
-    parser.add_argument('-f', '--force',
+    parser.add_argument('-f', '--force-mask-overwrite',
             action='store_true',
             help="""Overwrite mask if it already exits""")
 
-    parser.add_argument('-v', '--verbose',
-            action='count',
-            default=0,
-            help=hp.verbose)
+    ####################################################################
+    # Verbosity
+    ####################################################################
 
-########################################################################
-# Multiprocessing
-########################################################################
+    control_verbosity  = parser.add_argument_group(
+        """Control the level of verbosity""")
 
-    parser.add_argument('-j', '--cores',
-            type=int,
-            help=hp.cores)
+    control_verbosity.add_argument('-v', '--verbose',
+        action='count',
+        default=0,
+        help="""Increase output verbosity""")
+
+    ####################################################################
+    # Multiprocessing
+    ####################################################################
+
+    control_multiprocessing  = parser.add_argument_group(
+        """Multiprocessing""")
+
+    control_multiprocessing.add_argument('-j', '--cores',
+        type=int,
+        help="""Number of cores to use. Default is the number of cores
+        on the machine.""")
 
     return parser
 
+from ..api.fmristudy import add_study_arguments
+
 def cmd():
-    parser = create_argument_parser()
+    parser = define_parser()
+    add_study_arguments(parser)
     args = parser.parse_args()
     call(args)
 
@@ -97,22 +111,6 @@ cmd.__doc__ = __doc__
 #
 ########################################################################
 
-from ..df import get_df
-
-from ...load import load_result
-
-from ...name import Identifier
-
-from ...protocol import layout_dummy, layout_sdummy
-
-from ...smodel import Result
-
-from ...study import Study
-
-import pandas as pd
-
-import datetime
-
 import sys
 
 import os
@@ -123,78 +121,87 @@ from multiprocessing.dummy import Pool as ThreadPool
 
 import numpy as np
 
-import nibabel as ni
+from ..api.fmristudy import get_study
+
+from ...lock import Lock
+
+from ...study import Study
 
 ########################################################################
 
 def call(args):
 
-    ####################################################################
-    # Parse protocol
-    ####################################################################
+    study = get_study(args)
 
-    df = get_df(args, fall_back=args.fit)
-
-    if df is None:
+    if study is None:
+        print('No study found. Nothing to do.')
         sys.exit()
 
     ####################################################################
-    # Add file layout
+    # Options
     ####################################################################
 
-    layout = {
-        'stimulus':args.stimulus,
-        'session':args.session,
-        'reference_maps':args.reference_maps,
-        'result':args.fit,
-        'population_map':args.population_map,
-        'diffeomorphism_name':args.diffeomorphism_name,
-        'scale_type':args.scale_type,
-        }
-
-    study = Study(df, df, layout=layout, strftime=args.strftime)
-
-    study_iterator = study.iterate('result', new=['result'],
-            vb_name=args.vb_name,
-            diffeomorphism_name=args.diffeomorphism_name,
-            scale_type=args.scale_type)
+    force         = args.force_mask_overwrite
+    verbose       = args.verbose
+    threshold_df  = args.threshold
+    proportion_df = args.proportion
 
     ####################################################################
-    # wrapper
+    # Create the iterator
+    ####################################################################
+
+    study_iterator = study.iterate('result', new=['result'])
+            #vb_name=args.vb_name,
+            #diffeomorphism_name=args.diffeomorphism_name,
+            #scale_type=args.scale_type)
+
+    df = study_iterator.df.copy()
+
+    ####################################################################
+    # Wrapper
     ####################################################################
 
     def wm(result, filename, name):
-            verbose        = args.verbose
-            threshold_df   = args.threshold
-            proportion_df  = args.proportion
 
-            if verbose > 1:
-                print('{}: Description of the fit:'.format(name.name()))
-                print(result.describe())
-                print(result.population_map.describe())
+        if type(result) is Lock:
+            print('{}: Result file is locked. Still fitting?'.format(
+                name.name()))
+            return
 
-            gf = result.get_field('degrees_of_freedom')
+        if verbose > 2:
+            print("""{}: Description of the fit:
+                {}
+                {}""".format(name.name(), result.describe(),
+                    result.population_map.describe()))
 
-            if proportion_df:
-                threshold_df = int(proportion_df * np.nanmax(gf.data))
+        if hasattr(result.population_map, 'vb_mask') and not force:
+            print("""{}:
+            VB mask already present, force overwrite with --force""".format(
+                name.name()))
+            return
 
-            if verbose:
-                print('{}: Lower df threshold: {:d}'.format(name.name(), threshold_df))
+        gf = result.get_field('degrees_of_freedom')
 
-            inside = (gf.data >= threshold_df)
+        if proportion_df:
+            threshold_df = int(proportion_df * np.nanmax(gf.data))
 
-            result.population_map.set_vb_mask(inside)
+        if verbose:
+            print('{}: Lower df threshold: {:d}'.format(name.name(), threshold_df))
 
-            result.population_map.vb_mask.name = 'pruned_intercept'
+        inside = (gf.data >= threshold_df)
 
-            if verbose:
-                print('{}: Save: {}'.format(name.name(), filename))
+        result.population_map.set_vb_mask(inside)
 
-            try:
-                result.save(filename)
-            except Exception as e:
-                print('{}: Unable to write: {}'.format(name.name(), filename))
-                print('{}: Exception: {}'.format(name.name(), e))
+        result.population_map.vb_mask.name = 'pruned_intercept'
+
+        if verbose:
+            print('{}: Save: {}'.format(name.name(), filename))
+
+        try:
+            result.save(filename)
+        except Exception as e:
+            print('{}: Unable to write: {}'.format(name.name(), filename))
+            print('{}: Exception: {}'.format(name.name(), e))
 
     ###################################################################
 
@@ -226,3 +233,17 @@ def call(args):
                     wm(result, filename, name)
         finally:
             pass
+
+    ####################################################################
+    # Write study to disk
+    ####################################################################
+
+    if args.out is not None:
+        if args.verbose:
+            print('Save: {}'.format(args.out))
+
+        dfile = os.path.dirname(args.out)
+        if dfile and not isdir(dfile):
+           os.makedirs(dfile)
+
+        study.save(args.out)

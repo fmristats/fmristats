@@ -149,7 +149,7 @@ class Study:
         self.vb_background   = vb_background
         self.vb_ati          = vb_ati
 
-        self.diffeomorphism = diffeomorphism_name
+        self.diffeomorphism = diffeomorphism
         self.scale_type = scale_type
 
         if root_dir is None:
@@ -215,8 +215,12 @@ class Study:
         -------
         StudyIterator
         """
+        if vb_name is None:
+            if self.vb is not None:
+                vb_name = self.vb.name
+
         if diffeomorphism_name is None:
-            diffeomorphism_name = self.diffeomorphism_name
+            diffeomorphism_name = self.diffeomorphism
 
         if scale_type is None:
             if type(self.scale_type) is str:
@@ -224,6 +228,8 @@ class Study:
             elif type(scale_type) is float:
                 scale_type = '{:.2f}'.format(
                         self.scale_type).replace('.', 'd')
+            else:
+                scale_type = 'undefined'
 
         protocol = self.protocol[self.protocol.valid == True].copy()
 

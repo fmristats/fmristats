@@ -284,8 +284,6 @@ from ...lock import Lock
 
 from ...study import Study
 
-from ...diffeomorphisms import Image
-
 from ...session import Session
 
 from ...reference import ReferenceMaps
@@ -293,12 +291,6 @@ from ...reference import ReferenceMaps
 from ...pmap import PopulationMap
 
 from ...smodel import SignalModel
-
-from ...nifti import image2nii, nii2image
-
-from ...ants import fit_population_map
-
-import nibabel as ni
 
 ########################################################################
 
@@ -381,6 +373,10 @@ def call(args):
     df = study_iterator.df.copy()
 
     df['locked'] = False
+
+    ####################################################################
+    # Wrapper
+    ####################################################################
 
     def wm(index, name, session, reference_maps, population_map, result,
             file_result):
