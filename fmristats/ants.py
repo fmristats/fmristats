@@ -43,19 +43,26 @@ from contextlib import contextmanager
 
 import sys
 
-def fit_population_map(vb_image, nb_image, output_prefix, threads=4,
-        verbose=True, vb=None, name='ants'):
+def fit_population_map(vb_image, nb_image, nb_name, output_prefix,
+        name='ants', j=4, verbose=True):
     """
     Fits a diffeomorphism ψ from `vb` (the domain of ψ) to `nb` (the
-    image of ψ) using the images `vb_image` and `nb_image` as references in
-    `vb` and `nb` respectively.
+    image of ψ) using the images `vb_image` and `nb_image` as references
+    in `vb` and `nb` respectively.
 
     Parameters
     ----------
     vb_image : Image
-        Domain / Vorbereich
+        Template in the domain (the »Vorbereich«)
     nb_image : Image
-        Image / Nachbereich
+        Template in the image (the »Nachbereich«)
+    output_prefix : str
+        String that will be used as a prefix for temporary files created
+        by ANTS.
+    j : int
+        Number of threads to use.
+    name : str
+        Give a name to the diffeomorphism.
     """
 
     dfile = os.path.dirname(output_prefix)
@@ -71,7 +78,7 @@ def fit_population_map(vb_image, nb_image, output_prefix, threads=4,
     reg = RegistrationSynQuick()
     reg.inputs.fixed_image  = vb_file
     reg.inputs.moving_image = nb_file
-    reg.inputs.num_threads  = threads
+    reg.inputs.num_threads  = j
     reg.inputs.output_prefix = output_prefix
 
     if verbose:
@@ -115,7 +122,7 @@ def fit_population_map(vb_image, nb_image, output_prefix, threads=4,
             reference=vb_image.reference,
             warp=coordinates,
             vb=vb_image.name,
-            nb=nb_image.name,
+            nb=nb_name,
             name=name,
             metadata={
                 'vb_file': vb_file,

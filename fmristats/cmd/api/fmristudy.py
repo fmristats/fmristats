@@ -42,8 +42,8 @@ def add_study_arguments(parser):
         starting with the string: SINGLE_SUBJECT.""")
 
     study_parser.add_argument('--root_directory',
-        help="""Will overwrite the default and set the root directory of
-        the study to ROOT_DIRECTORY.""")
+        help="""Will overwrite the default (the work-directory) and set
+        the root directory of the study to ROOT_DIRECTORY.""")
 
     study_parser.add_argument('--traverse-upwards',
         type=int,
@@ -237,6 +237,8 @@ def get_study(args):
         except Exception as e:
             print('Unable to read --vb-nii: {}, {}'.format(args.vb_image, e))
             sys.exit()
+    else:
+        vb = None
 
     # Parse background template image in VB
     if args.vb_background_image:
@@ -257,6 +259,8 @@ def get_study(args):
         except Exception as e:
             print('Unable to read --vb-background-nii: {}, {}'.format(args.vb_background_image, e))
             sys.exit()
+    else:
+        vb_background = None
 
     # Parse ATI reference template image in VB
     if args.vb_ati_image:
@@ -277,6 +281,8 @@ def get_study(args):
         except Exception as e:
             print('Unable to read --vb-ati-nii: {}, {}'.format(args.vb_ati_image, e))
             sys.exit()
+    else:
+        vb_ati = None
 
     # Parse or create the protocol file
     if args.protocol:
@@ -415,8 +421,15 @@ def get_study(args):
         }
 
     if (study is None) or single_subject:
-        study = Study(protocol=protocol, covariates=covariates,
-                file_layout=file_layout, strftime=args.strftime,
+        study = Study(
+                protocol=protocol,
+                covariates=covariates,
+                vb = vb,
+                vb_background = vb_background,
+                vb_ati = vb_ati,
+                file_layout=file_layout,
+                strftime=args.strftime,
+                root_dir = args.root_directory,
                 single_subject=single_subject)
 
     else:
@@ -425,6 +438,12 @@ def get_study(args):
             study.protocol = protocol
         if covariates is not None:
             study.covariates = covariates
+        if vb is not None:
+            study.vb = vb
+        if vb_background is not None:
+            study.vb_background = vb_background
+        if vb_ati is not None:
+            study.vb_ati = vb_ati
 
     study.filter(cohort=args.cohort, j=args.id, paradigm=args.paradigm, inplace=True)
 

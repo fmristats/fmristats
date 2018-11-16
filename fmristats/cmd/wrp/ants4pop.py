@@ -49,16 +49,9 @@ def define_parser():
     specific = parser.add_argument_group(
         """Creating a standard space isometric to the reference space.""")
 
-    specific.add_argument('--diffeomorphism-type',
-        default='reference',
-        choices=['reference', 'scanner', 'scan_cycle', 'fit'],
+    specific.add_argument('--diffeomorphism-nb',
+        choices=['scan_cycle', 'fit'],
         help="""Type of diffeomorphism.""")
-
-    specific.add_argument('--resolution',
-        default=2.,
-        type=float,
-        help="""The resolution of the template in standard
-        space.""")
 
     specific.add_argument('--cycle',
         type=int,
@@ -76,12 +69,8 @@ def define_parser():
             default='ants',
             help="""Name to use for the fitted diffeomorphisms.""")
 
-    specific.add_argument('--ants4pop-prefix',
-            default='ants/vb/{}.nii.gz'
-            help="""Prefix for temporary files.""")
-
     specific.add_argument('--ants-prefix',
-            default='ants/tmp/{2}/{4}/{1:04d}/{0}-{1:04d}-{2}-{3}-{4}-',
+            default='ants/tmp/{0}-{1:04d}-{2}-{3}-{4}/{0}-{1:04d}-{2}-{3}-{4}-',
             help="""Prefix for temporary ANTS' files.""")
 
     ####################################################################
@@ -137,6 +126,12 @@ def define_parser():
         help="""Number of cores to use. Default is the number of cores
         on the machine.""")
 
+    control_multiprocessing.add_argument('-j2', '--ants-cores',
+        type=int,
+        default=4,
+        help="""Number of cores to use in the ANTS routine. Default is
+        the number of cores on the machine.""")
+
     return parser
 
 from ..api.fmristudy import add_study_arguments
@@ -171,6 +166,8 @@ from ...lock import Lock
 
 from ...study import Study
 
+from ...diffeomorphisms import Image
+
 from ...session import Session
 
 from ...reference import ReferenceMaps
@@ -190,7 +187,17 @@ def call(args):
     study = get_study(args)
 
     if study is None:
+        print('No study found. Nothing to do.')
         sys.exit()
+
+    if study.vb is None:
+        print("""
+        You need to provide a template in standard space (for example by
+        either setting a template in the study or by providing a
+        template using --vb-image or --vb-nii).""")
+        sys.exit()
+
+    study.update_layout({'ants_prefix':args.ants_prefix})
 
     study_iterator = study.iterate(
             'session',
@@ -210,12 +217,20 @@ def call(args):
     skip              = args.skip
     verbose           = args.verbose
 
-    diffeomorphism_type = args.diffeomorphism_type
-    resolution          = args.resolution
-    cycle               = args.cycle
+    if args.diffeomorphism_nb is None:
+        if args.cycle is None:
+            diffeomorphism_nb = 'fit'
+        else:
+            diffeomorphism_nb = 'scan_cycle'
+    else:
+        diffeomorphism_nb = args.diffeomorphism_nb
+
+    new_diffeomorphism = args.new_diffeomorphism
+    cycle              = args.cycle
+    ants_cores         = args.ants_cores
 
     def wm(index, name, session, reference_maps, population_map, result,
-            file_population_map):
+            file_population_map, ants_prefix):
 
         if type(population_map) is Lock:
             if remove_lock or ignore_lock:
@@ -241,7 +256,7 @@ def call(args):
         if verbose:
             print('{}: Lock: {}'.format(name.name(), file_population_map))
 
-        lock = Lock(name, 'fmripop', file_population_map)
+        lock = Lock(name, 'ants4pop', file_population_map)
         df.ix[index, 'locked'] = True
 
         dfile = os.path.dirname(file_population_map)
@@ -254,17 +269,28 @@ def call(args):
         # Create population map instance from a result instance
         ####################################################################
 
-        if cycle is None:
+        if diffeomorphism_nb == 'fit':
+
+            if result is None:
+                print('{}: No fit found'.format(name.name()))
+                df.ix[index,'valid'] = False
+                lock.conditional_unlock(df, index, verbose)
+                return
 
             result.mask()
             nb = result.get_field('intercept', 'point')
-            nb.name = name.name()
 
         ####################################################################
         # Create population map instance from a session instance
         ####################################################################
 
-        else:
+        elif diffeomorphism_nb == 'scan_cycle':
+
+            if (session is None) or (cycle is None):
+                print('{}: No session or CYCLE defined'.format(name.name()))
+                df.ix[index,'valid'] = False
+                lock.conditional_unlock(df, index, verbose)
+                return
 
             if reference_maps is None:
                 scan_cycle_to_use = cycle[0]
@@ -308,46 +334,25 @@ def call(args):
             nb = Image(
                 reference=session.reference,
                 data=session.data[scan_cycle_to_use],
-                name=name.name())
+                name=name.name()+'-{:d}'.format(scan_cycle_to_use))
 
-        if verbose:
-            print('{}: Population space: {}'.format(name.name(), vb.name))
-            print('{}: Subject space: {}'.format(name.name(), nb.name))
-            print('{}: Fit diffeomorphism'.format(name.name()))
-
-        try:
-            population_map = fit_population_map(
-                    vb_image=vb,
-                    nb_image=nb,
-                    output_prefix = output_prefix,
-                    vb=vb_token,
-                    name=diffeomorphism_new)
-        except Exception as e:
-            df.ix[index,'valid'] = False
-            print('{}: Unable to fit diffeomorphism'.format(name.name()))
-            print('{}: Exception: {}'.format(name.name(), e))
+        else:
+            print('{}: Diffeomorphism type not supported'.format(name.name()))
             return
 
-        population_map.set_vb_background(study.vb_background)
-
         if verbose:
-            print('{}: Save: {}'.format(name.name(), file_population_map))
+            print('{}: Fit diffeomorphism'.format(name.name()))
 
-        try:
-            population_map.save(file_population_map)
-            df.ix[index,'locked'] = False
-        except Exception as e:
-            df.ix[index,'valid'] = False
-            print('{}: Unable to write: {}'.format(name.name(), file_population_map))
-            print('{}: Exception: {}'.format(name.name(), e))
-            lock.conditional_unlock(df, index, verbose, True)
+        population_map = fit_population_map(
+                vb_image=study.vb,
+                nb_image=nb,
+                nb_name=name,
+                output_prefix = ants_prefix,
+                name=new_diffeomorphism,
+                j=ants_cores)
 
-        if verbose > 2:
-            print("""{}:
-                {}
-                {}""".format(name.name(),
-                    population_map.diffeomorphism.describe(),
-                    population_map.describe()))
+        if study.vb_background:
+            population_map.set_vb_background(study.vb_background)
 
         try:
             if verbose:
@@ -364,6 +369,13 @@ def call(args):
             lock.conditional_unlock(df, index, verbose, True)
             return
 
+        if verbose > 2:
+            print("""{}:
+                {}
+                {}""".format(name.name(),
+                    population_map.diffeomorphism.describe(),
+                    population_map.describe()))
+
         return
 
     ####################################################################
@@ -377,10 +389,11 @@ def call(args):
                 population_map  = instances['population_map']
                 result          = instances['result']
                 file_population_map = files['population_map']
+                ants_prefix         = files['ants_prefix']
                 wm
                 pool.apply_async(wm, args=(index, name, session,
                     reference_maps, population_map, result,
-                    file_population_map))
+                    file_population_map, ants_prefix))
             pool.close()
             pool.join()
         except Exception as e:
@@ -403,8 +416,9 @@ def call(args):
                 population_map  = instances['population_map']
                 result          = instances['result']
                 file_population_map = files['population_map']
+                ants_prefix         = files['ants_prefix']
                 wm(index, name, session, reference_maps, population_map,
-                        result, file_population_map)
+                        result, file_population_map, ants_prefix)
         finally:
             files = df.ix[df.locked, 'population_map'].values
             if len(files) > 0:
