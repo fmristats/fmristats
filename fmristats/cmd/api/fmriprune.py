@@ -23,10 +23,6 @@ Prune statistic field from non-brain areas
 
 """
 
-    # TODO: also give the option --reference-maps None or none,
-    # which will assume no movement. This is useful for analysing
-    # phantom data.
-
 ########################################################################
 #
 # Command line program
@@ -37,10 +33,7 @@ from ...epilog import epilog
 
 import argparse
 
-def define_parser():
-    parser = argparse.ArgumentParser(
-            description=__doc__,
-            epilog=epilog)
+def add_arguments(parser):
 
     ####################################################################
     # Handling cut-offs
@@ -93,6 +86,13 @@ def define_parser():
         help="""Number of cores to use. Default is the number of cores
         on the machine.""")
 
+    return parser
+
+def define_parser():
+    parser = argparse.ArgumentParser(
+            description=__doc__,
+            epilog=epilog)
+    add_arguments(parser)
     return parser
 
 from ..api.fmristudy import add_study_arguments
@@ -151,9 +151,6 @@ def call(args):
     ####################################################################
 
     study_iterator = study.iterate('result', new=['result'])
-            #vb_name=args.vb_name,
-            #diffeomorphism_name=args.diffeomorphism_name,
-            #scale_type=args.scale_type)
 
     df = study_iterator.df.copy()
 
@@ -194,14 +191,13 @@ def call(args):
 
         result.population_map.vb_mask.name = 'pruned_intercept'
 
-        if verbose:
-            print('{}: Save: {}'.format(name.name(), filename))
-
         try:
+            if verbose:
+                print('{}: Save: {}'.format(name.name(), filename))
             result.save(filename)
         except Exception as e:
-            print('{}: Unable to write: {}'.format(name.name(), filename))
-            print('{}: Exception: {}'.format(name.name(), e))
+            print('{}: Unable to write: {}, {}'.format(name.name(),
+                filename, e))
 
     ###################################################################
 
@@ -209,7 +205,7 @@ def call(args):
         try:
             pool = ThreadPool(args.cores)
             for name, files, instances in study_iterator:
-                result   = instances['result']
+                result = instances['result']
                 if result is not None:
                     filename = files['result']
                     pool.apply_async(wm, args=(result, filename, name))
@@ -227,7 +223,7 @@ def call(args):
         try:
             print('Process protocol entries sequentially')
             for name, files, instances in study_iterator:
-                result   = instances['result']
+                result = instances['result']
                 if result is not None:
                     filename = files['result']
                     wm(result, filename, name)

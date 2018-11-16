@@ -344,16 +344,16 @@ class PopulationMap:
         description = """
         Population map
         --------------
-        name:          {:s}
-        vb:            {:s}
-        nb:            {:s}
-        vb_background: {:s}
-        nb_background: {:s}
-        vb_estimate:   {:s}
-        nb_estimate:   {:s}
-        vb_mask:       {:s}
-        nb_mask:       {:s}
-        vb_ati:        {:s}"""
+        diffeomorphism: {:s}
+        vb:             {:s}
+        nb:             {:s}
+        vb_background:  {:s}
+        nb_background:  {:s}
+        vb_estimate:    {:s}
+        nb_estimate:    {:s}
+        vb_mask:        {:s}
+        nb_mask:        {:s}
+        vb_ati:         {:s}"""
 
         try:
             vb = self.vb.name
@@ -404,7 +404,7 @@ class PopulationMap:
             vb_ati = '--'
 
         return description.format(
-                self.name.name(),
+                self.diffeomorphism.name,
                 vb, nb, vb_background, nb_background,
                 vb_estimate, nb_estimate,
                 vb_mask, nb_mask, vb_ati,

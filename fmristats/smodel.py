@@ -976,8 +976,8 @@ class Result:
             Radius:          {:>6.2f} mm
             Diagonal:        {:>6.2f} mm
 
-        Fitted parameter field has
-        --------------------------
+        Fitted statistics field
+        -----------------------
         Shape:   {}
         Volume:  {:.2f} mm^3"""
         return description.format(

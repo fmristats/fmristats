@@ -29,8 +29,8 @@ save to disk.
 
 """
 
-import warnings
-warnings.simplefilter(action='ignore', category=FutureWarning)
+#import warnings
+#warnings.simplefilter(action='ignore', category=FutureWarning)
 
 ########################################################################
 #

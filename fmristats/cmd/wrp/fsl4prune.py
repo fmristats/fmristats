@@ -1,4 +1,4 @@
-# Copyright 2016-2017 Thomas W. D. Möbius
+# Copyright 2016-2018 Thomas W. D. Möbius
 #
 # This file is part of fmristats.
 #
@@ -19,7 +19,7 @@
 
 """
 
-Prune
+Prune statistics field from non-brain areas
 
 """
 
@@ -29,37 +29,45 @@ Prune
 #
 ########################################################################
 
-import fmristats.cmd.hp as hp
+from ...epilog import epilog
+
+from ..api.fmriprune import add_arguments
 
 import argparse
 
-from ..api.fmriprune import create_argument_parser as cap
+def define_parser():
+    parser = argparse.ArgumentParser(
+            description=__doc__,
+            epilog=epilog)
 
-import argparse
+    parser = add_arguments(parser)
 
-def create_argument_parser():
-    parser = cap()
+    specific = parser.add_argument_group(
+        """Prune the statistics field with BET""")
 
-    parser.add_argument('--cmd-bet',
+    specific.add_argument('--cmd-bet',
             default='fsl5.0-bet',
             help="""FSL bet command. Must be in your path.""")
 
-    parser.add_argument('--variante',
+    specific.add_argument('--variante',
             default='R',
             help="""FSL bet command. Must be in your path.""")
 
-    parser.add_argument('--vb-file',
+    specific.add_argument('--vb-file',
             default='pruning/{0}-{1:04d}-{2}-{3}-{4}-{5}-intercept.nii.gz',
             help="""brain mask in image space.""")
 
-    parser.add_argument('--vb-mask',
+    specific.add_argument('--vb-mask',
             default='pruning/{0}-{1:04d}-{2}-{3}-{4}-{5}-mask.nii.gz',
             help="""brain mask in image space.""")
 
     return parser
 
+from ..api.fmristudy import add_study_arguments
+
 def cmd():
-    parser = create_argument_parser()
+    parser = define_parser()
+    add_study_arguments(parser)
     args = parser.parse_args()
     call(args)
 
@@ -71,24 +79,6 @@ cmd.__doc__ = __doc__
 #
 ########################################################################
 
-from ..df import get_df
-
-from ...load import load_result
-
-from ...name import Identifier
-
-from ...smodel import Result
-
-from ...study import Study
-
-from ...nifti import image2nii
-
-from ...fsl import bet
-
-import pandas as pd
-
-import datetime
-
 import sys
 
 import os
@@ -99,102 +89,113 @@ from multiprocessing.dummy import Pool as ThreadPool
 
 import numpy as np
 
-import nibabel as ni
+from ..api.fmristudy import get_study
+
+from ...lock import Lock
+
+from ...study import Study
+
+from ...fsl import bet
 
 ########################################################################
 
 def call(args):
 
-    ####################################################################
-    # Parse protocol
-    ####################################################################
+    study = get_study(args)
 
-    df = get_df(args, fall_back=args.fit)
-
-    if df is None:
+    if study is None:
+        print('No study found. Nothing to do.')
         sys.exit()
 
     ####################################################################
-    # Add file layout
+    # Options
     ####################################################################
 
-    layout = {
-        'stimulus':args.stimulus,
-        'session':args.session,
-        'reference_maps':args.reference_maps,
-        'result':args.fit,
-        'population_map':args.population_map,
-        'diffeomorphism_name':args.diffeomorphism_name,
-        'scale_type':args.scale_type,
+    force         = args.force_mask_overwrite
+    verbose       = args.verbose
+    threshold_df  = args.threshold
+    proportion_df = args.proportion
+
+    cmd_bet = args.cmd_bet
+    variante = args.variante
+
+    ####################################################################
+    # Create the iterator
+    ####################################################################
+
+    study.update_layout({
         'vb_file':args.vb_file,
         'vb_mask':args.vb_mask,
-        }
-
-    study = Study(df, df, layout=layout, strftime=args.strftime)
+        })
 
     study_iterator = study.iterate('result',
-            new=['result', 'vb_file', 'vb_mask'],
-            vb_name=args.vb_name,
-            diffeomorphism_name=args.diffeomorphism_name,
-            scale_type=args.scale_type)
+            new=['result', 'vb_file', 'vb_mask'])
+
+    df = study_iterator.df.copy()
 
     ####################################################################
     # Wrapper
     ####################################################################
 
-    def wm(result, vb_file, vb_mask, filename, name):
-            verbose        = args.verbose
-            threshold_df   = args.threshold
-            proportion_df  = args.proportion
-            cmd_bet        = args.cmd_bet
-            variante       = args.variante
+    def wm (result, vb_file, vb_mask, filename, name):
 
-            if verbose > 1:
-                print('{}: Description of the fit:'.format(name.name()))
-                print(result.describe())
-                print(result.population_map.describe())
+        if type(result) is Lock:
+            print('{}: Result file is locked. Still fitting?'.format(
+                name.name()))
+            return
 
-            gf = result.get_field('degrees_of_freedom')
+        if verbose > 2:
+            print("""{}: Description of the fit:
+                {}
+                {}""".format(name.name(), result.describe(),
+                    result.population_map.describe()))
 
-            if proportion_df:
-                threshold_df = int(proportion_df * np.nanmax(gf.data))
+        if hasattr(result.population_map, 'vb_mask') and not force:
+            print("""{}:
+            VB mask already present, force overwrite with --force""".format(
+                name.name()))
+            return
 
-            if verbose:
-                print('{}: Lower df threshold: {:d}'.format(name.name(), threshold_df))
+        gf = result.get_field('degrees_of_freedom')
 
-            inside = (gf.data >= threshold_df)
+        if proportion_df:
+            threshold_df = int(proportion_df * np.nanmax(gf.data))
 
-            intercept = result.get_field('intercept', 'point')
-            intercept.mask(inside)
-            intercept = intercept.round()
+        if verbose:
+            print('{}: Lower df threshold: {:d}'.format(name.name(), threshold_df))
 
-            if verbose:
-                print('{}: Fit brain mask'.format(name.name()))
+        inside = (gf.data >= threshold_df)
 
-            template = bet(
-                    intercept = intercept,
-                    intercept_file = vb_file,
-                    mask_file = vb_mask,
-                    cmd = cmd_bet,
-                    variante = variante,
-                    verbose = verbose)
+        intercept = result.get_field('intercept', 'point')
+        intercept.mask(inside)
+        intercept = intercept.round()
 
-            if template is None:
-                print('{}: Unable to bet'.format(name.name()))
-                return
+        if verbose:
+            print('{}: Fit brain mask'.format(name.name()))
 
-            result.population_map.set_vb_mask(gf.data >= threshold_df)
+        template = bet(
+                intercept = intercept,
+                intercept_file = vb_file,
+                mask_file = vb_mask,
+                cmd = cmd_bet,
+                variante = variante,
+                verbose = verbose)
 
-            result.population_map.vb_mask.name = 'FSL_BETTED_INTERCEPT'
+        if template is None:
+            print('{}: Unable to bet'.format(name.name()))
+            return
 
+        result.population_map.set_vb_mask(gf.data >= threshold_df)
+
+        result.population_map.vb_mask.name = 'FSL_BETTED_INTERCEPT'
+
+        try:
             if verbose:
                 print('{}: Save: {}'.format(name.name(), filename))
-
-            try:
-                result.save(filename)
-            except Exception as e:
-                print('{}: Unable to write: {}'.format(name.name(), filename))
-                print('{}: Exception: {}'.format(name.name(), e))
+            result.save(filename)
+        except Exception as e:
+            print('{}: Unable to write: {}, {}'.format(name.name(),
+                filename, e))
 
     ###################################################################
 
@@ -230,3 +231,17 @@ def call(args):
                     wm(result, vb_file, vb_mask, filename, name)
         finally:
             pass
+
+    ####################################################################
+    # Write study to disk
+    ####################################################################
+
+    if args.out is not None:
+        if args.verbose:
+            print('Save: {}'.format(args.out))
+
+        dfile = os.path.dirname(args.out)
+        if dfile and not isdir(dfile):
+           os.makedirs(dfile)
+
+        study.save(args.out)
