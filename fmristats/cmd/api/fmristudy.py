@@ -1,4 +1,4 @@
-# Copyright 2016-2017 Thomas W. D. Möbius
+# Copyright 2016-2018 Thomas W. D. Möbius
 #
 # This file is part of fmristats.
 #
@@ -94,21 +94,33 @@ def add_study_arguments(parser):
         help="""Path to a result file or template for such a file""")
 
     study_parser.add_argument('--strftime',
-        help="""Format of date and time""")
+        help="""Format string of date and time. Convert time to string
+        according to this format specification.""")
 
     study_parser.add_argument('--cohort',
-        help="""Cohort to be processed.""")
+        help = """Only use entries which belong to this cohort. If no
+        study or protocol file is given, then this is the name of the
+        cohort of the subject.""")
 
     study_parser.add_argument('--id',
         type=int,
         nargs='+',
-        help="""ID of the subject to be processed.""")
+        help = """Only process entries which belong to this subject ID.
+        If no study or protocol file is given, then this is the id of
+        the subject in its cohort.""")
 
     study_parser.add_argument('--datetime',
-        help="""Datetime""")
+        help = """Only use entries which are stamped with this date and
+        time. If no study or protocol file is given, then this is the
+        date and time of the FMRI session of the subject.""")
 
     study_parser.add_argument('--paradigm',
-        help="""Stimulus design to be processed.""")
+        help = """Only use entries which belong to this stimulus design.
+        The name of the stimulus will appear as part of the default file
+        names produced by various fmristats command line tools. Unless
+        you are planing to provide custom file names to all of
+        fmristats' command line tools, try not to use any special
+        characters in this name.""")
 
     study_parser.add_argument('--vb-image',
         help="""A template in standard space""")
@@ -148,11 +160,16 @@ def add_study_arguments(parser):
 
     study_parser.add_argument('--scale-type',
         default='max',
-        choices=['diagonal','max','min'],
-        help="""Scale type""")
+        #choices=['diagonal','max','min'],
+        help="""May be any string but special keywords are reserved:
+        diagonal, max, and min. If SCALE_TYPE is `diagonal`, then SCALE
+        (in fmrifit) is set to one half of the length of the diagonal of
+        the orthorhombic measure lattice.  If SCALE_TYPE is `min` (or
+        `max`), then SCALE is one half of the minimal (or maximal) edge
+        length of the orthorhombic measure lattice.""")
 
     study_parser.add_argument('-o', '--out',
-            help="""Save possibly modified study instance to OUT.""")
+        help="""Save possibly modified study instance to OUT.""")
 
 from ...epilog import epilog
 
@@ -416,8 +433,6 @@ def get_study(args):
         'reference_maps':args.reference_maps,
         'result':args.fit,
         'population_map':args.population_map,
-        'diffeomorphism':args.diffeomorphism,
-        'scale_type':args.scale_type,
         }
 
     if (study is None) or single_subject:
@@ -427,6 +442,8 @@ def get_study(args):
                 vb = vb,
                 vb_background = vb_background,
                 vb_ati = vb_ati,
+                diffeomorphism = args.diffeomorphism,
+                scale_type = args.scale_type,
                 file_layout=file_layout,
                 strftime=args.strftime,
                 root_dir = args.root_directory,
@@ -444,6 +461,10 @@ def get_study(args):
             study.vb_background = vb_background
         if vb_ati is not None:
             study.vb_ati = vb_ati
+        if args.scale_type is not None:
+            study.scale_type = args.scale_type
+        if args.diffeomorphism is not None:
+            study.diffeomorphism = args.diffeomorphism
 
     study.filter(cohort=args.cohort, j=args.id, paradigm=args.paradigm, inplace=True)
 

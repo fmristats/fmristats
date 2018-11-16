@@ -95,12 +95,12 @@ class Study:
             vb=None,
             vb_background=None,
             vb_ati=None,
+            diffeomorphism=None,
+            scale_type=None,
             file_layout=None,
             strftime=None,
             root_dir=None,
             single_subject=False,
-            diffeomorphism_name=None,
-            scale_type=None,
             ):
         """
         Parameters
@@ -129,7 +129,7 @@ class Study:
             multiple subject is used. If True, a default file layout for
             a single subject analysis is used. If string, then the
             string is used.
-        diffeomorphism_name : str or None
+        diffeomorphism : str or None
             Name or type of the family of diffeomorphisms that will map
             from standard space to the respective subjects.
         scale_type : str or float
@@ -149,7 +149,7 @@ class Study:
         self.vb_background   = vb_background
         self.vb_ati          = vb_ati
 
-        self.diffeomorphism_name = diffeomorphism_name
+        self.diffeomorphism = diffeomorphism_name
         self.scale_type = scale_type
 
         if root_dir is None:

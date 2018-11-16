@@ -46,7 +46,7 @@ def define_parser():
     specific = parser.add_argument_group(
         """Creating a standard space isometric to the reference space.""")
 
-    specific.add_argument('--diffeomorphism-type',
+    specific.add_argument('--diffeomorphism-nb',
         default='reference',
         choices=['reference', 'scanner', 'scan_cycle', 'fit'],
         help="""Type of diffeomorphism.""")
@@ -190,9 +190,9 @@ def call(args):
     skip              = args.skip
     verbose           = args.verbose
 
-    diffeomorphism_type = args.diffeomorphism_type
-    resolution          = args.resolution
-    cycle               = args.cycle
+    diffeomorphism_nb = args.diffeomorphism_nb
+    resolution        = args.resolution
+    cycle             = args.cycle
 
     def wm(index, name, session, reference_maps, population_map, result,
             file_population_map):
@@ -234,7 +234,7 @@ def call(args):
         # Create population map instance from a session instance
         ####################################################################
 
-        if (diffeomorphism_type == 'scanner') or (diffeomorphism_type == 'reference'):
+        if (diffeomorphism_nb == 'scanner') or (diffeomorphism_nb == 'reference'):
 
             if session is None:
                 print('{}: No session found'.format(name.name()))
@@ -242,7 +242,7 @@ def call(args):
                 lock.conditional_unlock(df, index, verbose)
                 return
 
-            if diffeomorphism_type == 'scanner':
+            if diffeomorphism_nb == 'scanner':
                 population_map = pmap_scanner(session=session)
                 if verbose:
                     print("""{}:
@@ -250,7 +250,7 @@ def call(args):
                     scanner (with native resolution)""".format(
                     name.name()))
 
-            if diffeomorphism_type == 'reference':
+            if diffeomorphism_nb == 'reference':
                 population_map = pmap_reference(session=session, resolution=resolution)
                 if verbose:
                     print("""{}:
@@ -263,7 +263,7 @@ def call(args):
         # map instance
         ####################################################################
 
-        elif (diffeomorphism_type == 'scan_cycle'):
+        elif (diffeomorphism_nb == 'scan_cycle'):
 
             if (session is None) or (reference_maps is None) or (cycle is None):
                 print('{}: No session or reference maps found or CYCLE not defined'.format(name.name()))
@@ -321,7 +321,7 @@ def call(args):
         # Create population map instance from a result instance
         ####################################################################
 
-        elif (diffeomorphism_type == 'fit'):
+        elif (diffeomorphism_nb == 'fit'):
 
             if result is None:
                 print('{}: No fit found'.format(name.name()))
