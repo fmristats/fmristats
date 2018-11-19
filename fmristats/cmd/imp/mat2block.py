@@ -1,4 +1,4 @@
-# Copyright 2016-2017 Thomas W. D. Möbius
+# Copyright 2016-2018 Thomas W. D. Möbius
 #
 # This file is part of fmristats.
 #
@@ -19,7 +19,7 @@
 
 """
 
-Will convert MATLAB coded logfiles to stimulus instances for fmristats
+Create a block stimulus instances from MATLAB coded logfiles
 
 """
 
@@ -29,101 +29,86 @@ Will convert MATLAB coded logfiles to stimulus instances for fmristats
 #
 ########################################################################
 
-import fmristats.cmd.hp as hp
+from ...epilog import epilog
 
 import argparse
 
-def create_argument_parser():
+def define_parser():
     parser = argparse.ArgumentParser(
             description=__doc__,
-            epilog=hp.epilog)
+            epilog=epilog)
 
-########################################################################
-# Input arguments
-########################################################################
+    ####################################################################
+    # Specific arguments
+    ####################################################################
 
-    parser.add_argument('--mat',
+    specific = parser.add_argument_group(
+            """Setup of a two-block stimulus design""")
+
+    specific.add_argument('--mat',
             default='../raw/mat/{2}/{0}-{1:04d}-{2}-{3}.mat',
-            help='input file;' + hp.mat)
+            help = """A Matlab coded stimulus design""")
 
-########################################################################
-# Output arguments
-########################################################################
+    ####################################################################
+    # File handling
+    ####################################################################
 
-    parser.add_argument('--stimulus',
-            default='../data/irr/{2}/{0}-{1:04d}-{2}-{3}.irr',
-            help='input file;' + hp.stimulus)
+    file_handling = parser.add_argument_group(
+            """File handling""")
 
-    parser.add_argument('-o' , '--protocol-log',
-            default='logs/{}-mat2irr.pkl',
-            help=hp.protocol_log)
+    lock_handling = file_handling.add_mutually_exclusive_group()
 
-########################################################################
-# Arguments specific for using the protocol API
-########################################################################
-
-    parser.add_argument('--protocol',
-            help=hp.protocol)
-
-    parser.add_argument('--cohort',
-            help=hp.cohort)
-
-    parser.add_argument('--id',
-            type=int,
-            nargs='+',
-            help=hp.j)
-
-    parser.add_argument('--datetime',
-            help=hp.datetime)
-
-    parser.add_argument('--paradigm',
-            help=hp.paradigm)
-
-    parser.add_argument('--strftime',
-            default='%Y-%m-%d-%H%M',
-            help=hp.strftime)
-
-########################################################################
-# Miscellaneous
-########################################################################
-
-    lock_handling = parser.add_mutually_exclusive_group()
-
-    lock_handling.add_argument('--remove-lock',
+    lock_handling.add_argument('-r', '--remove-lock',
             action='store_true',
-            help=hp.remove_lock.format('population space'))
+            help="""Remove lock, if file is locked. This is useful, if
+            used together with -s/--skip to remove orphan locks.""")
 
-    lock_handling.add_argument('--ignore-lock',
+    lock_handling.add_argument('-i', '--ignore-lock',
             action='store_true',
-            help=hp.ignore_lock.format('population space'))
+            help="""Ignore lock, if file is locked. Together with
+            -s/--skip this will also remove orphan locks.""")
 
-    file_handling = parser.add_mutually_exclusive_group()
+    skip_force = file_handling.add_mutually_exclusive_group()
 
-    file_handling.add_argument('-f', '--force',
+    skip_force.add_argument('-f', '--force',
             action='store_true',
-            help=hp.force.format('population space'))
+            help="""Force re-writing any files""")
 
-    file_handling.add_argument('-s', '--skip',
+    skip_force.add_argument('-s', '--skip',
             action='store_true',
-            help=hp.skip.format('population space'))
+            help="""Do not perform any calculations.""")
 
-    parser.add_argument('-v', '--verbose',
+    ####################################################################
+    # Verbosity
+    ####################################################################
+
+    control_verbosity  = parser.add_argument_group(
+            """Control the level of verbosity""")
+
+    control_verbosity.add_argument('-v', '--verbose',
             action='count',
             default=0,
-            help=hp.verbose)
+            help="""Increase output verbosity""")
 
-########################################################################
-# Multiprocessing
-########################################################################
+    ####################################################################
+    # Multiprocessing
+    ####################################################################
 
-    parser.add_argument('-j', '--cores',
+    control_multiprocessing  = parser.add_argument_group(
+            """Multiprocessing""")
+
+    control_multiprocessing.add_argument('-j', '--cores',
             type=int,
-            help=hp.cores)
+            help="""Number of cores to use. Default is the number of
+            cores on the machine.""")
 
     return parser
 
+from ..api.fmristudy import add_study_arguments
+
 def cmd():
-    parser = create_argument_parser()
+    parser = define_parser()
+    add_study_arguments(parser)
     args = parser.parse_args()
     call(args)
 
@@ -135,26 +120,6 @@ cmd.__doc__ = __doc__
 #
 ########################################################################
 
-from ..df import get_df
-
-from ...lock import Lock
-
-from ...load import load_block_stimulus
-
-from ...name import Identifier
-
-from ...protocol import layout_dummy
-
-from ...stimulus import Block
-
-from ...matlab import mat2block
-
-import scipy.io
-
-import pandas as pd
-
-import datetime
-
 import sys
 
 import os
@@ -163,75 +128,145 @@ from os.path import isfile, isdir, join
 
 from multiprocessing.dummy import Pool as ThreadPool
 
+import numpy as np
+
+import scipy.io
+
+from ..api.fmristudy import get_study
+
+from ...lock import Lock
+
+from ...name import Identifier
+
+from ...study import Study
+
+from ...stimulus import Block
+
+from ...matlab import mat2block
+
 ########################################################################
 
 def call(args):
-    output = args.protocol_log.format(
-            datetime.datetime.now().strftime('%Y-%m-%d-%H%M'))
 
-    if args.strftime == 'short':
-        args.strftime = '%Y-%m-%d'
+    study = get_study(args)
 
-    ####################################################################
-    # Parse protocol
-    ####################################################################
-
-    df = get_df(args)
-
-    if df is None:
-        sys.exit()
+    if study is None:
+        print('No study found. Nothing to do.')
+        return
 
     ####################################################################
-    # Add file layout
+    # Options
     ####################################################################
 
-    df_layout = df.copy()
-
-    layout_dummy(df_layout, 'mat',
-            template=args.mat,
-            strftime=args.strftime
-            )
-
-    layout_dummy(df_layout, 'file',
-            template=args.stimulus,
-            strftime=args.strftime
-            )
+    remove_lock       = args.remove_lock
+    ignore_lock       = args.ignore_lock
+    force             = args.force
+    skip              = args.skip
+    verbose           = args.verbose
 
     ####################################################################
-    # Apply wrapper
+    # Create the iterator
     ####################################################################
+
+    study.update_layout({'mat':args.mat})
+
+    study_iterator = study.iterate('stimulus',
+            new=['stimulus', 'mat'],
+            integer_index=True)
+
+    df = study_iterator.df.copy()
 
     df['locked'] = False
 
-    def wm(r):
-        name = Identifier(cohort=r.cohort, j=r.id, datetime=r.date, paradigm=r.paradigm)
+    ####################################################################
+    # Wrapper
+    ####################################################################
+
+    def wm(index, stimulus, file_stimulus, file_mat, name):
+
+        if type(stimulus) is Lock:
+            if remove_lock or ignore_lock:
+                if verbose:
+                    print('{}: Remove lock'.format(name.name()))
+                stimulus.unlock()
+                if remove_lock:
+                    return
+            else:
+                if verbose:
+                    print('{}: Locked'.format(name.name()))
+                return
+
+        if stimulus is not None and not force:
+            if verbose:
+                print('{}: Stimulus already exists. Use -f/--force to overwrite'.format(name.name()))
+            return
+
+        if skip:
+            return
+
+        if verbose:
+            print('{}: Lock: {}'.format(name.name(), file_stimulus))
+
+        lock = Lock(name, 'fmriblock', file_stimulus)
+        df.ix[index, 'locked'] = True
+
+        dfile = os.path.dirname(file_stimulus)
+        if dfile and not isdir(dfile):
+           os.makedirs(dfile)
+
+        lock.save(file_stimulus)
+
+        ####################################################################
+        # Load MATLAB instance from disk
+        ####################################################################
 
         try:
-            dfile = os.path.dirname(r.file)
-            if dfile and not isdir(dfile):
-                os.makedirs(dfile)
+            mat = scipy.io.loadmat(file_mat)
+            if verbose:
+                print('{}: Read: {}'.format(name.name(), file_mat))
         except Exception as e:
-            print('{}: {}'.format(name.name(), e))
+            df.ix[index,'valid'] = False
+            print('{}: Unable to read: {}, {}'.format(name.name(),
+                file_mat, e))
 
-        wrapper(name              = name,
-                df                = df,
-                index             = r.Index,
-                remove_lock       = args.remove_lock,
-                ignore_lock       = args.ignore_lock,
-                force             = args.force,
-                skip              = args.skip,
-                verbose           = args.verbose,
-                file              = r.file,
+        if lock.conditional_unlock(df, index, verbose):
+            df.ix[index,'valid'] = False
+            return
 
-                file_mat          = r.mat,
-                )
+        ####################################################################
+        # Create stimulus instance
+        ####################################################################
 
-    it =  df_layout.itertuples()
+        try:
+            stimulus = mat2block(mat, name=name)
 
-    if len(df_layout) > 1 and ((args.cores is None) or (args.cores > 1)):
+            if verbose:
+                print('{}: Save {}'.format(name.name(), file_stimulus))
+
+            stimulus.save(file_stimulus)
+            df.ix[index,'locked'] = False
+
+        except Exception as e:
+            df.ix[index,'valid'] = False
+            print('{}: Unable to create: {}, {}'.format(name.name(),
+                file_stimulus, e))
+            lock.conditional_unlock(df, index, verbose, True)
+            return
+
+        return
+
+    ####################################################################
+
+    if len(df) > 1 and ((args.cores is None) or (args.cores > 1)):
         try:
             pool = ThreadPool(args.cores)
-            results = pool.map(wm, it)
+            for index, name, files, instances in study_iterator:
+                stimulus = instances['stimulus']
+                file_stimulus = files['stimulus']
+                file_mat = files['mat']
+                pool.apply_async(wm, args=(index, stimulus,
+                    file_stimulus, file_mat, name))
+
             pool.close()
             pool.join()
         except Exception as e:
@@ -240,112 +275,39 @@ def call(args):
             print('Pool execution has been terminated')
             print(e)
         finally:
-            files = df_layout.ix[df.locked, 'file'].values
+            files = df.ix[df.locked, 'stimulus'].values
             if len(files) > 0:
                 for f in files:
                     print('Unlock: {}'.format(f))
                     os.remove(f)
-            del df['locked']
     else:
         try:
             print('Process protocol entries sequentially')
-            for r in it:
-                wm(r)
+            for index, name, files, instances in study_iterator:
+                stimulus = instances['stimulus']
+                file_stimulus = files['stimulus']
+                file_mat = files['mat']
+                wm(index, stimulus, file_stimulus, file_mat, name)
         finally:
-            files = df_layout.ix[df.locked, 'file'].values
+            files = df.ix[df.locked, 'stimulus'].values
             if len(files) > 0:
                 for f in files:
                     print('Unlock: {}'.format(f))
                     os.remove(f)
-            del df['locked']
 
     ####################################################################
-    # Write protocol
+    # Write study to disk
     ####################################################################
 
-    if args.verbose:
-        print('Save: {}'.format(output))
+    if args.out is not None:
+        if args.epi_code is None:
+            print('Warning: study protocol has not been equipped with a valid EPI code')
 
-    dfile = os.path.dirname(output)
-    if dfile and not isdir(dfile):
-       os.makedirs(dfile)
+        if args.verbose:
+            print('Save: {}'.format(args.out))
 
-    df.to_pickle(output)
+        dfile = os.path.dirname(args.out)
+        if dfile and not isdir(dfile):
+           os.makedirs(dfile)
 
-########################################################################
-
-def wrapper(name, df, index, remove_lock, ignore_lock, force, skip,
-        verbose, file, file_mat):
-
-    if isfile(file):
-        instance = load_block_stimulus(file, name, df, index, verbose)
-        if type(instance) is Lock:
-            if remove_lock or ignore_lock:
-                if verbose:
-                    print('{}: Remove lock'.format(name.name()))
-                instance.unlock()
-                if remove_lock:
-                    return
-            else:
-                if verbose:
-                    print('{}: Locked'.format(name.name()))
-                return
-        else:
-            if df.ix[index,'valid'] and not force:
-                if verbose:
-                    print('{}: Valid'.format(name.name()))
-                return
-            else:
-                if skip:
-                    if verbose:
-                        print('{}: Invalid'.format(name.name()))
-                    return
-
-    if skip:
-        return
-
-    if verbose:
-        print('{}: Lock: {}'.format(name.name(), file))
-
-    lock = Lock(name, 'fmrifit', file)
-    df.ix[index, 'locked'] = True
-    lock.save(file)
-    df.ix[index,'valid'] = True
-
-    ####################################################################
-    # Load MATLAB instance from disk
-    ####################################################################
-
-    try:
-        mat = scipy.io.loadmat(file_mat)
-        if verbose:
-            print('{}: Read: {}'.format(name.name(), file_mat))
-    except Exception as e:
-        df.ix[index,'valid'] = False
-        print('{}: Unable to read: {}'.format(name.name(), file_mat))
-        print('{}: Exception: {}'.format(name.name(), e))
-
-    if lock.conditional_unlock(df, index, verbose):
-        return
-
-    ####################################################################
-    # Create stimulus instance
-    ####################################################################
-
-    try:
-        irr = mat2block(mat, name=name)
-
-        if verbose:
-            print('{}: Save {}'.format(name.name(), file))
-
-        irr.save(file)
-        df.ix[index,'locked'] = False
-
-    except Exception as e:
-        df.ix[index,'valid'] = False
-        print('{}: Unable to create: {}'.format(name.name(), file))
-        print('{}: Exception: {}'.format(name.name(), e))
-        lock.conditional_unlock(df, index, verbose, True)
-        return
-
-    return
+        study.save(args.out)

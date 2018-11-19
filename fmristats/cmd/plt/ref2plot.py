@@ -200,9 +200,8 @@ def call(args):
     if directory and not isdir(directory):
        os.makedirs(directory)
 
-    pt.ioff()
-
     def wm(name, reference_maps):
+        pt.ioff()
 
         if (grubbs is not None) and (not np.isclose(grubbs, 1)):
             if verbose:
@@ -331,11 +330,10 @@ def call(args):
     if len(df) > 1 and ((args.cores is None) or (args.cores > 1)):
         try:
             pool = ThreadPool(args.cores)
-            for name, files, instances in study_iterator:
+            for name, instances in study_iterator:
                 reference_maps  = instances['reference_maps']
-                wm
-                pool.apply_async(wm, args=(name, reference_maps))
-
+                if reference_maps is not None:
+                    pool.apply_async(wm, args=(name, reference_maps))
             pool.close()
             pool.join()
         except Exception as e:
@@ -350,7 +348,8 @@ def call(args):
             print('Process protocol entries sequentially')
             for name, instances in study_iterator:
                 reference_maps = instances['reference_maps']
-                wm(name, reference_maps)
+                if reference_maps is not None:
+                    wm(name, reference_maps)
         finally:
             pass
 

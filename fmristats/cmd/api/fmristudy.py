@@ -164,13 +164,11 @@ def add_study_arguments(parser):
         standard space""")
 
     study_parser.add_argument('--diffeomorphism',
-        default='identity',
         help="""Name of the diffeomorphism that maps between standard
         space and subject reference space.""")
 
     study_parser.add_argument('--scale-type',
-        default='max',
-        #choices=['diagonal','max','min'],
+        choices=['diagonal','max','min'],
         help="""May be any string but special keywords are reserved:
         diagonal, max, and min. If SCALE_TYPE is `diagonal`, then SCALE
         (in fmrifit) is set to one half of the length of the diagonal of
@@ -252,6 +250,7 @@ def get_study(args):
             if args.vb_name is not None:
                 vb.name = args.vb_name
         except Exception as e:
+            vb = None
             print('Unable to read --vb-image: {}'.format(args.vb_image))
             print('Using fallback --vb-nii: {}'.format(e))
     elif args.vb_nii:
@@ -274,6 +273,7 @@ def get_study(args):
             if args.vb_background_name is not None:
                 vb.name = args.vb_background_name
         except Exception as e:
+            vb_background = None
             print('Unable to read --vb-background-image: {}'.format(args.vb_background_image))
             print('Using fallback --vb-background-nii: {}'.format(e))
     elif args.vb_background_nii:
@@ -296,6 +296,7 @@ def get_study(args):
             if args.vb_ati_name is not None:
                 vb.name = args.vb_ati_name
         except Exception as e:
+            vb_ati = None
             print('Unable to read --vb-ati-image: {}'.format(args.vb_ati_image))
             print('Using fallback --vb-ati-nii: {}'.format(e))
     elif args.vb_ati_nii:
@@ -453,8 +454,8 @@ def get_study(args):
                 diffeomorphism = args.diffeomorphism,
                 scale_type = args.scale_type,
                 file_layout=file_layout,
-                strftime=args.strftime,
                 root_dir = args.root_directory,
+                strftime = args.strftime,
                 single_subject=single_subject)
 
     else:
@@ -489,6 +490,10 @@ def get_study(args):
                 print('Set (or reset) diffeomorphism to: {}'.format(
                     args.diffeomorphism))
             study.diffeomorphism = args.diffeomorphism
+        if args.strftime is not None:
+            if args.verbose > 1:
+                print('Set (or reset) strftime to: {}'.format(
+                    args.strftime))
 
     if args.protocol_update:
         for upfile in args.protocol_update:

@@ -105,7 +105,7 @@ def call(args):
 
     if study is None:
         print('No study found. Nothing to do.')
-        sys.exit()
+        return
 
     ####################################################################
     # Options

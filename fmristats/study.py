@@ -98,8 +98,8 @@ class Study:
             diffeomorphism=None,
             scale_type=None,
             file_layout=None,
-            strftime=None,
             root_dir=None,
+            strftime=None,
             single_subject=False,
             ):
         """
@@ -149,9 +149,6 @@ class Study:
         self.vb_background   = vb_background
         self.vb_ati          = vb_ati
 
-        self.diffeomorphism = diffeomorphism
-        self.scale_type = scale_type
-
         if root_dir is None:
             self.root_dir = ''
         else:
@@ -163,33 +160,41 @@ class Study:
                 'session'        : '{0}-{1:04d}-{2}-{3}.ses',
                 'reference_maps' : '{0}-{1:04d}-{2}-{3}.ref',
                 'population_map' : '{0}-{1:04d}-{2}-{3}-{4}.pop',
-                'result'         : '{0}-{1:04d}-{2}-{3}-{4}.fit',
-                'strftime'       : '%Y-%m-%d-%H%M'}
+                'result'         : '{0}-{1:04d}-{2}-{3}-{4}.fit'}
         elif type(single_subject) is str:
             self.file_layout = {
                 'stimulus'       : single_subject + '.stm',
                 'session'        : single_subject + '.ses',
                 'reference_maps' : single_subject + '.ref',
                 'population_map' : single_subject + '.pop',
-                'result'         : single_subject + '.fit',
-                'strftime'       : '%Y-%m-%d-%H%M'}
+                'result'         : single_subject + '.fit'}
         else:
             self.file_layout = {
-                'stimulus'       : 'data/irr/{2}/{0}-{1:04d}-{2}-{3}.stm',
+                'stimulus'       : 'data/stm/{2}/{0}-{1:04d}-{2}-{3}.stm',
                 'session'        : 'data/ses/{2}/{0}-{1:04d}-{2}-{3}.ses',
                 'reference_maps' : 'data/ref/{2}/{0}-{1:04d}-{2}-{3}.ref',
                 'population_map' : 'data/pop/{2}/{4}/{5}/{0}-{1:04d}-{2}-{3}-{4}.pop',
-                'result'         : 'data/fit/{2}/{4}/{5}/{6}/{0}-{1:04d}-{2}-{3}-{4}.fit',
-                'strftime'       : '%Y-%m-%d-%H%M'}
+                'result'         : 'data/fit/{2}/{4}/{5}/{6}/{0}-{1:04d}-{2}-{3}-{4}.fit'}
 
         if file_layout is not None:
             self.update_layout(file_layout)
 
-        if strftime == 'short':
-            strftime = '%Y-%m-%d'
+        if strftime is None:
+            self.strftime='%Y-%m-%d-%H%M'
+        elif strftime == 'short':
+            self.strftime = '%Y-%m-%d'
+        else:
+            self.strftime = strftime
 
-        if strftime is not None:
-            self.file_layout.update({'strftime' : strftime})
+        if scale_type is None:
+            self.scale_type = 'max'
+        else:
+            self.scale_type = scale_type
+
+        if diffeomorphism is None:
+            self.diffeomorphism = 'identity'
+        else:
+            self.diffeomorphism = diffeomorphism
 
     def update_layout(self, file_layout):
         """
@@ -265,18 +270,25 @@ class Study:
             else:
                 scale_type = 'undefined'
 
-        protocol = self.protocol[self.protocol.valid == True].copy()
+        df = self.protocol[self.protocol.valid == True].copy()
 
         if self.covariates is not None:
-            covariates = self.covariates[self.covariates.valid == True]
+            covariates = self.covariates
+            old_index_names = df.index.names
+            df.reset_index(inplace=True)
 
-            df = (protocol.join(up, on=['cohort', 'id'], lsuffix='_')
+            df = (df.join(covariates, on=['cohort', 'id'], lsuffix='_')
                     .assign(valid=lambda x: x.valid.fillna(False))
                     .assign(valid=lambda x: x.valid & x.valid_)
                     .drop('valid_', axis=1))
+
+            df.set_index(old_index_names, inplace=True)
+            df.valid = df.valid.astype(bool)
+
         else:
             df = protocol.copy()
 
+        df = df[df.valid == True].copy()
         df.reset_index(inplace=True)
 
         for key in keys:
@@ -285,7 +297,7 @@ class Study:
                             r.cohort,
                             r.id,
                             r.paradigm,
-                            r.date.strftime(self.file_layout['strftime']),
+                            r.date.strftime(self.strftime),
                             vb_name,
                             diffeomorphism_name,
                             scale_type))
@@ -299,7 +311,7 @@ class Study:
                                 r.cohort,
                                 r.id,
                                 r.paradigm,
-                                r.date.strftime(self.file_layout['strftime']),
+                                r.date.strftime(self.strftime),
                                 vb_name,
                                 diffeomorphism_name,
                                 scale_type))
