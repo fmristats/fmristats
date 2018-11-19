@@ -138,45 +138,47 @@ def print_info(x, f):
         print('{}: sample file'.format(f))
         print(x.describe())
 
+    def data_frame_information(x):
+        print('First five entries:\n{}\n\nNumber of entries: {:d}\n'.format(
+            x.head(), len(x)))
+
+        try:
+            valid = x.groupby(['cohort','paradigm']).valid.agg(
+                    ['sum', 'mean', 'count'])
+        except:
+            try:
+                valid = x.groupby(['cohort', 'sex']).valid.agg(
+                        ['sum', 'mean', 'count'])
+            except:
+                valid = x.groupby(['cohort']).valid.agg(
+                        ['sum', 'mean', 'count'])
+
+        valid['sum'] = valid['sum'].astype(int)
+        valid['count'] = valid['count'].astype(int)
+
+        #valid['mean'] = valid['mean'].astype(float)
+        #valid['mean'] = ['{:.2f}'.format(m) for m in valid['mean']]
+
+        valid.rename(
+                columns={'sum':'valid', 'count':'total'},
+                inplace=True)
+
+        print('Number of valid entries:\n{}\n'.format(
+            valid[['valid', 'total']]))
+
     if type(x) is Study:
         print('{}: study file'.format(f))
-        print(x.protocol.head())
+        print('Protocol:')
+        data_frame_information(x.protocol)
+        if x.covariates is None:
+            print('Covariates: none')
+        else:
+            print('Covariates:')
+        data_frame_information(x.covariates)
 
-        if x.covariates is not None:
-            print(x.covariates.head())
-
+        print('file layout:')
         print(x.file_layout)
 
     if type(x) is DataFrame:
-        if 'id' in x.columns:
-            del x['id']
-
-        if 'date' in x.columns:
-            del x['date']
-
-        if 'cohort' in x.columns:
-            del x['cohort']
-            #x.cohort.cat.remove_unused_categories(inplace=True)
-            if 'valid' in x.columns:
-                if 'paradigm' in x.columns:
-                    del x['paradigm']
-                    #x.paradigm.cat.remove_unused_categories(inplace=True)
-                    valid = x.groupby(['cohort','paradigm','valid']).epi.agg(['count'])
-                else:
-                    valid = x.groupby(['cohort','valid']).epi.agg(['count'])
-        else:
-            valid = None
-
-        print("""{}: protocol file
-
-No. of entries: {:d}
-
-First five entries:
-{}
-
-Data types:
-{}
-
-Valid entries:
-{}""".format(f, len(x), x.head(), x.dtypes, valid))
-
+        print('{}: protocol or covariates file:\n'.format(f))
+        data_frame_information(x)

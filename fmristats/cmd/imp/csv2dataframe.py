@@ -19,7 +19,7 @@
 
 """
 
-Converts a csv-file to a covariate file
+Converts a csv-file to a protocol or covariate file
 
 """
 
@@ -29,25 +29,30 @@ Converts a csv-file to a covariate file
 #
 ########################################################################
 
-import fmristats.cmd.hp as hp
+from ...epilog import epilog
 
 import argparse
 
 def create_argument_parser():
     parser = argparse.ArgumentParser(
             description=__doc__,
-            epilog=hp.epilog)
+            epilog=epilog)
 
     parser.add_argument('csv', help="""csv file""")
 
     parser.add_argument('output', help="""output file""")
+
+    parser.add_argument('--strftime',
+        default='%Y-%m-%d-%H%M',
+        help="""Format string of date and time. Convert time to string
+        according to this format specification.""")
 
     return parser
 
 def cmd():
     parser = create_argument_parser()
     args = parser.parse_args()
-    call(args)
+    call(args, True)
 
 cmd.__doc__ = __doc__
 
@@ -61,21 +66,53 @@ import pandas as pd
 
 ########################################################################
 
-def call(args):
+def call(args, drop):
     df = pd.read_csv(args.csv,
             dtype={
                 'cohort':str,
                 'id':int,
+                'paradigm':str,
+                'date':str,
+                'epi':int,
                 'valid':bool})
 
-    df.set_index(keys=['cohort', 'id'],
-            inplace=True,
-            verify_integrity=True,
-            drop=False)
-
-    df['cohort'] = df.cohort.astype('category')
+    if args.strftime == 'short':
+        args.strftime = '%Y-%m-%d'
 
     if not hasattr(df, 'valid'):
         df['valid'] = True
+
+    if 'date' in df.columns:
+        df['date'] = pd.to_datetime(df.date, format=args.strftime)
+        df.set_index(
+                keys=['cohort', 'id', 'paradigm', 'date'],
+                drop=drop,
+                inplace=True,
+                verify_integrity=True)
+        df.sort_index(inplace=True)
+        if not drop:
+            df.cohort = df.cohort.astype('category')
+            df.paradigm = df.paradigm.astype('category')
+
+    elif 'paradigm' in df.columns:
+        df.set_index(
+                keys=['cohort', 'id', 'paradigm'],
+                drop=drop,
+                inplace=True,
+                verify_integrity=True)
+        df.sort_index(inplace=True)
+        if not drop:
+            df.cohort = df.cohort.astype('category')
+            df.paradigm = df.paradigm.astype('category')
+
+    else:
+        df.set_index(
+                keys=['cohort', 'id'],
+                drop=drop,
+                inplace=True,
+                verify_integrity=True)
+        df.sort_index(inplace=True)
+        if not drop:
+            df.cohort = df.cohort.astype('category')
 
     df.to_pickle(args.output)

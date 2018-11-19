@@ -47,11 +47,10 @@ setup(
             'ants4pop   = fmristats.cmd.wrp.ants4pop:cmd',
 
             # import from third party formats
-            'mat2block = fmristats.cmd.imp.mat2block:cmd',
-            'nii2image = fmristats.cmd.imp.nii2image:cmd',
-            'nii2session = fmristats.cmd.imp.nii2session:cmd',
-            'csv2protocol = fmristats.cmd.imp.csv2protocol:cmd_pkl',
-            'csv2covariate = fmristats.cmd.imp.csv2protocol:cmd_cov',
+            'mat2block     = fmristats.cmd.imp.mat2block:cmd',
+            'nii2image     = fmristats.cmd.imp.nii2image:cmd',
+            'nii2session   = fmristats.cmd.imp.nii2session:cmd',
+            'csv2dataframe = fmristats.cmd.imp.csv2dataframe:cmd',
 
             # plot
             'fit2plot = fmristats.cmd.plt.fit2plot:cmd',
