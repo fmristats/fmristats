@@ -239,7 +239,7 @@ def get_study(args):
     if args.vb_image:
         try:
             if args.verbose:
-                print('Read: {}'.format(args.vb_image))
+                print('Read (vb): {}'.format(args.vb_image))
             vb = load(args.vb_image)
             if args.vb_name is not None:
                 vb.name = args.vb_name
@@ -261,8 +261,8 @@ def get_study(args):
     if args.vb_background_image:
         try:
             if args.verbose:
-                print('Read: {}'.format(args.vb_background_image))
-            vb = load(args.vb_background_image)
+                print('Read (vb-background): {}'.format(args.vb_background_image))
+            vb_background = load(args.vb_background_image)
             if args.vb_background_name is not None:
                 vb.name = args.vb_background_name
         except Exception as e:
@@ -272,7 +272,7 @@ def get_study(args):
         try:
             if args.verbose:
                 print('Read: {}'.format(args.vb_background_nii))
-            vb = nii2image(ni.load(args.vb_background_nii), name=args.vb_background_name)
+            vb_background = nii2image(ni.load(args.vb_background_nii), name=args.vb_background_name)
         except Exception as e:
             print('Unable to read --vb-background-nii: {}, {}'.format(args.vb_background_image, e))
             sys.exit()
@@ -283,8 +283,8 @@ def get_study(args):
     if args.vb_ati_image:
         try:
             if args.verbose:
-                print('Read: {}'.format(args.vb_ati_image))
-            vb = load(args.vb_ati_image)
+                print('Read (vb-ati): {}'.format(args.vb_ati_image))
+            vb_ati = load(args.vb_ati_image)
             if args.vb_ati_name is not None:
                 vb.name = args.vb_ati_name
         except Exception as e:
@@ -294,7 +294,7 @@ def get_study(args):
         try:
             if args.verbose:
                 print('Read: {}'.format(args.vb_ati_nii))
-            vb = nii2image(ni.load(args.vb_ati_nii), name=args.vb_ati_name)
+            vb_ati = nii2image(ni.load(args.vb_ati_nii), name=args.vb_ati_name)
         except Exception as e:
             print('Unable to read --vb-ati-nii: {}, {}'.format(args.vb_ati_image, e))
             sys.exit()

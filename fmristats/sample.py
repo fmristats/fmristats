@@ -1,4 +1,4 @@
-# Copyright 2016-2017 Thomas W. D. Möbius
+# Copyright 2016-2018 Thomas W. D. Möbius
 #
 # This file is part of fmristats.
 #
@@ -27,6 +27,8 @@ from .load import load
 
 from .diffeomorphisms import Image
 
+from .study import Study
+
 import numpy as np
 
 import pickle
@@ -37,30 +39,29 @@ class Sample:
     """
     Sampled activation fields of a FMRI study
     """
-    def __init__(self, vb, vb_background, vb_ati, covariates, statistics):
+    def __init__(self, covariates, statistics, study):
         """
         Parameters
         ----------
-        vb : Image
-        vb_background : Image
-        vb_ati : Image
         covariates : DataFrame
+            Should have an integer index (with start=0,
+            stop=len(covariates)) of the same length as the number of
+            statistics that are saved in statistics.
         statistics : ndarray, shape (…,3)
+            The statistics field.
+        study : Study
+            The study.
         """
-        assert type(vb) is Image, 'vb must be of type Image'
-        self.vb = vb
+        assert type(study) is Study, 'study must be of type Study'
 
-        assert type(vb_background) is Image, 'vb_background must be of type Image'
-        self.vb_background = vb_background
-
-        assert type(vb_ati) is Image, 'vb_ati must be of type Image'
-        self.vb_ati = vb_ati
+        self.study = study
+        self.vb = study.vb
+        self.vb_ati = study.vb_ati
 
         assert type(covariates) is DataFrame
-        covariates.reset_index(inplace=True, drop=True)
         self.covariates = covariates
 
-        assert statistics.shape == vb.shape + (3,len(covariates))
+        assert statistics.shape == self.vb.shape + (3,len(covariates))
         self.statistics = statistics
 
     def filter(self, b=None):
@@ -80,11 +81,9 @@ class Sample:
             covariates = self.covariates.iloc[b]
 
         return Sample(
-                vb               = self.vb,
-                vb_background    = self.vb_background,
-                vb_ati           = self.vb_ati,
-                covariates       = covariates.ix[b],
-                statistics       = self.statistics[...,b])
+                covariates = covariates.ix[b],
+                statistics = self.statistics[...,b],
+                study      = self.study)
 
     def at_index(self, index):
         """

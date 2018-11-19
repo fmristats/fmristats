@@ -19,7 +19,8 @@
 
 """
 
-Command line tool to create a sample of fits of the FMRI signal model
+Create a sample of fitted statistic fields of FMRI signal model
+for inference
 
 """
 
@@ -29,54 +30,51 @@ Command line tool to create a sample of fits of the FMRI signal model
 #
 ########################################################################
 
-import fmristats.cmd.hp as hp
+from ...epilog import epilog
 
 import argparse
 
-from ...study import add_study_parser
+def define_parser():
 
-def create_argument_parser():
     parser = argparse.ArgumentParser(
             description=__doc__,
-            epilog=hp.epilog)
+            epilog=epilog)
 
-    add_study_parser(parser)
+    specific = parser.add_argument_group(
+        """Create a sample of statistic fields""")
 
-########################################################################
-# Input arguments
-########################################################################
+    specific.add_argument('sample',
+            help="""Name of the output file""")
 
-# TODO: make population space optional, save ati in Sample and also
-# save the cfactor field!!
-
-    parser.add_argument('sample',
-            help="""path where to save the sample""")
-
-    parser.add_argument('vb',
-            help="""path to an image in population space""")
-
-    parser.add_argument('vb_background',
-            help="""path to a background image in population space""")
-
-    parser.add_argument('vb_ati',
-            help="""path to an ATI reference field in population space""")
-
-########################################################################
-# Miscellaneous
-########################################################################
-
-    parser.add_argument('-f', '--force',
+    specific.add_argument('-f', '--force',
             action='store_true',
-            help=hp.force.format('result'))
+            help="""Force re-writing the sample file.""")
 
-    parser.add_argument('-v', '--verbose',
-            action='store_true',
-            help=hp.verbose)
+    specific.add_argument('--mask',
+        help="""Set the mask to use. If yes, true, apply or not given,
+        both vb and vb_mask will apply. If no, false or ignore, neither
+        mask will be applied. If vb, vb_background, vb_estimate or
+        vb_mask, the respective mask will be applied.""")
+
+    ####################################################################
+    # Verbosity
+    ####################################################################
+
+    control_verbosity  = parser.add_argument_group(
+        """Control the level of verbosity""")
+
+    control_verbosity.add_argument('-v', '--verbose',
+        action='count',
+        default=0,
+        help="""Increase output verbosity""")
 
     return parser
 
+from ..api.fmristudy import add_study_arguments
+
 def cmd():
-    parser = create_argument_parser()
+    parser = define_parser()
+    add_study_arguments(parser)
     args = parser.parse_args()
     call(args)
 
@@ -88,104 +86,127 @@ cmd.__doc__ = __doc__
 #
 ########################################################################
 
-from ..df import get_df
-
-from ...smodel import Result
-
-from ...sample import Sample
-
-from ...load import load, load_result
-
-from ...name import Identifier
-
-from ...study import Study
-
-import numpy as np
-
-import pandas as pd
-
-import datetime
-
 import sys
 
 import os
 
 from os.path import isfile, isdir, join
 
+from multiprocessing.dummy import Pool as ThreadPool
+
+import numpy as np
+
+from ..api.fmristudy import get_study
+
+from ...load import load
+
+from ...lock import Lock
+
+from ...study import Study
+
+from ...smodel import Result
+
+from ...sample import Sample
+
 ########################################################################
 
 def call(args):
 
-    try:
-        vb = load(args.vb)
-    except Exception as e:
-        print('Unable to read: {}'.format(args.vb))
-        print('Exception: {}'.format(e))
-        exit()
-
-    try:
-        vb_background = load(args.vb_background)
-    except Exception as e:
-        print('Unable to read: {}'.format(args.vb_background))
-        print('Exception: {}'.format(e))
-        exit()
-
-    try:
-        vb_ati = load(args.vb_ati)
-    except Exception as e:
-        print('Unable to read: {}'.format(args.vb_ati))
-        print('Exception: {}'.format(e))
-        exit()
-
-    if args.vb_name is None:
-        vb_name = vb.name
+    if isfile(args.sample) and not args.force:
+        print('Sample file already exists, use --force to overwrite.')
+        if args.verbose:
+            print('Parse: {}'.format(args.sample))
+        sample = load(args.sample)
+        print('Description of standard space:')
+        print(sample.vb.describe())
+        print('Description of sample:')
+        print(sample.describe())
+        sys.exit()
     else:
-        vb_name = args.vb_name
+        sample_file = args.sample
 
-    ####################################################################
-    # Parse protocol
-    ####################################################################
+    ###################################################################
 
-    df = get_df(args)
+    study = get_study(args)
 
-    if df is None:
+    if study is None:
+        print('No study found. Nothing to do.')
+        sys.exit()
+
+    if study.vb is None:
+        print("""
+        You need to provide a template in standard space (for example by
+        either setting a template in the study or by providing a
+        template using --vb-image or --vb-nii).""")
+
+    if study.vb_ati is None:
+        print("""
+        You need to provide an ATI reference field in standard space
+        (for example by either setting the field in the study or by
+        providing a field using --vb-ati-image or --vb-ati-nii).""")
+
+    if (study.vb is None) or (study.vb_ati is None):
         sys.exit()
 
     ####################################################################
-    # Create study
+    # Respect the mask mask
     ####################################################################
 
-    layout = {
-        'stimulus':args.stimulus,
-        'session':args.session,
-        'reference_maps':args.reference_maps,
-        'result':args.fit,
-        'population_map':args.population_map}
+    if (args.mask is None) or (args.mask == 'yes') or \
+            (args.mask == 'true') or (args.mask == 'apply'):
+        mask = True
+    elif (args.mask == 'no') or (args.mask == 'false') or \
+            (args.mask == 'none') or (args.mask == 'ignore'):
+        mask = False
+    else:
+        mask = args.mask
 
-    study = Study(df, df, layout=layout, strftime=args.strftime)
-
-    study_iterator = study.iterate('result',
-            vb_name=args.vb_name,
-            diffeomorphism_name=args.diffeomorphism_name,
-            scale_type=args.scale_type,
-            integer_index = True)
+    if args.verbose:
+        print('Mask: {}'.format(mask))
 
     ####################################################################
-    # Wrapper
+    # Options
     ####################################################################
 
-    if not isfile(args.sample) or args.force:
-        if args.verbose:
-            print('Create population sample…'.format(args.sample))
+    force   = args.force
+    verbose = args.verbose
 
-        statistics = np.empty(vb.shape + (3,len(df),))
-        statistics [ ... ] = np.nan
+    ####################################################################
+    # Create the iterator
+    ####################################################################
 
-        for index, name, instances in study_iterator:
-            result = instances['result']
-            if result is not None:
+    study_iterator = study.iterate('result', integer_index=True)
+
+    df = study_iterator.df.copy()
+
+    ####################################################################
+    ####################################################################
+
+    if args.verbose:
+        print('Create population sample: {}'.format(sample_file))
+
+    statistics = np.empty(study.vb.shape + (3,len(df),))
+    statistics [ ... ] = np.nan
+
+    for index, name, instances in study_iterator:
+        result = instances['result']
+        if result is not None:
+            if type(result) is Lock:
+                print('{}: Result file is locked. Still fitting?'.format(
+                    name.name()))
+            elif type(result) is not Result:
+                print('{}: File does not contain a result. Skipping.'.format(
+                    name.name()))
+            else:
+                if verbose > 2:
+                    print("""{}: Description of the fit:
+                        {}
+                        {}""".format(name.name(), result.describe(),
+                            result.population_map.describe()))
+
+                result.mask(mask=mask, verbose=verbose)
                 intercept = result.get_field('intercept','point')
-                c = vb_ati.data / intercept.data
+                c = study.vb_ati.data / intercept.data
 
                 beta = result.get_field('task','point')
                 beta_stderr = result.get_field('task','stderr')
@@ -193,35 +214,61 @@ def call(args):
                 statistics[...,0,index] = c*beta.data
                 statistics[...,1,index] = c*beta_stderr.data
                 statistics[...,2,index] = c
-            else:
-                study_iterator.df.ix[index,'valid'] = False
+        else:
+            study_iterator.df.ix[index,'valid'] = False
 
-        df = study_iterator.df.copy()
-        del df['result']
+    df = study_iterator.df.copy()
+    del df['result']
 
-        print(df.head())
+    # TODO: Delete print statement
+    print(df)
 
-        sample = Sample(
-                vb            = vb,
-                vb_background = vb_background,
-                vb_ati        = vb_ati,
-                covariates    = study_iterator.df,
-                statistics    = statistics)
+    # TODO: Don't need this!
+    # if study.covariates is not None:
+    #     df = (df.join(up, on=['cohort', 'id'], lsuffix='_')
+    #             .assign(valid=lambda x: x.valid.fillna(False))
+    #             .assign(valid=lambda x: x.valid & x.valid_)
+    #             .drop('valid_', axis=1))
 
-        sample = sample.filter()
+    # # TODO: Delete print statement
+    # print(df)
 
-        if args.verbose:
-            print('Save: {}'.format(args.sample))
+    sample = Sample(
+            covariates = df,
+            statistics = statistics,
+            study      = study)
 
-        sample.save(args.sample)
+    sample = sample.filter()
 
-    else:
-        if args.verbose:
-            print('Parse: {}'.format(args.sample))
-        sample = load(args.sample)
-
-    if args.verbose:
+    if args.verbose > 1:
         print('Description of the population space:')
         print(sample.vb.describe())
         print('Description of the sample:')
         print(sample.describe())
+
+    try:
+        if verbose:
+            print('{}: Save: {}'.format(name.name(), sample_file))
+
+        dfile = os.path.dirname(sample_file)
+        if dfile and not isdir(dfile):
+           os.makedirs(dfile)
+
+        sample.save(sample_file)
+    except Exception as e:
+        print('{}: Unable to create: {}, {}'.format(name.name(),
+            sample_file, e))
+
+    ####################################################################
+    # Write study to disk
+    ####################################################################
+
+    if args.out is not None:
+        if args.verbose:
+            print('Save: {}'.format(args.out))
+
+        dfile = os.path.dirname(args.out)
+        if dfile and not isdir(dfile):
+           os.makedirs(dfile)
+
+        study.save(args.out)

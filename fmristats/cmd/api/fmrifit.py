@@ -159,12 +159,10 @@ def define_parser():
         changed.""")
 
     where_to_fit.add_argument('--mask',
-        help="""Set the mask to use.""")
-
-    where_to_fit.add_argument('--ignore-mask',
-        action='store_true',
-        help="""Ignore any brain masks saved in the respective
-        population map.""")
+        help="""Set the mask to use. If yes, true, apply or not given,
+        both vb and vb_mask will apply. If no, false or ignore, neither
+        mask will be applied. If vb, vb_background, vb_estimate or
+        vb_mask, the respective mask will be applied.""")
 
     where_to_fit.add_argument('--at-slice',
         type=int,
@@ -306,12 +304,14 @@ def call(args):
     # Respect the mask mask
     ####################################################################
 
-    if args.ignore_mask:
-        mask = False
-    elif args.mask:
-        mask = args.mask
-    else:
+    if (args.mask is None) or (args.mask == 'yes') or \
+            (args.mask == 'true') or (args.mask == 'apply'):
         mask = True
+    elif (args.mask == 'no') or (args.mask == 'false') or \
+            (args.mask == 'none') or (args.mask == 'ignore'):
+        mask = False
+    else:
+        mask = args.mask
 
     if args.verbose:
         print('Mask: {}'.format(mask))
