@@ -167,17 +167,23 @@ def print_info(x, f):
             valid[['valid', 'total']]))
 
     if type(x) is Study:
-        print('{}: study file'.format(f))
+        print('{}: study file\n'.format(f))
         print('Protocol:')
+        print('---------')
         data_frame_information(x.protocol)
         if x.covariates is None:
-            print('Covariates: none')
+            print('Covariates: none\n')
+            print('-----------')
         else:
             print('Covariates:')
-        data_frame_information(x.covariates)
+            print('-----------')
+            data_frame_information(x.covariates)
 
-        print('file layout:')
-        print(x.file_layout)
+        print('File layout:')
+        print('------------')
+
+        for k,v in x.file_layout.items():
+            print('{:<23}: {:<42}'.format(k, v))
 
     if type(x) is DataFrame:
         print('{}: protocol or covariates file:\n'.format(f))

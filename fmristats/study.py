@@ -159,7 +159,7 @@ class Study:
 
         if single_subject is True:
             self.file_layout = {
-                'stimulus'     : '{0}-{1:04d}-{2}-{3}.stm',
+                'stimulus'       : '{0}-{1:04d}-{2}-{3}.stm',
                 'session'        : '{0}-{1:04d}-{2}-{3}.ses',
                 'reference_maps' : '{0}-{1:04d}-{2}-{3}.ref',
                 'population_map' : '{0}-{1:04d}-{2}-{3}-{4}.pop',
@@ -167,7 +167,7 @@ class Study:
                 'strftime'       : '%Y-%m-%d-%H%M'}
         elif type(single_subject) is str:
             self.file_layout = {
-                'stimulus'     : single_subject + '.stm',
+                'stimulus'       : single_subject + '.stm',
                 'session'        : single_subject + '.ses',
                 'reference_maps' : single_subject + '.ref',
                 'population_map' : single_subject + '.pop',
@@ -175,7 +175,7 @@ class Study:
                 'strftime'       : '%Y-%m-%d-%H%M'}
         else:
             self.file_layout = {
-                'stimulus'     : 'data/irr/{2}/{0}-{1:04d}-{2}-{3}.stm',
+                'stimulus'       : 'data/irr/{2}/{0}-{1:04d}-{2}-{3}.stm',
                 'session'        : 'data/ses/{2}/{0}-{1:04d}-{2}-{3}.ses',
                 'reference_maps' : 'data/ref/{2}/{0}-{1:04d}-{2}-{3}.ref',
                 'population_map' : 'data/pop/{2}/{4}/{5}/{0}-{1:04d}-{2}-{3}-{4}.pop',
@@ -202,6 +202,40 @@ class Study:
         """
         self.file_layout.update( (k,v) for k,v in file_layout.items() if
                 v is not None)
+
+    def update_protocol(self, df, verbose=True):
+        """
+        Update fields in the protocol file
+
+        Parameters
+        ----------
+        df : DataFrame
+            Entries
+        """
+        old_index_names = self.protocol.index.names
+        self.protocol.reset_index(inplace=True)
+        self.protocol.set_index(df.index.names, inplace=True)
+        self.protocol.update(df)
+        self.protocol.reset_index(inplace=True)
+        self.protocol.set_index(old_index_names, inplace=True)
+        self.protocol.valid = self.protocol.valid.astype(bool)
+
+    def update_covariates(self, df, verbose=True):
+        """
+        Update fields in the covariates file
+
+        Parameters
+        ----------
+        df : DataFrame
+            Entries
+        """
+        old_index_names = self.covariates.index.names
+        self.covariates.reset_index(inplace=True)
+        self.covariates.set_index(df.index.names, inplace=True)
+        self.covariates.update(df)
+        self.covariates.reset_index(inplace=True)
+        self.covariates.set_index(old_index_names, inplace=True)
+        self.covariates.valid = self.covariates.valid.astype(bool)
 
     def iterate(self, *keys, new=None,
             vb_name=None, diffeomorphism_name=None, scale_type=None,
@@ -329,7 +363,7 @@ class Study:
                 print('No valid entries in the covariates data set')
                 return
 
-            covariates = covariates.loc(axis=0)[(cohort, j, paradigm)]
+            covariates = covariates.loc(axis=0)[(cohort, j)]
 
             if len(covariates) < 1:
                 print('No entries left in the covariates data set')

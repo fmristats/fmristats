@@ -61,6 +61,16 @@ def add_study_arguments(parser):
         help="""The covariates. The covariates file information about
         the subjects in the study.""")
 
+    parser.add_argument('--protocol-update',
+        nargs='+',
+        help="""Update field 'valid' in the protocol file with the
+        entries in the this file.""")
+
+    parser.add_argument('--covariates-update',
+        nargs='+',
+        help="""Update field 'valid' in the protocol file with the
+        entries in the this file.""")
+
     study_parser.add_argument('--protocol-query',
             help="""query the protocol.""")
 
@@ -219,8 +229,6 @@ import pandas as pd
 
 import datetime
 
-import sys
-
 import os
 
 from os.path import isfile, isdir, join
@@ -253,7 +261,7 @@ def get_study(args):
             vb = nii2image(ni.load(args.vb_nii), name=args.vb_name)
         except Exception as e:
             print('Unable to read --vb-nii: {}, {}'.format(args.vb_image, e))
-            sys.exit()
+            return
     else:
         vb = None
 
@@ -275,7 +283,7 @@ def get_study(args):
             vb_background = nii2image(ni.load(args.vb_background_nii), name=args.vb_background_name)
         except Exception as e:
             print('Unable to read --vb-background-nii: {}, {}'.format(args.vb_background_image, e))
-            sys.exit()
+            return
     else:
         vb_background = None
 
@@ -297,7 +305,7 @@ def get_study(args):
             vb_ati = nii2image(ni.load(args.vb_ati_nii), name=args.vb_ati_name)
         except Exception as e:
             print('Unable to read --vb-ati-nii: {}, {}'.format(args.vb_ati_image, e))
-            sys.exit()
+            return
     else:
         vb_ati = None
 
@@ -306,7 +314,7 @@ def get_study(args):
         try:
             protocol = pd.read_pickle(args.protocol)
             if args.verbose:
-                print('Read: {}'.format(args.protocol))
+                print('Read protocol: {}'.format(args.protocol))
         except Exception as e:
             print('Unable to read protocol file {}'.format(args.protocol))
             print('Exception: {}'.format(e))
@@ -361,7 +369,7 @@ def get_study(args):
         try:
             covariates = pd.read_pickle(args.covariates)
             if args.verbose:
-                print('Read: {}'.format(args.covariates))
+                print('Read covariates: {}'.format(args.covariates))
         except Exception as e:
             print('Unable to read covariates file {}'.format(args.covariates))
             print('Exception: {}'.format(e))
@@ -412,9 +420,9 @@ def get_study(args):
     # Parse or create the study file
     if args.study:
         try:
-            study = pd.read_pickle(args.study)
             if args.verbose:
-                print('Read: {}'.format(args.study))
+                print('Read study: {}'.format(args.study))
+            study = pd.read_pickle(args.study)
         except Exception as e:
             print('Unable to read study file {}'.format(args.study))
             print('Exception: {}'.format(e))
@@ -424,7 +432,7 @@ def get_study(args):
 
     # Exit if nothing to do
     if (study is None) and (protocol is None):
-        print('Unable to find a valid protocol.')
+        print('Unable to find a valid study or protocol.')
         return
 
     file_layout = {
@@ -452,19 +460,57 @@ def get_study(args):
     else:
         study.update_layout(file_layout)
         if protocol is not None:
+            if args.verbose > 1:
+                print('Set (or reset) protocol file in study')
             study.protocol = protocol
         if covariates is not None:
+            if args.verbose > 1:
+                print('Set (or reset) covariates file in study')
             study.covariates = covariates
         if vb is not None:
+            if args.verbose > 1:
+                print('Set (or reset) template in standard space')
             study.vb = vb
         if vb_background is not None:
+            if args.verbose > 1:
+                print('Set (or reset) background in standard space')
             study.vb_background = vb_background
         if vb_ati is not None:
+            if args.verbose > 1:
+                print('Set (or reset) ATI reference field in standard space')
             study.vb_ati = vb_ati
         if args.scale_type is not None:
+            if args.verbose > 1:
+                print('Set (or reset) scale_type to: {}'.format(
+                    args.scale_type))
             study.scale_type = args.scale_type
         if args.diffeomorphism is not None:
+            if args.verbose > 1:
+                print('Set (or reset) diffeomorphism to: {}'.format(
+                    args.diffeomorphism))
             study.diffeomorphism = args.diffeomorphism
+
+    if args.protocol_update:
+        for upfile in args.protocol_update:
+            try:
+                if args.verbose:
+                    print('Update protocol with: {}'.format(upfile))
+                df = pd.read_pickle(upfile)
+            except Exception as e:
+                print('Unable to read file {}, {}'.format(args.study, e))
+                return
+            study.update_protocol(df)
+
+    if args.covariates_update:
+        for upfile in args.covariates_update:
+            try:
+                if args.verbose:
+                    print('Update covariates with: {}'.format(upfile))
+                df = pd.read_pickle(upfile)
+            except Exception as e:
+                print('Unable to read file {}, {}'.format(args.study, e))
+                return
+            study.update_covariates(df)
 
     study.filter(cohort=args.cohort, j=args.id, paradigm=args.paradigm, inplace=True)
 
@@ -481,16 +527,7 @@ def call(args):
     study = get_study(args)
 
     if study is None:
-        sys.exit()
-
-    if args.verbose > 1:
-        for k, v in study.file_layout.items():
-            print('{:<24}: {}'.format(k,v))
-
-    if args.verbose > 2:
-        print(study.protocol.head())
-        if study.covariates is not None:
-            print(study.covariates.head())
+        return
 
     if args.out is not None:
         if args.verbose:
