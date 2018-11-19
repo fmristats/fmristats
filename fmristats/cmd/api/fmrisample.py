@@ -195,7 +195,7 @@ def call(args):
                 print('{}: Result file is locked. Still fitting?'.format(
                     name.name()))
             elif type(result) is not Result:
-                print('{}: File does not contain a result. Skipping.'.format(
+                print('{}: File does not contain Result. Skipping.'.format(
                     name.name()))
             else:
                 if verbose > 2:
