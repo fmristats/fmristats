@@ -183,7 +183,7 @@ def print_info(x, f):
         print('------------')
 
         for k,v in x.file_layout.items():
-            print('{:<23}: {:<42}'.format(k, v))
+            print('{:<14}: {}'.format(k, v))
 
     if type(x) is DataFrame:
         print('{}: protocol or covariates file:\n'.format(f))

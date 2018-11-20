@@ -70,7 +70,7 @@ def define_parser():
             help="""Name to use for the fitted diffeomorphisms.""")
 
     specific.add_argument('--ants-prefix',
-            default='ants/tmp/{0}-{1:04d}-{2}-{3}-{4}/{0}-{1:04d}-{2}-{3}-{4}-',
+            default='ants-tmps/{cohort}-{id:04d}/{cohort}-{id:04d}-{paradigm}-{date}-{space}-',
             help="""Prefix for temporary ANTS' files.""")
 
     ####################################################################
@@ -184,32 +184,9 @@ import nibabel as ni
 
 def call(args):
 
-    study = get_study(args)
-
-    if study is None:
-        print('No study found. Nothing to do.')
-        sys.exit()
-
-    if study.vb is None:
-        print("""
-        You need to provide a template in standard space (for example by
-        either setting a template in the study or by providing a
-        template using --vb-image or --vb-nii).""")
-        sys.exit()
-
-    study.update_layout({'ants_prefix':args.ants_prefix})
-
-    study_iterator = study.iterate(
-            'session',
-            'reference_maps',
-            'result',
-            'population_map',
-            new=['population_map', 'ants_prefix'],
-            integer_index=True)
-
-    df = study_iterator.df.copy()
-
-    df['locked'] = False
+    ####################################################################
+    # Options
+    ####################################################################
 
     remove_lock       = args.remove_lock
     ignore_lock       = args.ignore_lock
@@ -228,6 +205,49 @@ def call(args):
     new_diffeomorphism = args.new_diffeomorphism
     cycle              = args.cycle
     ants_cores         = args.ants_cores
+
+    ####################################################################
+    # Study
+    ####################################################################
+
+    study = get_study(args)
+
+    if study is None:
+        print('No study found. Nothing to do.')
+        return
+
+    if study.vb is None:
+        print("""
+        You need to provide a template in standard space (for example by
+        either setting a template in the study or by providing a
+        template using --vb-image or --vb-nii).""")
+        return
+
+    study.set_diffeomorphism(new_diffeomorphism)
+    study.set_standard_space(study.vb.name)
+
+    study.update_layout({'ants_prefix':args.ants_prefix})
+
+    ####################################################################
+    # Iterator
+    ####################################################################
+
+    study_iterator = study.iterate(
+            'session',
+            'reference_maps',
+            'result',
+            'population_map',
+            new=['population_map', 'ants_prefix'],
+            lookup=['result'],
+            integer_index=True)
+
+    df = study_iterator.df.copy()
+
+    df['locked'] = False
+
+    ####################################################################
+    # Wrapper
+    ####################################################################
 
     def wm(index, name, session, reference_maps, population_map, result,
             file_population_map, ants_prefix):
@@ -287,7 +307,7 @@ def call(args):
         elif diffeomorphism_nb == 'scan_cycle':
 
             if (session is None) or (cycle is None):
-                print('{}: No session or CYCLE defined'.format(name.name()))
+                print('{}: No session found or CYCLE defined'.format(name.name()))
                 df.ix[index,'valid'] = False
                 lock.conditional_unlock(df, index, verbose)
                 return
@@ -439,3 +459,8 @@ def call(args):
            os.makedirs(dfile)
 
         study.save(args.out)
+
+    else:
+        if args.verbose:
+            print('Save: {}'.format(args.study))
+        study.save(args.study)

@@ -164,18 +164,9 @@ from ...reference import ReferenceMaps
 
 def call(args):
 
-    study = get_study(args)
-
-    if study is None:
-        sys.exit()
-
-    study_iterator = study.iterate('session', 'reference_maps',
-            new=['reference_maps'],
-            integer_index=True)
-
-    df = study_iterator.df.copy()
-
-    df['locked'] = False
+    ####################################################################
+    # Options
+    ####################################################################
 
     remove_lock       = args.remove_lock
     ignore_lock       = args.ignore_lock
@@ -185,6 +176,33 @@ def call(args):
 
     cycle  = args.cycle
     grubbs = args.grubbs
+
+    ####################################################################
+    # Study
+    ####################################################################
+
+    study = get_study(args)
+
+    if study is None:
+        sys.exit()
+
+    study.set_rigids('pca')
+
+    ####################################################################
+    # Iterator
+    ####################################################################
+
+    study_iterator = study.iterate('session', 'reference_maps',
+            new=['reference_maps'],
+            integer_index=True)
+
+    df = study_iterator.df.copy()
+
+    df['locked'] = False
+
+    ####################################################################
+    # Wrapper
+    ####################################################################
 
     def wm(index, name, session, reference_maps, file_reference_maps):
         if session is None:
@@ -329,9 +347,6 @@ def call(args):
     ####################################################################
 
     if args.out is not None:
-        if args.epi_code is None:
-            print('Warning: study protocol has not been equipped with a valid EPI code')
-
         if args.verbose:
             print('Save: {}'.format(args.out))
 
@@ -340,3 +355,8 @@ def call(args):
            os.makedirs(dfile)
 
         study.save(args.out)
+
+    else:
+        if args.verbose:
+            print('Save: {}'.format(args.study))
+        study.save(args.study)

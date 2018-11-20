@@ -95,12 +95,12 @@ class Study:
             vb=None,
             vb_background=None,
             vb_ati=None,
-            diffeomorphism=None,
-            scale_type=None,
             file_layout=None,
             root_dir=None,
             strftime=None,
             single_subject=False,
+            scale_type=None,
+            name=None,
             ):
         """
         Parameters
@@ -124,25 +124,24 @@ class Study:
         root_dir : None or str
             The root directory of the study. All paths will always be
             expanded with respect to this root.
-        single_subject : False or True or str
+        single_subject : None or False or True or str
             The default is False. If False, a default file layout for
             multiple subject is used. If True, a default file layout for
             a single subject analysis is used. If string, then the
             string is used.
-        diffeomorphism : str or None
-            Name or type of the family of diffeomorphisms that will map
-            from standard space to the respective subjects.
-        scale_type : str or float
+        scale_type : None or str or float
             Scale type to use.
+        name : None or str
+            Name of this study
 
         Notes
         -----
         The covariates data frame can also be empty (None). If not None,
         though, it will never be allowed to be empty again.
         """
-        # TODO: check if protocol has an epi_code column
-        # TODO: check if protocol has valid index
-        # TODO: check if covariates have valid index
+        # TODO: assert if protocol has an epi_code column
+        # TODO: assert if protocol has valid index
+        # TODO: assert if covariates have valid index
         self.protocol        = protocol
         self.covariates      = covariates
         self.vb              = vb
@@ -156,29 +155,40 @@ class Study:
 
         if single_subject is True:
             self.file_layout = {
-                'stimulus'       : '{0}-{1:04d}-{2}-{3}.stm',
-                'session'        : '{0}-{1:04d}-{2}-{3}.ses',
-                'reference_maps' : '{0}-{1:04d}-{2}-{3}.ref',
-                'population_map' : '{0}-{1:04d}-{2}-{3}-{4}.pop',
-                'result'         : '{0}-{1:04d}-{2}-{3}-{4}.fit'}
+                'stimulus'       : '{cohort}-{id:04d}-{paradigm}-{date}.stimulus',
+                'session'        : '{cohort}-{id:04d}-{paradigm}-{date}.session',
+                'reference_maps' : '{cohort}-{id:04d}-{paradigm}-{date}-{rigids}.rigids',
+                'population_map' : '{cohort}-{id:04d}-{paradigm}-{date}-{space}-{psi}.popmap',
+                'result'         : '{cohort}-{id:04d}-{paradigm}-{date}-{space}-{psi}-{rigids}.fit'}
         elif type(single_subject) is str:
             self.file_layout = {
-                'stimulus'       : single_subject + '.stm',
-                'session'        : single_subject + '.ses',
-                'reference_maps' : single_subject + '.ref',
-                'population_map' : single_subject + '.pop',
+                'stimulus'       : single_subject + '.stimulus',
+                'session'        : single_subject + '.session',
+                'reference_maps' : single_subject + '.rigids',
+                'population_map' : single_subject + '.popmap',
                 'result'         : single_subject + '.fit'}
         else:
             self.file_layout = {
-                'stimulus'       : 'data/stm/{2}/{0}-{1:04d}-{2}-{3}.stm',
-                'session'        : 'data/ses/{2}/{0}-{1:04d}-{2}-{3}.ses',
-                'reference_maps' : 'data/ref/{2}/{0}-{1:04d}-{2}-{3}.ref',
-                'population_map' : 'data/pop/{2}/{4}/{5}/{0}-{1:04d}-{2}-{3}-{4}.pop',
-                'result'         : 'data/fit/{2}/{4}/{5}/{6}/{0}-{1:04d}-{2}-{3}-{4}.fit'}
+                'stimulus'       : '{study}/{paradigm}/{cohort}/{id:04d}/{cohort}-{id:04d}-{paradigm}-{date}.stimulus',
+                'session'        : '{study}/{paradigm}/{cohort}/{id:04d}/{cohort}-{id:04d}-{paradigm}-{date}.session',
+                'reference_maps' : '{study}/{paradigm}/{cohort}/{id:04d}/{cohort}-{id:04d}-{paradigm}-{date}-{rigids}.rigids',
+                'population_map' : '{study}/{paradigm}/{cohort}/{id:04d}/{cohort}-{id:04d}-{paradigm}-{date}-{space}-{psi}.popmap',
+                'result'         : '{study}/{paradigm}/{cohort}/{id:04d}/{cohort}-{id:04d}-{paradigm}-{date}-{space}-{psi}-{rigids}.fit'}
 
         if file_layout is not None:
             self.update_layout(file_layout)
 
+        set_strftime(strftime)
+        set_scale_type(scale_type)
+        set_study_name(name)
+
+    def set_name(self, name):
+        if name is None:
+            self.name = 'results'
+        else:
+            self.name = name
+
+    def set_strftime(self, strftime=None):
         if strftime is None:
             self.strftime='%Y-%m-%d-%H%M'
         elif strftime == 'short':
@@ -186,15 +196,69 @@ class Study:
         else:
             self.strftime = strftime
 
+    def set_scale_type(self, scale_type=None):
         if scale_type is None:
             self.scale_type = 'max'
         else:
             self.scale_type = scale_type
 
-        if diffeomorphism is None:
-            self.diffeomorphism = 'identity'
+
+    def set_rigids(self, rigids_name=None):
+        """
+        Set the rigids field in protocol
+
+        Parameters
+        ----------
+        rigids : str
+            Name of the method that has been used to fit the head
+            movements of the subject.
+
+        Note
+        ----
+        This will overwrite all entries in the protocol! Use with care.
+        """
+        if (rigids_name is None) and ('rigids' not in self.protocol.columns):
+                self.protocol['rigids'] = 'undefined'
         else:
-            self.diffeomorphism = diffeomorphism
+            self.protocol['rigids'] = rigids_name
+
+    def set_diffeomorphism(self, diffeomorphism_name=None):
+        """
+        Set the diffeomorphism field in protocol
+
+        Parameters
+        ----------
+        diffeomorphism : str
+            Name of the method that has been used to fit the
+            diffeomorphism from standard space to subject reference
+            space.
+
+        Note
+        ----
+        This will overwrite all entries in the protocol! Use with care.
+        """
+        if (diffeomorphism_name is None) and ('diffeomorphism' not in self.protocol.columns):
+                self.protocol['diffeomorphism'] = 'undefined'
+        else:
+            self.protocol['diffeomorphism'] = diffeomorphism_name
+
+    def set_standard_space(self, vb_name=None):
+        """
+        Set the standard space field in protocol
+
+        Parameters
+        ----------
+        space : str
+            Name of the standard space.
+
+        Note
+        ----
+        This will overwrite all entries in the protocol! Use with care.
+        """
+        if (vb_name is None) and ('standard_space' not in self.protocol.columns):
+                self.protocol['standard_space'] = 'undefined'
+        else:
+            self.protocol['standard_space'] = vb_name
 
     def update_layout(self, file_layout):
         """
@@ -242,9 +306,9 @@ class Study:
         self.covariates.set_index(old_index_names, inplace=True)
         self.covariates.valid = self.covariates.valid.astype(bool)
 
-    def iterate(self, *keys, new=None,
-            vb_name=None, diffeomorphism_name=None, scale_type=None,
-            verbose=True, integer_index=False):
+    def iterate(self, *keys, new=None, lookup=None, vb_name=None,
+            diffeomorphism_name=None, rigids_name=None, verbose=True,
+            integer_index=False):
         """
         If covariates in not None, then only subjects in the protocol are
         going to be processed which are also marked as valid in the
@@ -254,21 +318,10 @@ class Study:
         -------
         StudyIterator
         """
-        if vb_name is None:
-            if self.vb is not None:
-                vb_name = self.vb.name
 
-        if diffeomorphism_name is None:
-            diffeomorphism_name = self.diffeomorphism
-
-        if scale_type is None:
-            if type(self.scale_type) is str:
-                scale_type = self.scale_type
-            elif type(scale_type) is float:
-                scale_type = '{:.2f}'.format(
-                        self.scale_type).replace('.', 'd')
-            else:
-                scale_type = 'undefined'
+        ###############################################################
+        # Set up data frames
+        ###############################################################
 
         df = self.protocol[self.protocol.valid == True].copy()
 
@@ -286,37 +339,90 @@ class Study:
             df.valid = df.valid.astype(bool)
 
         else:
-            df = protocol.copy()
+            df = self.protocol.copy()
 
         df = df[df.valid == True].copy()
         df.reset_index(inplace=True)
 
-        for key in keys:
+        ###############################################################
+        # Create look up entries
+        ###############################################################
+
+        if lookup is not None:
+            for key in set(lookup):
                 df [key] = Series(
-                        data = [join(self.root_dir, self.file_layout[key].format(
-                            r.cohort,
-                            r.id,
-                            r.paradigm,
-                            r.date.strftime(self.strftime),
-                            vb_name,
-                            diffeomorphism_name,
-                            scale_type))
-                            for r in df.itertuples()],
-                        index = df.index)
+                    data = [join(self.root_dir, self.file_layout[key].format(
+                        study = self.name,
+                        cohort = r.cohort,
+                        id = r.id,
+                        paradigm = r.paradigm,
+                        date = r.date.strftime(self.strftime),
+                        space = r.standard_space,
+                        psi = r.diffeomorphism,
+                        rigids = r.rigids,
+                        )) for r in df.itertuples()],
+                    index = df.index)
+
+        ###############################################################
+        # Define names
+        ###############################################################
+
+        if rigids_name is None:
+            if ('rigids' not in df.columns):
+                df['rigids'] = 'undefined'
+        else:
+            df['rigids'] = rigids_name
+
+        if vb_name is None:
+            if 'standard_space' not in df.columns:
+                df['standard_space'] = 'undefined'
+        else:
+            df['standard_space'] = vb_name
+
+        if diffeomorphism_name is None:
+            if 'diffeomorphism' not in df.columns:
+                df['diffeomorphism'] = 'undefined'
+        else:
+            df['diffeomorphism'] = diffeomorphism_name
+
+        ###############################################################
+        # Create entries
+        ###############################################################
+
+        if lookup is None:
+            keys0 = keys
+        else:
+            keys0 = set(keys) - set(lookup)
+
+        for key in keys0:
+            df [key] = Series(
+                data = [join(self.root_dir, self.file_layout[key].format(
+                    study = self.name,
+                    cohort = r.cohort,
+                    id = r.id,
+                    paradigm = r.paradigm,
+                    date = r.date.strftime(self.strftime),
+                    space = r.standard_space,
+                    psi = r.diffeomorphism,
+                    rigids = r.rigids,
+                    )) for r in df.itertuples()],
+                index = df.index)
+
         if new is not None:
             for n in new:
                 if n not in keys:
                     df [n] = Series(
-                            data = [join(self.root_dir, self.file_layout[n].format(
-                                r.cohort,
-                                r.id,
-                                r.paradigm,
-                                r.date.strftime(self.strftime),
-                                vb_name,
-                                diffeomorphism_name,
-                                scale_type))
-                                for r in df.itertuples()],
-                            index = df.index)
+                        data = [join(self.root_dir, self.file_layout[n].format(
+                            study = self.name,
+                            cohort = r.cohort,
+                            id = r.id,
+                            paradigm = r.paradigm,
+                            date = r.date.strftime(self.strftime),
+                            space = r.standard_space,
+                            psi = r.diffeomorphism,
+                            rigids = r.rigids,
+                            )) for r in df.itertuples()],
+                        index = df.index)
 
         return StudyIterator(df, keys, new, verbose, integer_index)
 

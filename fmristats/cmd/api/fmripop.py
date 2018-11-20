@@ -48,8 +48,12 @@ def define_parser():
 
     specific.add_argument('--diffeomorphism-nb',
         default='reference',
-        choices=['reference', 'scanner', 'scan_cycle', 'fit'],
-        help="""Type of diffeomorphism.""")
+        choices=['reference', 'native', 'scan_cycle', 'fit'],
+        help="""Image space of diffeomorphism.""")
+
+    specific.add_argument('--new-diffeomorphism',
+        help="""Name to use for the fitted diffeomorphisms. If not
+        given, DIFFEOMORPHISM-NB will be set a default.""")
 
     specific.add_argument('--resolution',
         default=2.,
@@ -168,10 +172,41 @@ from ...pmap import PopulationMap, pmap_scanner, pmap_reference, pmap_scan_cycle
 
 def call(args):
 
+    ####################################################################
+    # Options
+    ####################################################################
+
+    remove_lock       = args.remove_lock
+    ignore_lock       = args.ignore_lock
+    force             = args.force
+    skip              = args.skip
+    verbose           = args.verbose
+
+    diffeomorphism_nb  = args.diffeomorphism_nb
+    resolution         = args.resolution
+    cycle              = args.cycle
+
+    if args.new_diffeomorphism is None:
+        new_diffeomorphism = diffeomorphism_nb
+    else:
+        new_diffeomorphism = args.new_diffeomorphism
+
+    ####################################################################
+    # Study
+    ####################################################################
+
     study = get_study(args)
 
     if study is None:
-        sys.exit()
+        print('No study found. Nothing to do.')
+        return
+
+    study.set_diffeomorphism(new_diffeomorphism)
+    study.set_standard_space('isometric')
+
+    ####################################################################
+    # Create iterator
+    ####################################################################
 
     study_iterator = study.iterate(
             'session',
@@ -184,15 +219,9 @@ def call(args):
 
     df['locked'] = False
 
-    remove_lock       = args.remove_lock
-    ignore_lock       = args.ignore_lock
-    force             = args.force
-    skip              = args.skip
-    verbose           = args.verbose
-
-    diffeomorphism_nb = args.diffeomorphism_nb
-    resolution        = args.resolution
-    cycle             = args.cycle
+    ####################################################################
+    # Wrapper
+    ####################################################################
 
     def wm(index, name, session, reference_maps, population_map, result,
             file_population_map):
@@ -234,7 +263,7 @@ def call(args):
         # Create population map instance from a session instance
         ####################################################################
 
-        if (diffeomorphism_nb == 'scanner') or (diffeomorphism_nb == 'reference'):
+        if (diffeomorphism_nb == 'native') or (diffeomorphism_nb == 'reference'):
 
             if session is None:
                 print('{}: No session found'.format(name.name()))
@@ -242,7 +271,7 @@ def call(args):
                 lock.conditional_unlock(df, index, verbose)
                 return
 
-            if diffeomorphism_nb == 'scanner':
+            if diffeomorphism_nb == 'native':
                 population_map = pmap_scanner(session=session)
                 if verbose:
                     print("""{}:
@@ -422,3 +451,8 @@ def call(args):
            os.makedirs(dfile)
 
         study.save(args.out)
+
+    else:
+        if args.verbose:
+            print('Save: {}'.format(args.study))
+        study.save(args.study)

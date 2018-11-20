@@ -46,7 +46,7 @@ def define_parser():
         """Setup of a two-block stimulus design""")
 
     specific.add_argument('--nii',
-        default='../raw/nii/{2}/{0}-{1:04d}-{2}-{3}.nii',
+        default='../raw/nii/{paradigm}/{cohort}-{id:04d}-{paradigm}-{date}.nii',
         help="""The file should contain a 4D-image of a fMRI session in
         any file format understood by the NiBabel project, e.g, any of
         ANALYZE (plain, SPM99, SPM2 and later), GIFTI, NIfTI1, NIfTI2,
@@ -65,7 +65,7 @@ def define_parser():
         help="""Set the foreground to the image in FOREGROUND""")
 
     specific.add_argument('--foreground',
-        default='../raw/foreground/{2}/{0}-{1:04d}-{2}-{3}-foreground.nii.gz',
+        default='../raw/foreground/{paradigm}/{cohort}-{id:04d}-{paradigm}-{date}-foreground.nii.gz',
         help="""A 4D-image that contains a mask for the foreground in
         the FMRI""")
 
@@ -166,10 +166,28 @@ import nibabel as ni
 
 def call(args):
 
+    ####################################################################
+    # Options
+    ####################################################################
+
+    remove_lock       = args.remove_lock
+    ignore_lock       = args.ignore_lock
+    force             = args.force
+    skip              = args.skip
+    verbose           = args.verbose
+
+    detect_foreground = args.detect_foreground
+    set_foreground    = args.set_foreground
+
+    ####################################################################
+    # Study
+    ####################################################################
+
     study = get_study(args)
 
     if study is None:
-        sys.exit()
+        print('No study found. Nothing to do.')
+        return
 
     study.update_layout({
         'nii' : args.nii,
@@ -191,6 +209,10 @@ def call(args):
             https://fmristats.github.io/tutorials/getting-started.html""")
             sys.exit()
 
+    ####################################################################
+    # Iterator
+    ####################################################################
+
     study_iterator = study.iterate('session', 'stimulus',
             new=['session', 'nii', 'foreground'],
             integer_index=True)
@@ -199,16 +221,12 @@ def call(args):
 
     df['locked'] = False
 
-    remove_lock       = args.remove_lock
-    ignore_lock       = args.ignore_lock
-    force             = args.force
-    skip              = args.skip
-    verbose           = args.verbose
+    ####################################################################
+    # Wrapper
+    ####################################################################
 
-    detect_foreground = args.detect_foreground
-    set_foreground    = args.set_foreground
-
-    def wm(index, name, session, stimulus, file_session, file_nii, file_foreground):
+    def wm(index, name, session, stimulus, file_session, file_nii,
+            file_foreground):
 
         if type(session) is Lock:
             if remove_lock or ignore_lock:
@@ -224,7 +242,8 @@ def call(args):
 
         elif session is not None and not force:
             if verbose:
-                print('{}: Session already exists. Use -f/--force to overwrite'.format(name.name()))
+                print('{}: Session already exists. Use -f/--force to overwrite'.format(
+                    name.name()))
             return
 
         if skip:
@@ -346,9 +365,6 @@ def call(args):
     ####################################################################
 
     if args.out is not None:
-        if args.epi_code is None:
-            print('Warning: study protocol has not been equipped with a valid EPI code')
-
         if args.verbose:
             print('Save: {}'.format(args.out))
 
@@ -357,3 +373,8 @@ def call(args):
            os.makedirs(dfile)
 
         study.save(args.out)
+
+    else:
+        if args.verbose:
+            print('Save: {}'.format(args.study))
+        study.save(args.study)

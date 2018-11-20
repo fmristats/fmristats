@@ -43,40 +43,40 @@ def define_parser():
     ####################################################################
 
     specific = parser.add_argument_group(
-            """Setup of a two-block stimulus design""")
+        """Setup of a two-block stimulus design""")
 
     specific.add_argument('--mat',
-            default='../raw/mat/{2}/{0}-{1:04d}-{2}-{3}.mat',
-            help = """A Matlab coded stimulus design""")
+        default='../raw/mat/{paradigm}/{cohort}-{id:04d}-{paradigm}-{date}.mat',
+        help = """A Matlab coded stimulus design""")
 
     ####################################################################
     # File handling
     ####################################################################
 
     file_handling = parser.add_argument_group(
-            """File handling""")
+        """File handling""")
 
     lock_handling = file_handling.add_mutually_exclusive_group()
 
     lock_handling.add_argument('-r', '--remove-lock',
-            action='store_true',
-            help="""Remove lock, if file is locked. This is useful, if
-            used together with -s/--skip to remove orphan locks.""")
+        action='store_true',
+        help="""Remove lock, if file is locked. This is useful, if
+        used together with -s/--skip to remove orphan locks.""")
 
     lock_handling.add_argument('-i', '--ignore-lock',
-            action='store_true',
-            help="""Ignore lock, if file is locked. Together with
-            -s/--skip this will also remove orphan locks.""")
+        action='store_true',
+        help="""Ignore lock, if file is locked. Together with
+        -s/--skip this will also remove orphan locks.""")
 
     skip_force = file_handling.add_mutually_exclusive_group()
 
     skip_force.add_argument('-f', '--force',
-            action='store_true',
-            help="""Force re-writing any files""")
+        action='store_true',
+        help="""Force re-writing any files""")
 
     skip_force.add_argument('-s', '--skip',
-            action='store_true',
-            help="""Do not perform any calculations.""")
+        action='store_true',
+        help="""Do not perform any calculations.""")
 
     ####################################################################
     # Verbosity
@@ -148,12 +148,6 @@ from ...matlab import mat2block
 
 def call(args):
 
-    study = get_study(args)
-
-    if study is None:
-        print('No study found. Nothing to do.')
-        return
-
     ####################################################################
     # Options
     ####################################################################
@@ -165,7 +159,17 @@ def call(args):
     verbose           = args.verbose
 
     ####################################################################
-    # Create the iterator
+    # Study
+    ####################################################################
+
+    study = get_study(args)
+
+    if study is None:
+        print('No study found. Nothing to do.')
+        return
+
+    ####################################################################
+    # Iterator
     ####################################################################
 
     study.update_layout({'mat':args.mat})
@@ -226,11 +230,13 @@ def call(args):
                 print('{}: Read: {}'.format(name.name(), file_mat))
         except Exception as e:
             df.ix[index,'valid'] = False
+            #study.protocol.ix[index,'valid'] = False
             print('{}: Unable to read: {}, {}'.format(name.name(),
                 file_mat, e))
 
         if lock.conditional_unlock(df, index, verbose):
             df.ix[index,'valid'] = False
+            #study.protocol.ix[index,'valid'] = False
             return
 
         ####################################################################
@@ -245,9 +251,11 @@ def call(args):
 
             stimulus.save(file_stimulus)
             df.ix[index,'locked'] = False
+            #study.protocol.ix[index,'valid'] = False
 
         except Exception as e:
             df.ix[index,'valid'] = False
+            #study.protocol.ix[index,'valid'] = False
             print('{}: Unable to create: {}, {}'.format(name.name(),
                 file_stimulus, e))
             lock.conditional_unlock(df, index, verbose, True)
@@ -300,9 +308,6 @@ def call(args):
     ####################################################################
 
     if args.out is not None:
-        if args.epi_code is None:
-            print('Warning: study protocol has not been equipped with a valid EPI code')
-
         if args.verbose:
             print('Save: {}'.format(args.out))
 
@@ -311,3 +316,8 @@ def call(args):
            os.makedirs(dfile)
 
         study.save(args.out)
+
+    else:
+        if args.verbose:
+            print('Save: {}'.format(args.study))
+        study.save(args.study)

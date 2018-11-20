@@ -358,9 +358,6 @@ def call(args):
     ####################################################################
 
     if args.out is not None:
-        if args.epi_code is None:
-            print('Warning: study protocol has not been equipped with a valid EPI code')
-
         if args.verbose:
             print('Save: {}'.format(args.out))
 
@@ -369,3 +366,8 @@ def call(args):
            os.makedirs(dfile)
 
         study.save(args.out)
+
+    else:
+        if args.verbose:
+            print('Save: {}'.format(args.study))
+        study.save(args.study)

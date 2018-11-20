@@ -36,6 +36,9 @@ def add_study_arguments(parser):
     study_parser.add_argument('--study',
         help="""A study.""")
 
+    study_parser.add_argument('--study-name',
+        help="""Name or new name of the study.""")
+
     study_parser.add_argument('--single-subject',
         help="""If this is a study that only contains a single subject,
         you may change the default file layout to name all files
@@ -133,39 +136,45 @@ def add_study_arguments(parser):
         characters in this name.""")
 
     study_parser.add_argument('--vb-image',
-        help="""A template in standard space""")
+        help="""A template in standard space.""")
 
     study_parser.add_argument('--vb-nii',
-        help="""A template in standard space""")
+        help="""A template in standard space.""")
 
     study_parser.add_argument('--vb-name',
         help="""The name of the standard space that shall be used in the
         analysis.""")
 
     study_parser.add_argument('--vb-background-image',
-        help="""Image file with a background image in VB""")
+        help="""Image file with a background image in VB.""")
 
     study_parser.add_argument('--vb-background-nii',
-        help="""Image file with a background image in VB""")
+        help="""Image file with a background image in VB.""")
 
     study_parser.add_argument('--vb-background-name',
-        help="""Name of the background image in VB""")
+        help="""Name of the background image in VB.""")
 
     study_parser.add_argument('--vb-ati-image',
         help="""A template for the ATI reference field in standard
-        space""")
+        space.""")
 
     study_parser.add_argument('--vb-ati-nii',
         help="""A template for the ATI reference field in standard
-        space""")
+        space.""")
 
     study_parser.add_argument('--vb-ati-name',
         help="""A name for the template for the ATI reference field in
-        standard space""")
+        standard space.""")
 
     study_parser.add_argument('--diffeomorphism',
         help="""Name of the diffeomorphism that maps between standard
-        space and subject reference space.""")
+        space and subject reference space. This will overwrite any
+        entries in the protocol. Use with care.""")
+
+    study_parser.add_argument('--rigids',
+        help="""Name of the method that has been used to fit the head
+        movements. This will overwrite any entires in the protocol. Use
+        with care.""")
 
     study_parser.add_argument('--scale-type',
         choices=['diagonal','max','min'],
@@ -451,49 +460,72 @@ def get_study(args):
                 vb = vb,
                 vb_background = vb_background,
                 vb_ati = vb_ati,
-                diffeomorphism = args.diffeomorphism,
-                scale_type = args.scale_type,
                 file_layout=file_layout,
                 root_dir = args.root_directory,
                 strftime = args.strftime,
-                single_subject=single_subject)
+                single_subject=single_subject,
+                scale_type = args.scale_type,
+                name = args.study_name,
+                )
 
     else:
         study.update_layout(file_layout)
+
         if protocol is not None:
             if args.verbose > 1:
                 print('Set (or reset) protocol file in study')
             study.protocol = protocol
+
         if covariates is not None:
             if args.verbose > 1:
                 print('Set (or reset) covariates file in study')
             study.covariates = covariates
+
         if vb is not None:
             if args.verbose > 1:
                 print('Set (or reset) template in standard space')
             study.vb = vb
+            study.set_standard_space(vb.name)
+
         if vb_background is not None:
             if args.verbose > 1:
                 print('Set (or reset) background in standard space')
             study.vb_background = vb_background
+
         if vb_ati is not None:
             if args.verbose > 1:
                 print('Set (or reset) ATI reference field in standard space')
             study.vb_ati = vb_ati
+
         if args.scale_type is not None:
             if args.verbose > 1:
                 print('Set (or reset) scale_type to: {}'.format(
                     args.scale_type))
             study.scale_type = args.scale_type
-        if args.diffeomorphism is not None:
-            if args.verbose > 1:
-                print('Set (or reset) diffeomorphism to: {}'.format(
-                    args.diffeomorphism))
-            study.diffeomorphism = args.diffeomorphism
+
         if args.strftime is not None:
             if args.verbose > 1:
                 print('Set (or reset) strftime to: {}'.format(
                     args.strftime))
+            study.set_strftime(args.strftime)
+
+        if args.diffeomorphism is not None:
+            if args.verbose > 1:
+                print('Set (or reset) diffeomorphism to: {}'.format(
+                    args.diffeomorphism))
+            study.set_diffeomorphism(args.diffeomorphism)
+
+        if args.rigids is not None:
+            if args.verbose > 1:
+                print('Set (or reset) rigids to: {}'.format(
+                    args.rigids))
+            study.set_rigids(args.rigids)
+
+        if args.study_name is not None:
+            if args.verbose > 1:
+                print('Set (or reset) study name to: {}'.format(
+                    args.study_name))
+            study.name = args.study_name
 
     if args.protocol_update:
         for upfile in args.protocol_update:
