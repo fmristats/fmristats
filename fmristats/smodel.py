@@ -182,11 +182,12 @@ class SignalModel:
         The coordinate grid of observations
 
         The coordinates in subject reference space of all points at
-        which MR signals have been aquired.
+        which MR signals have been acquired.
 
         Returns
         -------
         ndarray, shape (n,x,y,z,3), dtype: float
+            [...,:3] = coordinates of observation
         """
         n,x,y,z = self.session.data.shape
         indices = ((slice(0,x), slice(0,y), slice(0,z)))
@@ -206,13 +207,15 @@ class SignalModel:
                 slice_timing=self.slice_timing_design, **kwargs)
         return self.stimulus_design
 
-    def observations(self, include_background=False):
+    def get_observations_(self, include_background=False):
         """
-        Create observation matrix
+        Observation matrix
+
+        Returns the array of (un-cleaned) observations
 
         Returns
         -------
-        ndarray, shape (n,x,y,z,6), dtype: float
+        ndarray, shape (n,x,y,z,9), dtype: float
             [...,:3] = coordinates of observation
             [..., 3] = MR signal response
             [..., 4] = time of observation
@@ -243,26 +246,27 @@ class SignalModel:
 
         return observations
 
-    def create_data_matrix(self, burn_in=None, demean=True, dropna=True, verbose=True, **kwargs):
+    def get_observations(self, burn_in=None, demean=True, dropna=True,
+            include_background=False, verbose=True):
         """
-        Create the data matrix
+        Observation matrix
 
-        This is the essentially the same matrix as returned by
-        .observations(kwargs). However, scan cycles missing data or
-        severe head movements are removed.
+        Returns the array of (un-cleaned) observations
 
         Returns
         -------
-        DataFrame : Not necessarily in this order,
+        ndarray, shape (n,x,y,z,9), dtype: float
             [...,:3] = coordinates of observation
             [..., 3] = MR signal response
             [..., 4] = time of observation
             [..., 5] = task during time of observation
             [..., 6] = block number during time of observation
+            [..., 7] = scan cycle
+            [..., 8] = slice number
         """
         self.burn_in = burn_in
 
-        observations = self.observations(**kwargs)
+        observations = self.get_observations_(include_background)
 
         # remove outlying scans due to severe movements of the subject
         # in the scanner
@@ -321,46 +325,44 @@ class SignalModel:
                 …voxels which are not:               {:>10,d}
                 """.format(self.name.name(), valid.sum(), (~valid).sum()))
 
-        data = DataFrame({
-            'i'     : observations[...,0].ravel(),
-            'j'     : observations[...,1].ravel(),
-            'k'     : observations[...,2].ravel(),
-            'y'     : observations[...,3].ravel(),
-            'time'  : observations[...,4].ravel(),
-            'task'  : observations[...,5].ravel(),
-            'block' : observations[...,6].ravel(),
-            'cycle' : observations[...,7].ravel(),
-            'slice' : observations[...,8].ravel()})
+        self.observations = observations
+        return observations
 
-        if dropna:
-            data.dropna(inplace=True)
-        else:
-            data.dropna(inplace=True,
-                    subset=['i', 'j', 'k', 'y', 'time'])
-
-        self.data = data
-        return self.data
-
-    def create_design_matrix(self, formula='C(task)/C(block, Sum)',
+    def get_design(self, formula='C(task)/C(block, Sum)',
             parameter=['intercept', 'task'], verbose=True):
         """
         Create the design matrix
 
         Returns
         -------
-        (DesignMatrix, DesignMatrix)
+        DesignMatrix
         """
-        assert hasattr(self, 'data'), 'first set the design using .create_data_matrix()'
+        assert hasattr(self, 'observations'), \
+                'first run .get_observations()'
 
-        self.data_matrix = self.data.dropna().copy()
+        obs_m = np.isfinite(self.observations).all(-1)
+        obs_t = self.observations[obs_m]
 
-        dmat = dmatrix(formula, self.data_matrix, eval_env=-1)
+        data = DataFrame({
+            'i'     : obs_t[...,0],
+            'j'     : obs_t[...,1],
+            'k'     : obs_t[...,2],
+            'y'     : obs_t[...,3],
+            'time'  : obs_t[...,4],
+            'task'  : obs_t[...,5],
+            'block' : obs_t[...,6],
+            'cycle' : obs_t[...,7],
+            'slice' : obs_t[...,8]})
+
+        dmat = dmatrix(formula, data, eval_env=-1)
         names = dmat.design_info.column_names
         parameter_dict = { p : [p in n.lower() for n in names].index(True) for p in parameter}
 
         self.exog  = np.asarray(dmat)
         self.formula = formula
         self.parameter_dict = parameter_dict
+        self.dataframe = data
+        self.data = obs_t
         return dmat
 
     ####################################################################
@@ -438,6 +440,17 @@ class SignalModel:
         assert hasattr(self, 'radius'), 'first set hyperparameters'
         assert hasattr(self, 'data'), 'first set data'
 
+        observations = self.observations
+
+        if dropna:
+            data.dropna(inplace=True)
+        else:
+            data.dropna(inplace=True,
+                    subset=['i', 'j', 'k', 'y', 'time'])
+
+        self.data = data
+        return self.data
+
         data_matrix = self.data.dropna().copy()
 
         return model_at(coordinate=x, formula=formula,
@@ -476,6 +489,9 @@ class SignalModel:
     ####################################################################
 
     def get_data_mask(self, verbose=True):
+        """
+        Creates a data mask
+        """
         coordinates = self.population_map.diffeomorphism.coordinates()
         to_index = self.mean_index_affine()
         idx = to_index.apply(coordinates)
@@ -504,21 +520,29 @@ class SignalModel:
 
         return mask
 
-    def create_estimation_matrix(self, mask=True, verbose=True):
+    def get_roi_coordinates(self, mask=True, verbose=True):
         """
+        Coordinates and mask
+
+        Combines the data mask with other masks to produce a suitable
+        mask for fitting.
+
         Parameters
         ----------
         mask : None or bool or str or ndarray, dtype: bool
-            string can be one of 'vb', 'vb_background',
-            'foreground', or 'vb_estimate'. None defaults to 'data'. True will
-            take precedence: 'vb'> 'vb_background'> 'vb_estimate' >
-            'foreground'.
+            Either one of 'vb_mask', 'vb', 'vb_background',
+            'foreground', or 'vb_estimate'. If None defaults to 'data'.
+            True will take precedence: 'vb_mask' > 'vb' >
+            'vb_background'> 'vb_estimate' > 'foreground'.
         verbose : bool
-            increase output verbosity
+            Increase output verbosity
 
         Returns
         -------
-        ndarray
+        coordinates : ndarray, dtype: float
+            Coordinates in standard space.
+        mask : ndarray, dtype: bool
+            Mask in standard space. True when within a ROI.
         """
         coordinates = self.population_map.diffeomorphism.coordinates()
 
@@ -563,9 +587,7 @@ class SignalModel:
         if verbose:
             print('{}: Fit is restricted to: {}'.format(self.name.name(), maskname))
 
-        self.estimation_matrix = coordinates
-        self.estimation_mask   = mask
-        return self.estimation_matrix, self.estimation_mask
+        return coordinates, mask
 
     def fit_at_subject_coordinates(self, coordinates, mask=None, verbose=True):
         """
@@ -584,8 +606,8 @@ class SignalModel:
         """
         assert hasattr(self, 'scale'), 'first set hyperparameters using .set_hyperparameters()'
         assert hasattr(self, 'radius'), 'first set hyperparameters using .set_hyperparameters()'
-        assert hasattr(self, 'data_matrix'), 'first set the design using .create_design_matrix()'
-        assert hasattr(self, 'exog'), 'first set the design using .create_design_matrix()'
+        assert hasattr(self, 'data_matrix'), 'first set the design using .get_design()'
+        assert hasattr(self, 'exog'), 'first set the design using .get_design()'
 
         if verbose:
             print('{}: Start fit'.format(self.name.name()))
@@ -597,12 +619,15 @@ class SignalModel:
         dataframe['reweighted_residual'] = 0.
 
         statistics, parameter_dict, value_dict = fit_field(
-                coordinates = coordinates.copy(),
+                coordinates = coordinates,
                 mask        = mask,
+
+
                 endog       = self.data_matrix.y.values.copy(),
                 exog        = self.exog.copy(),
                 agc         = self.data_matrix[['i','j','k']].values.copy(),
                 dataframe   = dataframe,
+
                 ep          = self.ep,
                 scale       = self.scale,
                 radius      = self.radius,
@@ -671,16 +696,15 @@ class SignalModel:
         if not hasattr(self, 'exog'):
             if verbose:
                 print('{}! Set design matrix / model to default'.format(self.name.name()))
-            self.create_design_matrix()
+            self.get_design()
 
         if verbose:
             print('{}: Create estimation matrix and mask'.format(self.name.name()))
-        self.create_estimation_matrix(mask=mask, verbose=verbose)
+        coordinates, mask = self.get_roi_coordinates(mask=mask, verbose=verbose)
 
         return self.fit_at_subject_coordinates(
-                coordinates = self.estimation_matrix,
-                mask        = self.estimation_mask)
-
+                coordinates = coordinates,
+                mask        = mask)
 
     ###################################################################
     # Descriptive statistics of this session
