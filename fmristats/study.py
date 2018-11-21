@@ -178,9 +178,9 @@ class Study:
         if file_layout is not None:
             self.update_layout(file_layout)
 
-        set_strftime(strftime)
-        set_scale_type(scale_type)
-        set_study_name(name)
+        self.set_strftime(strftime)
+        self.set_scale_type(scale_type)
+        self.set_name(name)
 
     def set_name(self, name):
         if name is None:
@@ -307,8 +307,8 @@ class Study:
         self.covariates.valid = self.covariates.valid.astype(bool)
 
     def iterate(self, *keys, new=None, lookup=None, vb_name=None,
-            diffeomorphism_name=None, rigids_name=None, verbose=True,
-            integer_index=False):
+            diffeomorphism_name=None, rigids_name=None,
+            integer_index=False, verbose=True):
         """
         If covariates in not None, then only subjects in the protocol are
         going to be processed which are also marked as valid in the
@@ -468,7 +468,16 @@ class Study:
             print('No valid entries in the protocol')
             return
 
-        protocol = protocol.loc(axis=0)[(cohort, j, paradigm)]
+        try:
+            protocol = protocol.loc(axis=0)[(cohort, j, paradigm)]
+        except KeyError as e:
+            print("""
+            Unable to find the query combination:
+                cohort   = {},
+                id       = {},
+                paradigm = {}.
+            Failed due to {}""".format( cohort, j, paradigm, e))
+            raise
 
         if len(protocol) < 1:
             print('No entries left in the protocol')

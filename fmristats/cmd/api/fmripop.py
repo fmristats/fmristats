@@ -71,7 +71,8 @@ def define_parser():
         scan cycle that shows more head movements that usual). You won't
         be able to set an outlying scan cycle as reference. More than
         one cycle can be specified, though, and the list will be used as
-        fall backs.""")
+        fall backs. If --cycle is given, DIFFEOMORPHISM_NB will be set
+        to scan_cycle.""")
 
     ####################################################################
     # File handling
@@ -182,9 +183,13 @@ def call(args):
     skip              = args.skip
     verbose           = args.verbose
 
-    diffeomorphism_nb  = args.diffeomorphism_nb
     resolution         = args.resolution
     cycle              = args.cycle
+
+    if cycle is not None:
+        diffeomorphism_nb = 'scan_cycle'
+    else:
+        diffeomorphism_nb = args.diffeomorphism_nb
 
     if args.new_diffeomorphism is None:
         new_diffeomorphism = diffeomorphism_nb

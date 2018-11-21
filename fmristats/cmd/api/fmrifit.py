@@ -368,7 +368,8 @@ def call(args):
             'result',
             'population_map',
             new=['result'],
-            integer_index=True)
+            integer_index=True,
+            verbose=verbose)
 
     df = study_iterator.df.copy()
 

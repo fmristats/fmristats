@@ -41,6 +41,18 @@ def create_argument_parser():
 
     parser.add_argument('files', nargs='+', help='input files')
 
+    ####################################################################
+    # Verbosity
+    ####################################################################
+
+    control_verbosity  = parser.add_argument_group(
+        """Control the level of verbosity""")
+
+    control_verbosity.add_argument('-v', '--verbose',
+        action='count',
+        default=0,
+        help="""Increase output verbosity""")
+
     return parser
 
 def cmd():
@@ -92,9 +104,12 @@ import numpy as np
 
 def call(args):
     for f in args.files:
-        print_info(load(f), f)
+        try:
+            print_info(load(f), f, args.verbose)
+        except FileNotFoundError as e:
+            print(e)
 
-def print_info(x, f):
+def print_info(x, f, verbose=False):
     if type(x) is Image:
         print('{}: image file'.format(f))
         print(x.describe())
@@ -172,18 +187,19 @@ def print_info(x, f):
         print('---------')
         data_frame_information(x.protocol)
         if x.covariates is None:
-            print('Covariates: none\n')
+            print('Covariates:')
             print('-----------')
+            print(None)
         else:
             print('Covariates:')
             print('-----------')
             data_frame_information(x.covariates)
 
-        print('File layout:')
-        print('------------')
-
-        for k,v in x.file_layout.items():
-            print('{:<14}: {}'.format(k, v))
+        if verbose > 1:
+            print('File layout:')
+            print('------------')
+            for k,v in x.file_layout.items():
+                print('{:<14}: {}'.format(k, v))
 
     if type(x) is DataFrame:
         print('{}: protocol or covariates file:\n'.format(f))

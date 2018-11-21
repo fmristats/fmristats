@@ -34,15 +34,19 @@ def add_study_arguments(parser):
             """Create or manage a study""")
 
     study_parser.add_argument('--study',
-        help="""A study.""")
-
-    study_parser.add_argument('--study-name',
-        help="""Name or new name of the study.""")
+        help="""A study. If not specified, fmristats will try to search
+        for a valid study file in your file hierarchy. If you set
+        --study to no or none, this search will be skipped.""")
 
     study_parser.add_argument('--single-subject',
         help="""If this is a study that only contains a single subject,
         you may change the default file layout to name all files
-        starting with the string: SINGLE_SUBJECT.""")
+        starting with the string: SINGLE_SUBJECT. Setting
+        --single_subject will create a new study exclusively for this
+        subject.""")
+
+    study_parser.add_argument('--study-name',
+        help="""Name or new name of the study.""")
 
     study_parser.add_argument('--root_directory',
         help="""Will overwrite the default (the work-directory) and set
@@ -64,12 +68,12 @@ def add_study_arguments(parser):
         help="""The covariates. The covariates file information about
         the subjects in the study.""")
 
-    parser.add_argument('--protocol-update',
+    study_parser.add_argument('--protocol-update',
         nargs='+',
         help="""Update field 'valid' in the protocol file with the
         entries in the this file.""")
 
-    parser.add_argument('--covariates-update',
+    study_parser.add_argument('--covariates-update',
         nargs='+',
         help="""Update field 'valid' in the protocol file with the
         entries in the this file.""")
@@ -250,7 +254,10 @@ import numpy as np
 
 def get_study(args):
 
+    ###################################################################
     # Parse template image in VB
+    ###################################################################
+
     if args.vb_image:
         try:
             if args.verbose:
@@ -273,7 +280,10 @@ def get_study(args):
     else:
         vb = None
 
+    ###################################################################
     # Parse background template image in VB
+    ###################################################################
+
     if args.vb_background_image:
         try:
             if args.verbose:
@@ -296,7 +306,10 @@ def get_study(args):
     else:
         vb_background = None
 
+    ###################################################################
     # Parse ATI reference template image in VB
+    ###################################################################
+
     if args.vb_ati_image:
         try:
             if args.verbose:
@@ -319,86 +332,28 @@ def get_study(args):
     else:
         vb_ati = None
 
-    # Parse or create the protocol file
-    if args.protocol:
-        try:
-            protocol = pd.read_pickle(args.protocol)
-            if args.verbose:
-                print('Read protocol: {}'.format(args.protocol))
-        except Exception as e:
-            print('Unable to read protocol file {}'.format(args.protocol))
-            print('Exception: {}'.format(e))
-            return
-    else:
-        protocol = None
-
-    if protocol is None and args.id is not None:
-        assert len(args.id) == 1, \
-                """When no protocol is specified, only a single id is
-                allowed"""
-
-        if hasattr(args, 'epi_code'):
-            epi_code = args.epi_code
-        else:
-            epi_code = None
-
-        try:
-            date = pd.to_datetime(args.datetime, format=args.strftime)
-        except Exception as e:
-            print('Unable to parse datetime string: {}'.format(args.datetime))
-            print(e)
-            return
-        name = Identifier(cohort=args.cohort, j=args.id[0],
-                datetime=date, paradigm=args.paradigm)
-        protocol = name.to_data_frame(epi_code)
-
-    force_single_subject = False
-    if protocol is None:
-        if hasattr(args, 'epi_code'):
-            epi_code = args.epi_code
-        else:
-            epi_code = None
-
-        for f in [args.session, args.reference_maps,
-                args.population_map, args.fit, args.stimulus]:
-            if f is not None:
-                #print('Read: {}'.format(f))
-                try:
-                    instance = load(f)
-                    protocol = instance.name.to_data_frame(epi_code)
-                    print('Processing subject: {}'.format(
-                        instance.name.name()))
-                    force_single_subject = True
-                    break
-                except Exception as e:
-                    pass
-                    #print('…failed with {}'.format(e))
-
-    # Parse or create the covariate file
-    if args.covariates:
-        try:
-            covariates = pd.read_pickle(args.covariates)
-            if args.verbose:
-                print('Read covariates: {}'.format(args.covariates))
-        except Exception as e:
-            print('Unable to read covariates file {}'.format(args.covariates))
-            print('Exception: {}'.format(e))
-            return
-    else:
-        covariates = None
+    ###################################################################
+    # Decide whether to process a single subject
+    ###################################################################
 
     if args.single_subject:
         if args.single_subject == 'yes':
             single_subject = True
+        elif args.single_subject == 'no':
+            single_subject = False
         else:
             single_subject = args.single_subject
-    elif force_single_subject:
-        single_subject = True
     else:
         single_subject = False
 
-    # Find study file
-    if (args.study is None) and not single_subject:
+    ###################################################################
+    # Find study file if it exists
+    ###################################################################
+
+    if args.study in ['none', 'no']:
+        study_file = None
+        study_dir = None
+    elif args.study is None:
         dir_home = str(Path.home())
         dir_curr = '.'
         dir_n = args.traverse_upwards
@@ -415,45 +370,133 @@ def get_study(args):
                 else:
                     dir_curr = join('..', dir_curr)
 
-        if len(x) > 1:
-            print('Found more than one study: {}'.format(x))
+        if len(x) == 0:
+            study_file = None
+            study_dir = None
+        elif len(x) > 1:
+            print("""
+            Found more than one study. Please choose the correct study
+            manually using --study from the list:
+                {}""".format(x))
             return
         elif len(x) == 1:
             study_dir = dir_curr
-            study_file = x[0]
-            print('Found study: {}'.format(os.path.join(study_dir, study_file)))
+            study_file = join(study_dir, x[0])
+            print('Found study: {}'.format(study_file)) #os.path.join(study_dir, study_file)))
+    else:
+        study_file = args.study
+        study_dir = None
 
-            os.chdir(study_dir)
-            args.study = study_file
-            print('Working directory has been changed to: {}'.format(os.getcwd()))
+    ###################################################################
+    # Parse protocol
+    ###################################################################
 
-    # Parse or create the study file
-    if args.study:
+    if args.protocol:
+        try:
+            protocol = pd.read_pickle(args.protocol)
+            if args.verbose:
+                print('Read protocol: {}'.format(args.protocol))
+        except Exception as e:
+            print('Unable to read protocol file {}'.format(args.protocol))
+            print('Exception: {}'.format(e))
+            return
+    else:
+        if hasattr(args, 'epi_code'):
+            epi_code = args.epi_code
+        else:
+            epi_code = None
+
+        for f in [args.session, args.reference_maps,
+                args.population_map, args.fit, args.stimulus]:
+            if f is not None:
+                try:
+                    instance = load(f)
+                    protocol = instance.name.to_data_frame(epi_code)
+                    print('Processing subject: {}'.format(
+                        instance.name.name()))
+                    break
+                except Exception as e:
+                    pass
+            else:
+                protocol = None
+
+    ###################################################################
+    # Parse covariates
+    ###################################################################
+
+    if args.covariates:
+        try:
+            covariates = pd.read_pickle(args.covariates)
+            if args.verbose:
+                print('Read covariates: {}'.format(args.covariates))
+        except Exception as e:
+            print('Unable to read covariates file {}'.format(args.covariates))
+            print('Exception: {}'.format(e))
+            return
+    else:
+        covariates = None
+
+    ###################################################################
+    # Parse study
+    ###################################################################
+
+    if study_file is not None:
         try:
             if args.verbose:
-                print('Read study: {}'.format(args.study))
-            study = pd.read_pickle(args.study)
+                print('Read study: {}'.format(study_file))
+            study = pd.read_pickle(study_file)
+            args.study = study_file
         except Exception as e:
-            print('Unable to read study file {}'.format(args.study))
-            print('Exception: {}'.format(e))
+            print('Unable to read study file {}, {}'.format(
+                study_file, e))
             return
     else:
         study = None
 
+    if protocol is None and study is None and args.id is not None:
+        assert len(args.id) == 1, \
+                """When no protocol or study is specified or found, only
+                a single ID in --id is allowed"""
+
+        if hasattr(args, 'epi_code'):
+            epi_code = args.epi_code
+        else:
+            epi_code = None
+
+        try:
+            date = pd.to_datetime(args.datetime, format=args.strftime)
+        except Exception as e:
+            print('Unable to parse datetime string: {}'.format(args.datetime))
+            print(e)
+            return
+        name = Identifier(cohort=args.cohort, j=args.id[0],
+                datetime=date, paradigm=args.paradigm)
+        protocol = name.to_data_frame(epi_code)
+
+        if args.study_name is None:
+            args.study_name = name.name()
+
+    ###################################################################
     # Exit if nothing to do
+    ###################################################################
+
     if (study is None) and (protocol is None):
-        print('Unable to find a valid study or protocol.')
+        print('Unable to find or create a valid study or protocol.')
         return
+
+    ###################################################################
+    # Update study or create study if it still does still not exist
+    ###################################################################
 
     file_layout = {
         'stimulus':args.stimulus,
         'session':args.session,
         'reference_maps':args.reference_maps,
-        'result':args.fit,
         'population_map':args.population_map,
+        'result':args.fit,
         }
 
-    if (study is None) or single_subject:
+    if single_subject or (study is None):
         study = Study(
                 protocol=protocol,
                 covariates=covariates,
@@ -467,7 +510,7 @@ def get_study(args):
                 scale_type = args.scale_type,
                 name = args.study_name,
                 )
-
+        args.study = study.name
     else:
         study.update_layout(file_layout)
 
@@ -534,7 +577,7 @@ def get_study(args):
                     print('Update protocol with: {}'.format(upfile))
                 df = pd.read_pickle(upfile)
             except Exception as e:
-                print('Unable to read file {}, {}'.format(args.study, e))
+                print('Unable to read file {}, {}'.format(upfile, e))
                 return
             study.update_protocol(df)
 
@@ -545,17 +588,29 @@ def get_study(args):
                     print('Update covariates with: {}'.format(upfile))
                 df = pd.read_pickle(upfile)
             except Exception as e:
-                print('Unable to read file {}, {}'.format(args.study, e))
+                print('Unable to read file {}, {}'.format(upfile, e))
                 return
             study.update_covariates(df)
 
-    study.filter(cohort=args.cohort, j=args.id, paradigm=args.paradigm, inplace=True)
+    try:
+        study.filter(cohort=args.cohort, j=args.id, paradigm=args.paradigm, inplace=True)
+    except:
+        return
 
     if args.protocol_query:
         study.query(args.protocol_query, inplace=True)
 
     if args.covariates_query:
         study.query(args.covariates_query, inplace=True)
+
+    ###################################################################
+    # Change working direction
+    ###################################################################
+
+    if study_dir is not None:
+        os.chdir(study_dir)
+        if args.verbose:
+            print('Working directory changed to: {}'.format(os.getcwd()))
 
     return study
 

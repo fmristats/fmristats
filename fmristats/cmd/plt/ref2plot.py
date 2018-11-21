@@ -327,6 +327,11 @@ def call(args):
 
     ####################################################################
 
+    if args.cores != 1:
+        if verbose:
+            print('Multiprocessing not implemented yet.')
+        args.cores = 1
+
     if len(df) > 1 and ((args.cores is None) or (args.cores > 1)):
         try:
             pool = ThreadPool(args.cores)
