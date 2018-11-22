@@ -246,7 +246,7 @@ class SignalModel:
 
         return observations
 
-    def get_observations(self, burn_in=None, demean=True, dropna=True,
+    def get_observations(self, burn_in=4, demean=True, dropna=True,
             include_background=False, verbose=True):
         """
         Observation matrix
@@ -314,15 +314,15 @@ class SignalModel:
             valid = np.isfinite(observations).all(axis=-1)
             if demean:
                 print("""{}:
-                …voxels which are part of the model: {:>10,d}
-                …voxels which are not:               {:>10,d}
-                …intercept field refers to:          {:>10.2f} s
+                …number of within brain observations: {:>10,d}
+                …number of    non brain observations: {:>10,d}
+                …intercept field refers to time:      {:>10.2f} s
                 """.format(self.name.name(), valid.sum(), (~valid).sum(),
                     self.midpoint))
             else:
                 print("""{}:
-                …voxels which are part of the model: {:>10,d}
-                …voxels which are not:               {:>10,d}
+                …number of within brain observations: {:>10,d}
+                …number of    non brain observations: {:>10,d}
                 """.format(self.name.name(), valid.sum(), (~valid).sum()))
 
         self.observations = observations
@@ -358,7 +358,7 @@ class SignalModel:
         names = dmat.design_info.column_names
         parameter_dict = { p : [p in n.lower() for n in names].index(True) for p in parameter}
 
-        self.exog  = np.asarray(dmat)
+        self.design  = np.asarray(dmat)
         self.formula = formula
         self.parameter_dict = parameter_dict
         self.dataframe = data
@@ -432,7 +432,7 @@ class SignalModel:
             A formula.
         timevec : bool
             If the formula does not contain time, the design matrix
-            (exog) will not contain time as a covariate. If timevec is
+            (design) will not contain time as a covariate. If timevec is
             True, this will add a timevec attribute to the model
             instance that contains the time vector.
         """
@@ -514,9 +514,9 @@ class SignalModel:
 
         if verbose:
             print("""{}:
-            …coordinates which are in data mask: {:>10,d}
-            …coordinates which are not:          {:>10,d}""".format(
-                self.name.name(), mask.sum(), (~mask).sum()))
+                …coordinates which are in data mask: {:>10,d}
+                …coordinates which are not:          {:>10,d}""".format(
+                    self.name.name(), mask.sum(), (~mask).sum()))
 
         return mask
 
@@ -604,35 +604,55 @@ class SignalModel:
         -------
         Result
         """
-        assert hasattr(self, 'scale'), 'first set hyperparameters using .set_hyperparameters()'
-        assert hasattr(self, 'radius'), 'first set hyperparameters using .set_hyperparameters()'
-        assert hasattr(self, 'data_matrix'), 'first set the design using .get_design()'
-        assert hasattr(self, 'exog'), 'first set the design using .get_design()'
+        if not hasattr(self, 'scale'):
+            if verbose:
+                print('{}! Set hyperparameters to default'.format(self.name.name()))
+            self.set_hyperparameters()
+
+        if not hasattr(self, 'radius'):
+            if verbose:
+                print('{}! Set hyperparameters to default'.format(self.name.name()))
+            self.set_hyperparameters()
+
+        if not hasattr(self, 'observations'):
+            if verbose:
+                print('{}! Set observations to default'.format(self.name.name()))
+            self.get_observations()
+
+        if not hasattr(self, 'data'):
+            if verbose:
+                print('{}! Set design to default'.format(self.name.name()))
+            self.get_design()
+
+        if not hasattr(self, 'design'):
+            if verbose:
+                print('{}! Set design to default'.format(self.name.name()))
+            self.get_design()
 
         if verbose:
-            print('{}: Start fit'.format(self.name.name()))
+            if mask is None:
+                print("""{}:
+                    …number of coordinates to fit: {:>10,d}
+                    """.format(
+                    self.name.name(), mask.sum()))
+            else:
+                print("""{}:
+                    …number of coordinates to fit: {:>10,d}
+                    …number of coordinates not to: {:>10,d}
+                    """.format(self.name.name(), mask.sum(), (~mask).sum()))
 
         old_settings = np.seterr(divide='raise', invalid='raise')
         time0 = time.time()
 
-        dataframe = self.data_matrix[['time', 'i', 'j', 'k']].copy()
-        dataframe['reweighted_residual'] = 0.
-
         statistics, parameter_dict, value_dict = fit_field(
-                coordinates = coordinates,
-                mask        = mask,
-
-
-                endog       = self.data_matrix.y.values.copy(),
-                exog        = self.exog.copy(),
-                agc         = self.data_matrix[['i','j','k']].values.copy(),
-                dataframe   = dataframe,
-
-                ep          = self.ep,
-                scale       = self.scale,
-                radius      = self.radius,
-                verbose     = verbose,
-                name        = self.name.name())
+                coordinates, mask,
+                data = self.data,
+                design = self.design,
+                ep = self.ep,
+                scale = self.scale,
+                radius = self.radius,
+                verbose = verbose,
+                durbin_watson=False, backend='statsmodels')
 
         time1 = time.time()
         np.seterr(**old_settings)
@@ -678,28 +698,6 @@ class SignalModel:
         -------
         Result : Fitted field.
         """
-        if not hasattr(self, 'scale'):
-            if verbose:
-                print('{}! Set hyperparameters to default'.format(self.name.name()))
-            self.set_hyperparameters()
-
-        if not hasattr(self, 'radius'):
-            if verbose:
-                print('{}! Set hyperparameters to default'.format(self.name.name()))
-            self.set_hyperparameters()
-
-        if not hasattr(self, 'data_matrix'):
-            if verbose:
-                print('{}! Set data matrix to default (and with no burn-in)'.format(self.name.name()))
-            self.create_data_matrix()
-
-        if not hasattr(self, 'exog'):
-            if verbose:
-                print('{}! Set design matrix / model to default'.format(self.name.name()))
-            self.get_design()
-
-        if verbose:
-            print('{}: Create estimation matrix and mask'.format(self.name.name()))
         coordinates, mask = self.get_roi_coordinates(mask=mask, verbose=verbose)
 
         return self.fit_at_subject_coordinates(
@@ -711,14 +709,17 @@ class SignalModel:
     ###################################################################
 
     def hyperparameters(self):
-        return {
-                'scale_type':self.scale_type,
-                'scale':self.scale,
-                'factor':self.factor,
-                'mass':self.mass,
-                'radius':self.radius,
-                #'half_edge':self.half_edge,
-                }
+        if hasattr(self, 'scale_type'):
+            return {
+                    'scale_type':self.scale_type,
+                    'scale':self.scale,
+                    'factor':self.factor,
+                    'mass':self.mass,
+                    'radius':self.radius,
+                    }
+        else:
+            print('Hyperparameters not set')
+            return
 
     def describe(self):
         description = """
@@ -933,7 +934,7 @@ class Result:
             assert mask.shape == self.statistics.shape[:-2], 'mask shape must match image shape'
 
         if verbose:
-            print('Fit is restricted to: {}'.format(maskname))
+            print('Statistics field is restricted to: {}'.format(maskname))
 
         if mask is not None:
             assert type(mask) is np.ndarray, 'mask must be an ndarray'
