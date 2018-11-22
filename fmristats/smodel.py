@@ -251,7 +251,7 @@ class SignalModel:
         """
         Observation matrix
 
-        Returns the array of (un-cleaned) observations
+        Returns the array of (cleaned) observations
 
         Returns
         -------
@@ -343,7 +343,7 @@ class SignalModel:
         obs_m = np.isfinite(self.observations).all(-1)
         obs_t = self.observations[obs_m]
 
-        data = DataFrame({
+        dataframe = DataFrame({
             'i'     : obs_t[...,0],
             'j'     : obs_t[...,1],
             'k'     : obs_t[...,2],
@@ -354,14 +354,14 @@ class SignalModel:
             'cycle' : obs_t[...,7],
             'slice' : obs_t[...,8]})
 
-        dmat = dmatrix(formula, data, eval_env=-1)
+        dmat = dmatrix(formula, dataframe, eval_env=-1)
         names = dmat.design_info.column_names
         parameter_dict = { p : [p in n.lower() for n in names].index(True) for p in parameter}
 
         self.design  = np.asarray(dmat)
         self.formula = formula
         self.parameter_dict = parameter_dict
-        self.dataframe = data
+        self.dataframe = dataframe
         self.data = obs_t
         return dmat
 
@@ -436,9 +436,9 @@ class SignalModel:
             True, this will add a timevec attribute to the model
             instance that contains the time vector.
         """
-        assert hasattr(self, 'scale'), 'first set hyperparameters'
-        assert hasattr(self, 'radius'), 'first set hyperparameters'
-        assert hasattr(self, 'data'), 'first set data'
+        assert hasattr(self, 'scale'), 'first run .set_hyperparameters()'
+        assert hasattr(self, 'radius'), 'first run .set_hyperparameters()'
+        assert hasattr(self, 'data'), 'first run .get_design()'
 
         observations = self.observations
 

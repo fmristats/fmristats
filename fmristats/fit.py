@@ -37,20 +37,29 @@ from statsmodels.stats.stattools import durbin_watson
 
 ########################################################################
 
-# TODO:
+
 def data_at(coordinate, data, scale:float, radius:float):
-    agc = data[['i','j','k']].values
-    distances = ((agc - coordinate)**2).sum(axis=1)
-    valid = np.less(distances, radius**2)
+    r = radius**2
+    s = -2*scale**2
+    squared_distances = ((data[...,:3] - coordinate)**2).sum(axis=1)
+    valid = np.where(squared_distances < r)
+    weights = np.exp(squared_distances[valid] / s)
+    data = data[valid][...,3]
 
-    double_squared_scale = -2*(scale**2)
-    weights  = np.exp( distances[valid] / double_squared_scale )
+    dataframe = DataFrame({
+        'i'      : data[...,0],
+        'j'      : data[...,1],
+        'k'      : data[...,2],
+        'y'      : data[...,3],
+        'time'   : data[...,4],
+        'task'   : data[...,5],
+        'block'  : data[...,6],
+        'cycle'  : data[...,7],
+        'slice'  : data[...,8],
+        'weight' : weights})
 
-    data = data[valid].copy()
-    data['weight'] = weights
-    return data
+    return dataframe
 
-# TODO:
 def model_at(formula, timevec=False, **kwargs):
     data = data_at(**kwargs)
     m = smf.wls(formula, weights=data.weight, data=data)
