@@ -652,7 +652,7 @@ class SignalModel:
                 scale = self.scale,
                 radius = self.radius,
                 verbose = verbose,
-                durbin_watson=False, backend='statsmodels')
+                durbin_watson=False, backend='jit')
 
         time1 = time.time()
         np.seterr(**old_settings)

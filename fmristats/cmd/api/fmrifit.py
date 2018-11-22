@@ -462,24 +462,21 @@ def call(args):
                 offset=offset,
                 preset=preset)
 
-        smodel.create_data_matrix(burn_in=burn_in, verbose=verbose)
-
         smodel.set_hyperparameters(
                 scale_type=scale_type,
                 scale=scale,
                 factor=factor,
                 mass=mass)
 
-        if verbose > 2:
-            print(smodel.describe())
+        smodel.get_observations(burn_in=burn_in, verbose=verbose)
 
-        if verbose:
-            print('{}: Create design matrix'.format(name.name()))
-
-        smodel.create_design_matrix(
+        smodel.get_design(
                 formula=formula,
                 parameter=parameter,
                 verbose=verbose)
+
+        if verbose > 2:
+            print("""{}: {}""".format(name.name(), smodel.describe()))
 
         ########################################################################
         # Fit
@@ -513,7 +510,7 @@ def call(args):
                 print('{}: Save: {}'.format(name.name(),
                     file_result))
 
-            population_map.save(file_result)
+            result.save(file_result)
             df.ix[index,'locked'] = False
 
         except Exception as e:

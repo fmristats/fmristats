@@ -23,13 +23,17 @@ Fit signal model to signal data
 
 """
 
+from numba import jit, njit
+
+import numpy as np
+
+from numpy.linalg import solve, inv
+
 import statsmodels.api as sm
 
 import statsmodels.formula.api as smf
 
 from statsmodels.stats.stattools import durbin_watson
-
-import numpy as np
 
 ########################################################################
 
@@ -61,7 +65,7 @@ def extract_field(field, param, value, parameter_dict, value_dict):
 
 def fit_field(coordinates, mask, data, design, ep:int, scale:float,
         radius:float, verbose=True,
-        durbin_watson=False, backend='statsmodels'):
+        durbin_watson=False, backend='jit'):
     """
     Parameters
     ----------
@@ -164,8 +168,10 @@ def fit_field(coordinates, mask, data, design, ep:int, scale:float,
 
     else:
         if mask is None:
+            print('JIT with no mask')
             fit_nm(result, coordinates, data, design, r, s)
         else:
+            print('JIT with mask')
             fit_wm(result, coordinates, mask, data, design, r, s)
 
     return result, parameter_dict, value_dict
@@ -264,6 +270,7 @@ def fit_sm_wm(result, coordinates, mask, data, design, r, s):
                         result[i,j,k,3,0] = fit.mse_resid
                         result[i,j,k,3,1] = fit.df_resid
 
+@jit(nopython=True, fastmath=True, parallel=True)
 def fit_nm(result, coordinates, data, design, r, s):
     ni, nj, nk, _ = coordinates.shape
     for i in range(ni):
@@ -273,17 +280,24 @@ def fit_nm(result, coordinates, data, design, r, s):
                 valid = np.where(squared_distances < r)
                 if valid[0].size > 120:
                     weights = np.exp(squared_distances[valid] / s)
-                    fit = sm.WLS(
-                        endog    = data[valid][...,3],
-                        exog     = design[valid],
-                        weights  = weights,
-                        hasconst = True).fit()
-                    result[i,j,k,0]   = fit.params
-                    result[i,j,k,1]   = fit.bse
-                    result[i,j,k,2]   = fit.tvalues
-                    result[i,j,k,3,0] = fit.mse_resid
-                    result[i,j,k,3,1] = fit.df_resid
+                    endog   = data[valid][...,3]
+                    exog    = design[valid]
 
+                    W = np.diag(weights)
+                    V_inverse = exog.T.dot(W).dot(exog)
+                    params    = solve(V_inverse, exog.T.dot(W).dot(endog))   # regression parameters
+                    residuals = endog - exog.dot(params)                     # residuals
+                    df_resid  = exog.shape[0] - exog.shape[1]                # degrees of freedom
+                    mse_resid = residuals.T.dot(W).dot(residuals) / df_resid # mean squared error
+                    bse       = np.sqrt(mse_resid*np.diag(inv(V_inverse)))   # standard error
+
+                    result[i,j,k,0]   = params
+                    result[i,j,k,1]   = bse
+                    result[i,j,k,2]   = params / bse
+                    result[i,j,k,3,0] = mse_resid
+                    result[i,j,k,3,1] = df_resid
+
+@jit(nopython=True, fastmath=True, parallel=True)
 def fit_wm(result, coordinates, mask, data, design, r, s):
     ni, nj, nk, _ = coordinates.shape
     for i in range(ni):
@@ -294,13 +308,19 @@ def fit_wm(result, coordinates, mask, data, design, r, s):
                     valid = np.where(squared_distances < r)
                     if valid[0].size > 120:
                         weights = np.exp(squared_distances[valid] / s)
-                        fit = sm.WLS(
-                            endog    = data[valid][...,3],
-                            exog     = design[valid],
-                            weights  = weights,
-                            hasconst = True).fit()
-                        result[i,j,k,0]   = fit.params
-                        result[i,j,k,1]   = fit.bse
-                        result[i,j,k,2]   = fit.tvalues
-                        result[i,j,k,3,0] = fit.mse_resid
-                        result[i,j,k,3,1] = fit.df_resid
+                        endog   = data[valid][...,3]
+                        exog    = design[valid]
+
+                        W = np.diag(weights)
+                        V_inverse = exog.T.dot(W).dot(exog)
+                        params    = solve(V_inverse, exog.T.dot(W).dot(endog))   # regression parameters
+                        residuals = endog - exog.dot(params)                     # residuals
+                        df_resid  = exog.shape[0] - exog.shape[1]                # degrees of freedom
+                        mse_resid = residuals.T.dot(W).dot(residuals) / df_resid # mean squared error
+                        bse       = np.sqrt(mse_resid*np.diag(inv(V_inverse)))   # standard error
+
+                        result[i,j,k,0]   = params
+                        result[i,j,k,1]   = bse
+                        result[i,j,k,2]   = params / bse
+                        result[i,j,k,3,0] = mse_resid
+                        result[i,j,k,3,1] = df_resid
