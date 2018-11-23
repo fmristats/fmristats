@@ -37,7 +37,7 @@ from .pmap import PopulationMap
 
 from .stimulus import Stimulus
 
-from .fit import fit_field, extract_field, model_at, data_at
+from .fit import fit_field, extract_field, model_at, data_at, fit_at
 
 import time
 
@@ -81,7 +81,7 @@ class SignalModel:
         self.population_map = population_map
 
         self.shape = (session.numob, session.shape[session.ep])
-        self.slice_timing = session.slice_time
+        self.slice_timing = session.slice_timing
 
         self.name = self.session.name
         self.epi_code = self.session.epi_code
@@ -327,16 +327,16 @@ class SignalModel:
         if verbose:
             if demean:
                 print("""{}:
-             Number of within brain observations: {:>10,d}
-             Number of    non brain observations: {:>10,d}
-             Intercept field refers to time:      {:>10.2f} s
-             """.format(self.name.name(), valid.sum(), (~valid).sum(),
-                 self.midpoint))
+            Number of within brain observations: {:>10,d}
+            Number of    non brain observations: {:>10,d}
+            Intercept field refers to time:      {:>10.2f} s""".format(
+                self.name.name(), valid.sum(), (~valid).sum(),
+                self.midpoint))
             else:
-            print("""{}:
-             Number of within brain observations: {:>10,d}
-             Number of    non brain observations: {:>10,d}
-             """.format(self.name.name(), valid.sum(), (~valid).sum()))
+                print("""{}:
+            Number of within brain observations: {:>10,d}
+            Number of    non brain observations: {:>10,d}""".format(
+                self.name.name(), valid.sum(), (~valid).sum()))
 
     def set_design(self, formula='C(task)/C(block, Sum)',
             parameter=['intercept', 'task'], verbose=True):
@@ -465,6 +465,60 @@ class SignalModel:
         x=self.population_map.diffeomorphism.apply(x)
         return self.model_at_subject_coordinate(x, **kwargs)
 
+    def fit_at_subject_coordinate(self, x,
+            formula='signal~C(task)/C(block, Sum)'):
+        """
+        Fit the signal model to data at specified coordinates given
+        with respect to the coordinate system of the subject reference
+        space.
+
+        Parameters
+        ----------
+        x : ndarray, shape (3,), dtype: float
+            The coordinates at which to fit the model
+        formula : str
+            A formula.
+        also_return_data : bool
+            If the formula does not contain time, the design matrix
+            (design) will not contain time as a covariate. If
+            also_return_data is True, this will also return the data
+            matrix.
+        """
+        assert hasattr(self, 'scale'), 'first set hyperparameters'
+        assert hasattr(self, 'radius'), 'first set hyperparameters'
+        assert hasattr(self, 'data'), 'first set data'
+
+        return fit_at(formula=formula,
+                coordinate=x,
+                data=self.data,
+                scale=self.scale,
+                radius=self.radius)
+
+    def fit_at_index(self, index, **kwargs):
+        """
+        Fit the signal model to data at specified coordinates
+
+        Parameters
+        ----------
+        index : tuple
+            The index at which to fit the model
+        """
+        x=self.population_map.diffeomorphism.apply_to_index(index)
+        return self.fit_at_subject_coordinate(x, **kwargs)
+
+    def fit_at_coordinate(self, x, **kwargs):
+        """
+        Fit the signal model to data at specified coordinates given with
+        respect to the coordinate system of the population space.
+
+        Parameters
+        ----------
+        x : ndarray, shape (3,), dtype: float
+            The coordinates at which to fit the model
+        """
+        x=self.population_map.diffeomorphism.apply(x)
+        return self.fit_at_subject_coordinate(x, **kwargs)
+
     ####################################################################
     # Fit at many coordinates
     ####################################################################
@@ -495,9 +549,9 @@ class SignalModel:
 
         if verbose:
             print("""{}:
-                 Coordinates which are in data mask: {:>10,d}
-                 Coordinates which are not:          {:>10,d}""".format(
-                     self.name.name(), mask.sum(), (~mask).sum()))
+            Coordinates which are in data mask: {:>10,d}
+            Coordinates which are not:          {:>10,d}""".format(
+                self.name.name(), mask.sum(), (~mask).sum()))
 
         return mask
 
@@ -613,14 +667,13 @@ class SignalModel:
         if verbose:
             if mask is None:
                 print("""{}:
-                 Number of coordinates to fit: {:>10,d}
-                 """.format(
+            Number of coordinates to fit: {:>10,d}""".format(
                 self.name.name(), mask.sum()))
             else:
                 print("""{}:
-                 Number of coordinates to fit: {:>10,d}
-                 Number of coordinates not to: {:>10,d}
-                 """.format(self.name.name(), mask.sum(), (~mask).sum()))
+            Number of coordinates to fit: {:>10,d}
+            Number of coordinates not to: {:>10,d}""".format(
+                self.name.name(), mask.sum(), (~mask).sum()))
 
         old_settings = np.seterr(divide='raise', invalid='raise')
         time0 = time.time()
