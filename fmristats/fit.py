@@ -29,6 +29,8 @@ import numpy as np
 
 from numpy.linalg import solve, inv
 
+from pandas import DataFrame
+
 import statsmodels.api as sm
 
 import statsmodels.formula.api as smf
@@ -37,20 +39,19 @@ from statsmodels.stats.stattools import durbin_watson
 
 ########################################################################
 
-
 def data_at(coordinate, data, scale:float, radius:float):
     r = radius**2
     s = -2*scale**2
     squared_distances = ((data[...,:3] - coordinate)**2).sum(axis=1)
     valid = np.where(squared_distances < r)
     weights = np.exp(squared_distances[valid] / s)
-    data = data[valid][...,3]
+    data = data[valid]
 
     dataframe = DataFrame({
-        'i'      : data[...,0],
-        'j'      : data[...,1],
-        'k'      : data[...,2],
-        'y'      : data[...,3],
+        'x'      : data[...,0],
+        'y'      : data[...,1],
+        'z'      : data[...,2],
+        'signal' : data[...,3],
         'time'   : data[...,4],
         'task'   : data[...,5],
         'block'  : data[...,6],
@@ -60,14 +61,14 @@ def data_at(coordinate, data, scale:float, radius:float):
 
     return dataframe
 
-def model_at(formula, timevec=False, **kwargs):
+def model_at(formula, also_return_data=False, **kwargs):
     data = data_at(**kwargs)
     m = smf.wls(formula, weights=data.weight, data=data)
 
-    if timevec:
-        m.timevec = data['time']
-
-    return m
+    if also_return_data:
+        return m, data
+    else:
+        return m
 
 def extract_field(field, param, value, parameter_dict, value_dict):
     return field[..., value_dict[value], parameter_dict[param]]

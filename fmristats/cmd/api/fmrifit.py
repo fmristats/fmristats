@@ -456,7 +456,7 @@ def call(args):
             reference_maps=reference_maps,
             population_map=population_map)
 
-        smodel.create_stimulus_design(
+        smodel.set_stimulus_design(
                 s=stimulus_block,
                 c=control_block,
                 offset=offset,
@@ -468,9 +468,9 @@ def call(args):
                 factor=factor,
                 mass=mass)
 
-        smodel.get_observations(burn_in=burn_in, verbose=verbose)
+        smodel.set_data(burn_in=burn_in, verbose=verbose)
 
-        smodel.get_design(
+        smodel.set_design(
                 formula=formula,
                 parameter=parameter,
                 verbose=verbose)

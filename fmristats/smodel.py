@@ -81,7 +81,7 @@ class SignalModel:
         self.population_map = population_map
 
         self.shape = (session.numob, session.shape[session.ep])
-        self.slice_timing_design = session.slice_time
+        self.slice_timing = session.slice_time
 
         self.name = self.session.name
         self.epi_code = self.session.epi_code
@@ -198,16 +198,12 @@ class SignalModel:
 
         return coordinates
 
-    def create_slice_timing_design(self):
-        return self.slice_timing_design
-
-    def create_stimulus_design(self, **kwargs):
-        assert hasattr(self, 'slice_timing_design'), 'first create the slice timing design'
+    def set_stimulus_design(self, **kwargs):
         self.stimulus_design = self.stimulus.design(
-                slice_timing=self.slice_timing_design, **kwargs)
+                slice_timing=self.slice_timing, **kwargs)
         return self.stimulus_design
 
-    def get_observations_(self, include_background=False):
+    def get_observations(self, include_background=False):
         """
         Observation matrix
 
@@ -224,7 +220,6 @@ class SignalModel:
             [..., 7] = scan cycle
             [..., 8] = slice number
         """
-        assert hasattr(self, 'slice_timing_design'), 'first set the slice time design'
         assert hasattr(self, 'stimulus_design'), 'first set the stimulus design'
         n,x,y,z = self.session.data.shape
 
@@ -237,7 +232,7 @@ class SignalModel:
             observations[..., 3] = self.session.data
 
         tmp = np.moveaxis(observations, self.ep+1, 1)
-        tmp[...,4]  = self.slice_timing_design[...,None,None]
+        tmp[...,4]  = self.slice_timing[...,None,None]
         tmp[...,5:7] = self.stimulus_design[...,None,None,:]
 
         x = np.mgrid[:self.shape[0], :self.shape[1]]
@@ -246,27 +241,30 @@ class SignalModel:
 
         return observations
 
-    def get_observations(self, burn_in=4, demean=True, dropna=True,
+    def set_data(self, burn_in=4, demean=True, dropna=True,
             include_background=False, verbose=True):
         """
-        Observation matrix
+        Set the observation matrix
 
-        Returns the array of (cleaned) observations
+        Notes
+        -----
 
-        Returns
-        -------
-        ndarray, shape (n,x,y,z,9), dtype: float
-            [...,:3] = coordinates of observation
-            [..., 3] = MR signal response
-            [..., 4] = time of observation
-            [..., 5] = task during time of observation
-            [..., 6] = block number during time of observation
-            [..., 7] = scan cycle
-            [..., 8] = slice number
+        The observations will be an array of the following shape:
+
+            ndarray, shape (n,x,y,z,9), dtype: float
+                [...,:3] = coordinates of observation
+                [..., 3] = MR signal response
+                [..., 4] = time of observation
+                [..., 5] = task during time of observation
+                [..., 6] = block number during time of observation
+                [..., 7] = scan cycle
+                [..., 8] = slice number
+
+        The data in this array is the basis of all model fits.
         """
         self.burn_in = burn_in
 
-        observations = self.get_observations_(include_background)
+        observations = self.get_observations(include_background)
 
         # remove outlying scans due to severe movements of the subject
         # in the scanner
@@ -310,25 +308,37 @@ class SignalModel:
             self.midpoint = np.nanmean(observations[...,4])
             observations[...,4] = observations[...,4] - self.midpoint
 
-        if verbose:
-            valid = np.isfinite(observations).all(axis=-1)
-            if demean:
-                print("""{}:
-                …number of within brain observations: {:>10,d}
-                …number of    non brain observations: {:>10,d}
-                …intercept field refers to time:      {:>10.2f} s
-                """.format(self.name.name(), valid.sum(), (~valid).sum(),
-                    self.midpoint))
-            else:
-                print("""{}:
-                …number of within brain observations: {:>10,d}
-                …number of    non brain observations: {:>10,d}
-                """.format(self.name.name(), valid.sum(), (~valid).sum()))
+        valid = np.isfinite(observations).all(axis=-1)
 
         self.observations = observations
-        return observations
+        self.data = observations[valid]
 
-    def get_design(self, formula='C(task)/C(block, Sum)',
+        self.dataframe = DataFrame({
+            'x'      : self.data[...,0],
+            'y'      : self.data[...,1],
+            'z'      : self.data[...,2],
+            'signal' : self.data[...,3],
+            'time'   : self.data[...,4],
+            'task'   : self.data[...,5],
+            'block'  : self.data[...,6],
+            'cycle'  : self.data[...,7],
+            'slice'  : self.data[...,8]})
+
+        if verbose:
+            if demean:
+                print("""{}:
+             Number of within brain observations: {:>10,d}
+             Number of    non brain observations: {:>10,d}
+             Intercept field refers to time:      {:>10.2f} s
+             """.format(self.name.name(), valid.sum(), (~valid).sum(),
+                 self.midpoint))
+            else:
+            print("""{}:
+             Number of within brain observations: {:>10,d}
+             Number of    non brain observations: {:>10,d}
+             """.format(self.name.name(), valid.sum(), (~valid).sum()))
+
+    def set_design(self, formula='C(task)/C(block, Sum)',
             parameter=['intercept', 'task'], verbose=True):
         """
         Create the design matrix
@@ -337,32 +347,15 @@ class SignalModel:
         -------
         DesignMatrix
         """
-        assert hasattr(self, 'observations'), \
-                'first run .get_observations()'
+        assert hasattr(self, 'dataframe'), 'first run .set_data()'
 
-        obs_m = np.isfinite(self.observations).all(-1)
-        obs_t = self.observations[obs_m]
-
-        dataframe = DataFrame({
-            'i'     : obs_t[...,0],
-            'j'     : obs_t[...,1],
-            'k'     : obs_t[...,2],
-            'y'     : obs_t[...,3],
-            'time'  : obs_t[...,4],
-            'task'  : obs_t[...,5],
-            'block' : obs_t[...,6],
-            'cycle' : obs_t[...,7],
-            'slice' : obs_t[...,8]})
-
-        dmat = dmatrix(formula, dataframe, eval_env=-1)
+        dmat = dmatrix(formula, self.dataframe, eval_env=-1)
         names = dmat.design_info.column_names
         parameter_dict = { p : [p in n.lower() for n in names].index(True) for p in parameter}
 
         self.design  = np.asarray(dmat)
         self.formula = formula
         self.parameter_dict = parameter_dict
-        self.dataframe = dataframe
-        self.data = obs_t
         return dmat
 
     ####################################################################
@@ -418,7 +411,7 @@ class SignalModel:
         return self.data_at_subject_coordinate(x)
 
     def model_at_subject_coordinate(self, x,
-            formula='y~C(task)/C(block, Sum)', timevec=False):
+            formula='signal~C(task)/C(block, Sum)', also_return_data=False):
         """
         Fit the signal model to data at specified coordinates given
         with respect to the coordinate system of the subject reference
@@ -430,34 +423,22 @@ class SignalModel:
             The coordinates at which to fit the model
         formula : str
             A formula.
-        timevec : bool
+        also_return_data : bool
             If the formula does not contain time, the design matrix
-            (design) will not contain time as a covariate. If timevec is
-            True, this will add a timevec attribute to the model
-            instance that contains the time vector.
+            (design) will not contain time as a covariate. If
+            also_return_data is True, this will also return the data
+            matrix.
         """
-        assert hasattr(self, 'scale'), 'first run .set_hyperparameters()'
-        assert hasattr(self, 'radius'), 'first run .set_hyperparameters()'
-        assert hasattr(self, 'data'), 'first run .get_design()'
+        assert hasattr(self, 'scale'), 'first set hyperparameters'
+        assert hasattr(self, 'radius'), 'first set hyperparameters'
+        assert hasattr(self, 'data'), 'first set data'
 
-        observations = self.observations
-
-        if dropna:
-            data.dropna(inplace=True)
-        else:
-            data.dropna(inplace=True,
-                    subset=['i', 'j', 'k', 'y', 'time'])
-
-        self.data = data
-        return self.data
-
-        data_matrix = self.data.dropna().copy()
-
-        return model_at(coordinate=x, formula=formula,
-                data=data_matrix,
+        return model_at(formula=formula,
+                also_return_data=also_return_data,
+                coordinate=x,
+                data=self.data,
                 scale=self.scale,
-                radius=self.radius,
-                timevec=timevec)
+                radius=self.radius)
 
     def model_at_index(self, index, **kwargs):
         """
@@ -488,7 +469,7 @@ class SignalModel:
     # Fit at many coordinates
     ####################################################################
 
-    def get_data_mask(self, verbose=True):
+    def get_mask(self, verbose=True):
         """
         Creates a data mask
         """
@@ -514,13 +495,13 @@ class SignalModel:
 
         if verbose:
             print("""{}:
-                …coordinates which are in data mask: {:>10,d}
-                …coordinates which are not:          {:>10,d}""".format(
-                    self.name.name(), mask.sum(), (~mask).sum()))
+                 Coordinates which are in data mask: {:>10,d}
+                 Coordinates which are not:          {:>10,d}""".format(
+                     self.name.name(), mask.sum(), (~mask).sum()))
 
         return mask
 
-    def get_roi_coordinates(self, mask=True, verbose=True):
+    def get_roi(self, mask=True, verbose=True):
         """
         Coordinates and mask
 
@@ -546,7 +527,7 @@ class SignalModel:
         """
         coordinates = self.population_map.diffeomorphism.coordinates()
 
-        datamask = self.get_data_mask()
+        datamask = self.get_mask()
 
         if (mask is None) or (mask is False):
             mask = None
@@ -617,29 +598,29 @@ class SignalModel:
         if not hasattr(self, 'observations'):
             if verbose:
                 print('{}! Set observations to default'.format(self.name.name()))
-            self.get_observations()
+            self.set_data()
 
         if not hasattr(self, 'data'):
             if verbose:
                 print('{}! Set design to default'.format(self.name.name()))
-            self.get_design()
+            self.set_design()
 
         if not hasattr(self, 'design'):
             if verbose:
                 print('{}! Set design to default'.format(self.name.name()))
-            self.get_design()
+            self.set_design()
 
         if verbose:
             if mask is None:
                 print("""{}:
-                    …number of coordinates to fit: {:>10,d}
-                    """.format(
-                    self.name.name(), mask.sum()))
+                 Number of coordinates to fit: {:>10,d}
+                 """.format(
+                self.name.name(), mask.sum()))
             else:
                 print("""{}:
-                    …number of coordinates to fit: {:>10,d}
-                    …number of coordinates not to: {:>10,d}
-                    """.format(self.name.name(), mask.sum(), (~mask).sum()))
+                 Number of coordinates to fit: {:>10,d}
+                 Number of coordinates not to: {:>10,d}
+                 """.format(self.name.name(), mask.sum(), (~mask).sum()))
 
         old_settings = np.seterr(divide='raise', invalid='raise')
         time0 = time.time()
@@ -698,7 +679,7 @@ class SignalModel:
         -------
         Result : Fitted field.
         """
-        coordinates, mask = self.get_roi_coordinates(mask=mask, verbose=verbose)
+        coordinates, mask = self.get_roi(mask=mask, verbose=verbose)
 
         return self.fit_at_subject_coordinates(
                 coordinates = coordinates,
@@ -723,24 +704,23 @@ class SignalModel:
 
     def describe(self):
         description = """
-        Hyperparameters
-        ---------------
-        Scale type:   {:s}
-        Scale:        {:.2f} mm
-        Factor:       {:.2f}
+        Hyperparameters:
+            Scale type:      {:>6s}
+            Factor:          {:>6.2f}
 
         Resulting in:
-            Mass:         {:3>,.5f}
-            FWHM:         {:3>,.2f} mm
-            Radius:       {:3>,.2f} mm
-            Diagonal:     {:3>,.2f} mm"""
+            Mass:            {:>5.4f}
+            Scale:           {:>6.2f} mm
+            FWHM:            {:>6.2f} mm
+            Radius:          {:>6.2f} mm
+            Diagonal:        {:>6.2f} mm
+        """
         hyperparameters = self.hyperparameters()
         return description.format(
                 hyperparameters['scale_type'],
-                hyperparameters['scale'],
                 hyperparameters['factor'],
-
                 hyperparameters['mass'],
+                hyperparameters['scale'],
                 2*np.sqrt(2*np.log(2)) * hyperparameters['scale'],
                 hyperparameters['radius'],
                 2*hyperparameters['radius'],
@@ -942,43 +922,6 @@ class Result:
             assert mask.shape == self.statistics.shape[:-2], 'mask shape must match image shape'
             self.statistics [ ~mask ] = np.nan
 
-    def summary(self, quantile_t=None):
-        tf = self.get_field('activation', 'tstatistic')
-
-        if quantile_t:
-            assert quantile_t <= 1, 'quantile_t must be less than 1'
-            assert quantile_t >= 0, 'quantile_t must be greater than 0'
-            threshold_t = np.nanpercentile(tf.data, q=quantile_t*100)
-            neuronal_active = tf.data > threshold_t
-        else:
-            neuronal_active = np.isfinite(tf.data)
-
-        intercept  = self.parameter_dict ['intercept']
-        activation = self.parameter_dict ['activation']
-        degfreedom = self.parameter_dict ['df']
-
-        point      = self.value_dict ['point']
-        stderr     = self.value_dict ['stderr']
-        tstatistic = self.value_dict ['tstatistic']
-        other      = self.value_dict ['other']
-
-        statistics = self.statistics [neuronal_active]
-
-        return DataFrame({
-            'cohort'   : self.name.cohort,
-            'id'       : self.name.j,
-            'paradigm' : self.name.paradigm,
-            'date'     : self.name.datetime,
-            'x' : self.coordinates[neuronal_active,0],
-            'y' : self.coordinates[neuronal_active,1],
-            'z' : self.coordinates[neuronal_active,2],
-            'intercept'  : statistics[...,point,intercept],
-            'activation' : statistics[...,point,activation],
-            'stderr'     : statistics[...,stderr,activation],
-            'tstatistic' : statistics[...,tstatistic,activation],
-            'df' : statistics[...,other,degfreedom],
-            })
-
     def descriptive_statistics(self):
         mask = np.isnan(self.statistics).any(axis=(-1,-2))
         nooc = np.isnan(mask).all(axis=(0,1))
@@ -990,10 +933,10 @@ class Result:
         Subject:  {}
         Paradigm: {}
 
-        Hyperparameter has been set to
-        ------------------------------
+        Hyperparameters:
             Scale type:      {:>6s}
             Factor:          {:>6.2f}
+
         Resulting in:
             Mass:            {:>5.4f}
             Scale:           {:>6.2f} mm
@@ -1001,8 +944,7 @@ class Result:
             Radius:          {:>6.2f} mm
             Diagonal:        {:>6.2f} mm
 
-        Fitted statistics field
-        -----------------------
+        Fitted statistics field:
         Shape:   {}
         Volume:  {:.2f} mm^3"""
         return description.format(

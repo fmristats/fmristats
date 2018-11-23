@@ -31,8 +31,6 @@ from .affines import Affine, isinverse
 
 from .stimulus import Stimulus
 
-from .observations import create_slice_time_matrix
-
 from .filters import fit_foreground
 
 from .diffeomorphisms import Image
@@ -49,6 +47,41 @@ import pickle
 #######################################################################
 #######################################################################
 
+def create_slice_timing(shape, epi_code, temporal_resolution,
+        interleaved=None):
+    """
+    Creates a time vector from parameters
+
+    Parameters
+    ----------
+    shape : tuple, type: int
+    epi_code : int or None
+    temporal_resolution : float
+        The temporal resolution.
+    interleaved : bool
+
+    Returns
+    -------
+    ndarray of float, shape (M,) or (M,N,O,P)
+        The time vector that holds the slices time information. The
+        vector holds the start point of the time at which a particular
+        slice has been measured.  If ep is None, slice_time has
+        shape (M,) with M equal to the number of full scan cycles.  If
+        ep is int, then slice_time has
+        the same shape as the data.
+
+    """
+    # TODO: implement interleaved
+    assert not interleaved, 'sorry, interleaved not implemented yet'
+
+    n = shape[0]
+    m = shape[abs(epi_code)]
+    slice_time = np.arange(
+            start = 0,
+            stop  = n*temporal_resolution,
+            step  = temporal_resolution/m).reshape((n,m))
+    return slice_time
+
 def fmrisetup(session, stimulus):
     """
 
@@ -62,7 +95,7 @@ def fmrisetup(session, stimulus):
     session : Session
     stimulus : Stimulus
     """
-    session.set_slice_time()
+    session.set_slice_timing()
     session.set_stimulus(stimulus)
 
 #######################################################################
@@ -121,31 +154,31 @@ class Session:
     # Functions that act on the data or extract information from it
     ####################################################################
 
-    def set_slice_time(self, slice_time=None, interleaved=False):
+    def set_slice_timing(self, slice_timing=None, interleaved=False):
         """
         Set up the slice time information
 
         Parameters
         ----------
-        slice_time : ndarray of float, shape (n,) or (n,x,y,z)
+        slice_timing : ndarray of float, shape (n,) or (n,x,y,z)
             The time vector indicating the point in time at which a
             given slice of the acquisition grid has been measured.  If
-            slice_time has shape (n,), all slices of a scan cycle are
+            slice_timing has shape (n,), all slices of a scan cycle are
             assumed to have been measured during the same time.
         """
-        if slice_time is None:
-            slice_time = create_slice_time_matrix(
+        if slice_timing is None:
+            slice_timing = create_slice_timing(
                 shape               = self.data.shape,
                 epi_code            = self.epi_code,
                 temporal_resolution = self.temporal_resolution,
                 interleaved         = False)
 
         shape_test = (self.numob, self.shape[self.ep])
-        assert slice_time.shape == shape_test, \
+        assert slice_timing.shape == shape_test, \
                 'slice times have shape: {}, expected {}'.format(
-                        slice_time.shape, shape_test)
+                        slice_timing.shape, shape_test)
 
-        self.slice_time = slice_time
+        self.slice_timing = slice_timing
 
     def set_stimulus(self, stimulus):
         """
