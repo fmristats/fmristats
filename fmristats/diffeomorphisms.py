@@ -558,8 +558,8 @@ class Image(Identity):
 
 class AffineTransformation(Diffeomorphism):
     """
-    An affine transformation ψ mapping from a population space :math:`M`
-    to a subject space :math:`R`. It is
+    An affine transformation ψ mapping from a standard space :math:`M`
+    to a subject reference space :math:`R`. It is
 
     .. math::
 
@@ -567,14 +567,14 @@ class AffineTransformation(Diffeomorphism):
 
     for :math:`x∈M` and :math:`A` an affine transformation.
 
-    A point [i,j,k] in the index space of the template of :math:`M` maps
+    A point [i,j,k] in the index space of the template in :math:`M` maps
     to the coordinates
 
     .. math::
 
         ψ(reference[i,j,k]) = A ⋅ reference[i,j,k]
 
-    in the subject space.
+    in the subject reference space.
 
     Parameters
     ----------

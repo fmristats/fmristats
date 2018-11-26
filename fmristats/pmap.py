@@ -428,70 +428,29 @@ class PopulationMap:
 #
 #######################################################################
 
-def pmap_scanner(session, name='session'):
+def pmap_scanner(session, reference_maps=None, scan_cycle=None,
+        resolution=2., name='scanner'):
     """
     The identity map
 
-    Sets the population space equal to the coordinate system of the
-    scanner and the population map equal to the identity, and the
-    template grid to native resolution.
+    Sets the standard space equal to the coordinate system of the
+    scanner and the diffeomorphism from standard space to subject
+    reference space to different rigid body transformation.
 
     Parameters
     ----------
     session : Session
         A FMRI session
-
-    Notes
-    -----
-    When only studying a single subject, it makes perfect sense to
-    set the population space equal to an isometric image of the
-    subject's head, i.e. to a population space which preserves distances
-    with respect to the subject.
-
-    In other words, for a single subject, the population space can be
-    set equal to the subject reference space :math:`R` or to
-    :math:`ρ_s[R]` for some scan reference :math:`ρ_s`. This function
-    will do the former and sets the resolution of the template equal to
-    the resolution of the acquisition grid. (When fitting on this grid,
-    the signal model is estimated in *native* resolution).
-
-    It only makes sense, though, to set the population space equal to
-    the coordinate system of the FMRI session, if this space is *close*
-    to the subject reference space of the FMRI session. This may be
-    archived by calling :func:`reset_reference_space` of
-    the reference_maps: This will have the effect that the population
-    space is then equal to the mean location of the subject in the
-    scanner.
-
-
-    See also
-    --------
-    `pmap_reference`
-    `pmap_scan_cycle`
-    """
-    diffeomorphism = Identity(
-            reference=session.reference,
-            shape=session.shape,
-            vb=session.name.name(),
-            nb=session.name,
-            name=name)
-
-    return PopulationMap(diffeomorphism)
-
-def pmap_reference(session, resolution=2., name='reference'):
-    """
-    The identity map
-
-    Sets the population space equal to the coordinate system of the
-    scanner and the population map equal to the identity, and the
-    template grid to given resolution.
-
-    Parameters
-    ----------
-    session : Session
-        A FMRI session
-    resolution : float
-        Resolution in milli meter, default 2.
+    reference_maps : None or ReferenceMaps
+        Reference Maps
+    scan_cycle : None or int
+        Reference scan cycle.
+    resolution : str or float
+        Resolution (in units of the session reference, this will likely
+        be milli meter), default 2. If resolution is set to 'native' the
+        resolution of the scanner is used.
+    name = str
+        A name for this population map.
 
     Notes
     -----
@@ -508,72 +467,43 @@ def pmap_reference(session, resolution=2., name='reference'):
     It only makes sense, though, to set the population space equal to
     the coordinate system of the FMRI session, if this space is *close*
     to the subject reference space of the FMRI session. This may be
-    archived by calling :func:`reset_reference_space` of
-    the reference maps. This will have the effect that the population
-    space is then equal to the mean location of the subject in the
-    scanner.
-
-    See also
-    --------
-    :func:`pmap_scanner`
-    :func:`pmap_scan_cycle`
+    archived by calling :func:`reset_reference_space` of the reference
+    maps. If called without arguments, this will have the effect that
+    the population space is then equal to the mean location of the
+    subject in the scanner.
     """
+    if (resolution is None) or (resolution == 'native') or np.isclose(resolution, 0):
+        reference = session.reference
+        shape = session.shape
+    else:
+        ref = session.reference
+        mat = ref.affine[:3,:3] / (ref.resolution() / resolution)
+        reference = from_cartesian(mat, ref.affine[:3,3])
+        shape = tuple(np.ceil(reference.inv().apply(ref.apply_to_index(session.shape))).astype(int))
 
-    ref = session.reference
-    mat = ref.affine[:3,:3] / (ref.resolution() / resolution)
-
-    reference = from_cartesian(mat, ref.affine[:3,3])
-    shape = tuple(np.ceil(reference.inv().apply(ref.apply_to_index(session.shape))).astype(int))
-
-    diffeomorphism = Identity(
-            reference=reference,
-            shape=shape,
-            vb=session.name.name(),
-            nb=session.name,
-            name=name)
-
-    return PopulationMap(diffeomorphism)
-
-def pmap_scan_cycle(session, reference_maps, scan_cycle,
-        name='scan_cycle'):
-    """
-    Pick a scan reference as the population map
-
-    Parameters
-    ----------
-    session : Session
-        Session instance
-    reference_maps : ReferenceMaps
-        Reference Maps
-    scan_cycle : int
-        Reference scan cycle.
-
-    Notes
-    -----
-    When only studying a single subject, it makes perfect sense to
-    set the population space equal to an isometric image of the
-    subject's head, i.e. to a population space which preserves distances
-    with respect to the subject.
-
-    In other words, for a single subject, the population space can be
-    set equal to the subject reference space :math:`R` or to
-    :math:`ρ_s[R]` for some scan reference :math:`ρ_s`. This function
-    will do the latter for the given scan, and sets the resolution of
-    the template equal to the resolution of the acquisition grid. (When
-    fitting on this grid, the signal model is estimated in *native*
-    resolution).
-
-    See also
-    --------
-    :func:`pmap_reference`
-    :func:`pmap_scanner`
-    """
-    diffeomorphism = AffineTransformation(
-            reference=session.reference,
-            affine=reference_maps.scan_references.inv().affines[scan_cycle],
-            shape=session.shape,
-            vb=session.name.name(),
-            nb=session.name,
-            name=name)
+    if reference_maps is None:
+        diffeomorphism = Identity(
+                reference=reference,
+                shape=shape,
+                vb=session.name.name(),
+                nb=session.name,
+                name=name)
+    else:
+        if scan_cycle is None:
+            diffeomorphism = AffineTransformation(
+                    reference=reference,
+                    affine=reference_maps.scan_references.inv().mean_rigid(),
+                    shape=session.shape,
+                    vb=session.name.name(),
+                    nb=session.name,
+                    name=name)
+        else:
+            diffeomorphism = AffineTransformation(
+                    reference=reference,
+                    affine=reference_maps.scan_references.inv().affines[scan_cycle],
+                    shape=session.shape,
+                    vb=session.name.name(),
+                    nb=session.name,
+                    name=name)
 
     return PopulationMap(diffeomorphism)

@@ -104,7 +104,7 @@ def call(args):
     except Exception as e:
         print('Cannot read: {}'.format(args.input))
         print('Failed with: {}'.format(e))
-        sys.exit()
+        return
 
     if type(x) is PopulationMap:
         x = x.diffeomorphism
