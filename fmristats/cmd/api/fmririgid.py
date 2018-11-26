@@ -309,7 +309,11 @@ def call(args):
                 session         = instances['session']
                 reference_maps  = instances['reference_maps']
                 file_reference_maps = files['reference_maps']
-                wm
+
+                if session is None:
+                    print('{}: No Session found'.format(name.name()))
+                    break
+
                 pool.apply_async(wm, args=\
                     (index, name, session, reference_maps, file_reference_maps)
                     )
@@ -334,6 +338,11 @@ def call(args):
                 session         = instances['session']
                 reference_maps  = instances['reference_maps']
                 file_reference_maps = files['reference_maps']
+
+                if session is None:
+                    print('{}: No Session found'.format(name.name()))
+                    break
+
                 wm(index, name, session, reference_maps, file_reference_maps)
         finally:
             files = df.ix[df.locked, 'reference_maps'].values

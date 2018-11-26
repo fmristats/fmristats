@@ -679,14 +679,15 @@ class SignalModel:
         time0 = time.time()
 
         statistics, parameter_dict, value_dict = fit_field(
-                coordinates, mask,
-                data = self.data,
-                design = self.design,
-                ep = self.ep,
-                scale = self.scale,
-                radius = self.radius,
-                verbose = verbose,
-                durbin_watson=False, backend='jit')
+                coordinates = coordinates,
+                mask        = mask,
+                data        = self.data,
+                design      = self.design,
+                ep          = self.ep,
+                scale       = self.scale,
+                radius      = self.radius,
+                verbose     = verbose,
+                backend     = backend)
 
         time1 = time.time()
         np.seterr(**old_settings)

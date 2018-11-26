@@ -196,6 +196,19 @@ def define_parser():
             help="""Detect the foreground in the FMRI""")
 
     ####################################################################
+    # Backends
+    ####################################################################
+
+    backends = parser.add_argument_group(
+        """Backends""",
+        """Currently, two backends are supported: Numba and
+        Statsmodels.""")
+
+    backends.add_argument('--backend',
+            default='numba',
+            help="""Detect the foreground in the FMRI""")
+
+    ####################################################################
     # File handling
     ####################################################################
 
@@ -358,6 +371,8 @@ def call(args):
     fit_at_slice         = fit_at_slice
     slice_object         = slice_object
 
+    backend              = args.backend
+
     ####################################################################
     # Create the iterator
     ####################################################################
@@ -489,14 +504,20 @@ def call(args):
             coordinates = smodel.population_map.diffeomorphism.coordinates()
             coordinates = coordinates[slice_object]
 
-            result = smodel.fit_at_subject_coordinates(coordinates,
-                    mask=mask, verbose=verbose)
+            result = smodel.fit_at_subject_coordinates(
+                    coordinates=coordinates,
+                    mask=mask,
+                    verbose=verbose,
+                    backend=backend)
 
             if verbose:
                 print('{}: Done fitting'.format(name.name()))
 
         else:
-            result = smodel.fit(mask=mask, verbose=verbose)
+            result = smodel.fit(
+                    mask=mask,
+                    verbose=verbose,
+                    backend=backend)
 
             if verbose:
                 print('{}: Done fitting'.format(name.name()))
@@ -536,7 +557,20 @@ def call(args):
                 population_map  = instances['population_map']
                 result          = instances['result']
                 file_result     = files['result']
-                wm
+
+                skip = False
+                if session is None:
+                    print('{}: No Session found'.format(name.name()))
+                    skip = True
+                if reference_maps is None:
+                    print('{}: No ReferenceMaps found'.format(name.name()))
+                    skip = True
+                if reference_maps is None:
+                    print('{}: No PopulationMap found'.format(name.name()))
+                    skip = True
+                if skip:
+                    break
+
                 pool.apply_async(wm, args=(index, name, session,
                     reference_maps, population_map, result,
                     file_result))
@@ -562,6 +596,20 @@ def call(args):
                 population_map  = instances['population_map']
                 result          = instances['result']
                 file_result     = files['result']
+
+                skip = False
+                if session is None:
+                    print('{}: No Session found'.format(name.name()))
+                    skip = True
+                if reference_maps is None:
+                    print('{}: No ReferenceMaps found'.format(name.name()))
+                    skip = True
+                if reference_maps is None:
+                    print('{}: No PopulationMap found'.format(name.name()))
+                    skip = True
+                if skip:
+                    break
+
                 wm(index, name, session, reference_maps, population_map,
                         result, file_result)
         finally:

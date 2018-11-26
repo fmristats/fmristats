@@ -85,8 +85,7 @@ def extract_field(field, param, value, parameter_dict, value_dict):
     return field[..., value_dict[value], parameter_dict[param]]
 
 def fit_field(coordinates, mask, data, design, ep:int, scale:float,
-        radius:float, verbose=True,
-        durbin_watson=False, backend='jit'):
+        radius:float, verbose=True, backend='numba'):
     """
     Parameters
     ----------
@@ -128,7 +127,7 @@ def fit_field(coordinates, mask, data, design, ep:int, scale:float,
     # In case you need the Durbin-Watson statistics
     ###################################################################
 
-    if durbin_watson:
+    if backend == 'statsmodels':
         if ep == 2:
             sortvar = ['time', 'k', 'i', 'j']
         elif ep == 1:
@@ -184,16 +183,10 @@ def fit_field(coordinates, mask, data, design, ep:int, scale:float,
     ###################################################################
 
     if backend == 'statsmodels':
-        if durbin_watson:
-            if mask is None:
-                fit_sm_nm_dw(rresult, rcoordinates, data, design, r, s, sortvar)
-            else:
-                fit_sm_wm_dw(rresult, rcoordinates, rmask, data, design, r, s, sortvar)
+        if mask is None:
+            fit_sm_nm_dw(rresult, rcoordinates, data, design, r, s, sortvar)
         else:
-            if mask is None:
-                fit_sm_nm(rresult, rcoordinates, data, design, r, s)
-            else:
-                fit_sm_wm(rresult, rcoordinates, rmask, data, design, r, s)
+            fit_sm_wm_dw(rresult, rcoordinates, rmask, data, design, r, s, sortvar)
 
     else:
         if mask is None:

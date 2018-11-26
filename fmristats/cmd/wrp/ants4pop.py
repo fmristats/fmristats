@@ -294,7 +294,7 @@ def call(args):
         if diffeomorphism_nb == 'fit':
 
             if result is None:
-                print('{}: No fit found'.format(name.name()))
+                print('{}: No Result found'.format(name.name()))
                 df.ix[index,'valid'] = False
                 lock.conditional_unlock(df, index, verbose)
                 return
@@ -309,12 +309,13 @@ def call(args):
         elif diffeomorphism_nb == 'scan_cycle':
 
             if (session is None) or (cycle is None):
-                print('{}: No session found or CYCLE defined'.format(name.name()))
+                print('{}: No Session found or CYCLE defined'.format(name.name()))
                 df.ix[index,'valid'] = False
                 lock.conditional_unlock(df, index, verbose)
                 return
 
             if reference_maps is None:
+                print('{}: No ReferenceMaps found, continue…'.format(name.name()))
                 scan_cycle_to_use = cycle[0]
             else:
                 try:
@@ -412,7 +413,6 @@ def call(args):
                 result          = instances['result']
                 file_population_map = files['population_map']
                 ants_prefix         = files['ants_prefix']
-                wm
                 pool.apply_async(wm, args=(index, name, session,
                     reference_maps, population_map, result,
                     file_population_map, ants_prefix))

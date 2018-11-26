@@ -325,7 +325,11 @@ def call(args):
                 file_session    = files['session']
                 file_nii        = files['nii']
                 file_foreground = files['foreground']
-                wm
+
+                if stimulus is None:
+                    print('{}: No Stimulus found'.format(name.name()))
+                    break
+
                 pool.apply_async(wm, args=\
                     (index, name, session, stimulus, file_session, file_nii, file_foreground)
                     )
@@ -352,6 +356,11 @@ def call(args):
                 file_session    = files['session']
                 file_nii        = files['nii']
                 file_foreground = files['foreground']
+
+                if stimulus is None:
+                    print('{}: No Stimulus found'.format(name.name()))
+                    break
+
                 wm(index, name, session, stimulus, file_session, file_nii, file_foreground)
         finally:
             files = df.ix[df.locked, 'session'].values

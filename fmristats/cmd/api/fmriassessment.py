@@ -19,8 +19,8 @@
 
 """
 
-Quality assessment statistics for image quality, ability to track head
-movements, and descriptive statistics of fitted effect fields.
+Quality statistics for image quality, tracking head movements, and
+some descriptive statistics of fitted effect fields.
 
 """
 
