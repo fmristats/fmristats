@@ -184,7 +184,8 @@ def call(args):
     study = get_study(args)
 
     if study is None:
-        sys.exit()
+        print('Nothing to do.')
+        return
 
     study.set_rigids('pca')
 

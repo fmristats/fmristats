@@ -47,19 +47,19 @@ def define_parser():
         """Creating a standard space isometric to the reference space.""")
 
     specific.add_argument('--diffeomorphism-nb',
-        default='reference',
-        choices=['reference', 'native', 'scan_cycle', 'fit'],
+        default='scanner',
+        choices=['scanner', 'identity', 'fit'],
         help="""Image space of diffeomorphism.""")
 
     specific.add_argument('--new-diffeomorphism',
-        help="""Name to use for the fitted diffeomorphisms. If not
-        given, DIFFEOMORPHISM-NB will be set a default.""")
+        default='scanner',
+        help="""Name to use for the fitted diffeomorphisms.""")
 
     specific.add_argument('--resolution',
         default=2.,
         type=float,
-        help="""The resolution of the template in standard
-        space.""")
+        help="""The resolution of the template in standard space. If set
+        to 0, the resolution of the scanner will be used.""")
 
     specific.add_argument('--cycle',
         type=int,
@@ -167,7 +167,7 @@ from ...session import Session
 
 from ...reference import ReferenceMaps
 
-from ...pmap import PopulationMap, pmap_scanner, pmap_reference, pmap_scan_cycle
+from ...pmap import PopulationMap, pmap_scanner
 
 ########################################################################
 
@@ -183,18 +183,13 @@ def call(args):
     skip              = args.skip
     verbose           = args.verbose
 
-    resolution         = args.resolution
     cycle              = args.cycle
+    resolution         = args.resolution
+    new_diffeomorphism = args.new_diffeomorphism
+    diffeomorphism_nb  = args.diffeomorphism_nb
 
-    if cycle is not None:
-        diffeomorphism_nb = 'scan_cycle'
-    else:
-        diffeomorphism_nb = args.diffeomorphism_nb
-
-    if args.new_diffeomorphism is None:
-        new_diffeomorphism = diffeomorphism_nb
-    else:
-        new_diffeomorphism = args.new_diffeomorphism
+    if (resolution is None) or (resolution == 'native') or np.isclose(resolution, 0):
+        resolution = None
 
     ####################################################################
     # Study
@@ -265,91 +260,125 @@ def call(args):
         lock.save(file_population_map)
 
         ####################################################################
-        # Create population map instance from a session instance
+        # Create population map from a session instance
         ####################################################################
 
-        if (diffeomorphism_nb == 'native') or (diffeomorphism_nb == 'reference'):
+        if session is None:
+            print('{}: No session found'.format(name.name()))
+            df.ix[index,'valid'] = False
+            lock.conditional_unlock(df, index, verbose)
+            return
 
-            if session is None:
-                print('{}: No session found'.format(name.name()))
-                df.ix[index,'valid'] = False
-                lock.conditional_unlock(df, index, verbose)
-                return
-
-            if diffeomorphism_nb == 'native':
-                population_map = pmap_scanner(session=session)
-                if verbose:
-                    print("""{}:
-                    VB space equals average position of subject in the
-                    scanner (with native resolution)""".format(
-                    name.name()))
-
-            if diffeomorphism_nb == 'reference':
-                population_map = pmap_reference(session=session, resolution=resolution)
-                if verbose:
-                    print("""{}:
-                    VB space equals average position of subject in the
-                    scanner (with resolution ({} mm)**3)""".format(
-                        name.name(), resolution))
-
-        ####################################################################
-        # Create population map instance from a session and reference
-        # map instance
-        ####################################################################
-
-        elif (diffeomorphism_nb == 'scan_cycle'):
-
-            if (session is None) or (reference_maps is None) or (cycle is None):
-                print('{}: No session or reference maps found or CYCLE not defined'.format(name.name()))
-                df.ix[index,'valid'] = False
-                lock.conditional_unlock(df, index, verbose)
-                return
-
-            try:
-                outlying_cycles = reference_maps.outlying_cycles
-            except:
-                if verbose:
-                    print('{}: I have found no information about outlying scan cycles!'.format(
-                        name.name()))
-                outlying_cycles = None
-
-            if outlying_cycles is None:
-                scan_cycle_to_use = cycle[0]
-            else:
-                if outlying_cycles[cycle].all():
-                    df.ix[index,'valid'] = False
-                    print("""{}:
-                    All suggested reference cycles have been marked as
-                    outlying. Unable to proceed. Please specify a
-                    different scan cycle (using --cycle) as
-                    reference.""".format(name.name()))
-                    lock.conditional_unlock(df, index, verbose, True)
-                    return
-                elif outlying_cycles[cycle].any():
-                    for c, co in zip (cycle, outlying_cycles[cycle]):
-                        if co:
-                            if verbose:
-                                print("""{}: Suggested cycle {:>4d} marked as outlying, using fallback.""".format(
-                                    name.name(), c))
-                        else:
-                            scan_cycle_to_use = c
-                            break
-                else:
-                    scan_cycle_to_use = cycle[0]
+        if diffeomorphism_nb == 'identity':
+            population_map = pmap_scanner(
+                    session=session,
+                    resolution=resolution,
+                    name=new_diffeomorphism)
 
             if verbose:
-                print('{}: VB space equals subject position during scan cycle: {:d}'.format(
-                    name.name(), scan_cycle_to_use))
+                if resolution:
+                    print("""{}:
+                    Standard space equals scanner space. Diffeomorphism
+                    equals identity. Resolution is ({} mm)**3.""".format(
+                        name.name(), resolution))
+                else:
+                    print("""{}:
+                    Standard space equals scanner space. Diffeomorphism
+                    equals identity. Resolution is native.""".format(
+                        name.name()))
 
-            population_map = pmap_scan_cycle(
-                    reference_maps=reference_maps,
-                    session=session,
-                    scan_cycle=scan_cycle_to_use)
+        ####################################################################
+        # Create population map from a session and reference instance
+        ####################################################################
 
-            population_map.set_nb(Image(
-                reference=session.reference,
-                data=session.data[scan_cycle_to_use],
-                name=session.name.name()+'-{:d}'.format(scan_cycle_to_use)))
+        elif diffeomorphism_nb == 'scanner':
+            if reference_maps is None:
+                print('{}: No ReferenceMaps found'.format(name.name()))
+                df.ix[index,'valid'] = False
+                lock.conditional_unlock(df, index, verbose)
+                return
+
+            if cycle is None:
+                population_map = pmap_scanner(
+                        session=session,
+                        reference_maps = reference_maps,
+                        resolution=resolution,
+                        name=new_diffeomorphism)
+
+                if verbose:
+                    if resolution:
+                        print("""{}:
+                        Standard space equals scanner space. Diffeomorphism
+                        maps to the average position of the subject in the
+                        scanner. Resolution is ({} mm)**3.""".format(
+                            name.name(), resolution))
+                    else:
+                        print("""{}:
+                        Standard space equals scanner space. Diffeomorphism
+                        maps to the average position of the subject in the
+                        scanner. Resolution is native.""".format(
+                            name.name()))
+
+            else:
+                try:
+                    outlying_cycles = reference_maps.outlying_cycles
+                except:
+                    if verbose:
+                        print("""{}:
+                        I have found no information
+                        about outlying scan cycles!""".format(name.name()))
+                    outlying_cycles = None
+
+                if outlying_cycles is None:
+                    scan_cycle_to_use = cycle[0]
+                else:
+                    if outlying_cycles[cycle].all():
+                        df.ix[index,'valid'] = False
+                        print("""{}:
+                        All suggested reference cycles have been marked as
+                        outlying. Unable to proceed. Please specify a
+                        different scan cycle (using --cycle) as
+                        reference.""".format(name.name()))
+                        lock.conditional_unlock(df, index, verbose, True)
+                        return
+                    elif outlying_cycles[cycle].any():
+                        for c, co in zip (cycle, outlying_cycles[cycle]):
+                            if co:
+                                if verbose:
+                                    print("""{}:
+                                    Suggested cycle {:>4d} marked as outlying,
+                                    using fallback.""".format( name.name(), c))
+                            else:
+                                scan_cycle_to_use = c
+                                break
+                    else:
+                        scan_cycle_to_use = cycle[0]
+
+                population_map = pmap_scanner(
+                        session=session,
+                        reference_maps = reference_maps,
+                        cycle = scan_cycle_to_use,
+                        resolution=resolution,
+                        name=new_diffeomorphism)
+
+                population_map.set_nb(Image(
+                    reference=session.reference,
+                    data=session.data[scan_cycle_to_use],
+                    name=session.name.name()+'-{:d}'.format(scan_cycle_to_use)))
+
+                if verbose:
+                    if resolution:
+                        print("""{}:
+                        Standard space equals scanner space,
+                        diffeomorphism maps to subject position during
+                        scan cycle: {:d}. Resolution is ({} mm)**3.""".format(
+                            name.name(), scan_cycle_to_use, resolution))
+                    else:
+                        print("""{}:
+                        Standard space equals scanner space,
+                        diffeomorphism maps to subject position during
+                        scan cycle: {:d}. Resolution is native.""".format(
+                            name.name(), scan_cycle_to_use))
 
         ####################################################################
         # Create population map instance from a result instance

@@ -313,8 +313,8 @@ def call(args):
     study = get_study(args)
 
     if study is None:
-        print('No study found. Nothing to do.')
-        sys.exit()
+        print('Nothing to do.')
+        return
 
     ####################################################################
     # Respect the mask mask

@@ -121,7 +121,7 @@ def call(args):
         print(sample.vb.describe())
         print('Description of sample:')
         print(sample.describe())
-        sys.exit()
+        return
     else:
         sample_file = args.sample
 
@@ -130,8 +130,8 @@ def call(args):
     study = get_study(args)
 
     if study is None:
-        print('No study found. Nothing to do.')
-        sys.exit()
+        print('Nothing to do.')
+        return
 
     if study.vb is None:
         print("""
@@ -146,7 +146,7 @@ def call(args):
         providing a field using --vb-ati-image or --vb-ati-nii).""")
 
     if (study.vb is None) or (study.vb_ati is None):
-        sys.exit()
+        return
 
     ####################################################################
     # Respect the mask mask

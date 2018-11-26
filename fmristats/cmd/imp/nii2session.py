@@ -207,7 +207,7 @@ def call(args):
             measured. Visit:
 
             https://fmristats.github.io/tutorials/getting-started.html""")
-            sys.exit()
+            return
 
     ####################################################################
     # Iterator
