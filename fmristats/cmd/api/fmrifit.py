@@ -192,8 +192,8 @@ def define_parser():
         estimation is performed again.""")
 
     detect.add_argument('--detect-foreground',
-            action='store_true',
-            help="""Detect the foreground in the FMRI""")
+        action='store_true',
+        help="""Detect the foreground in the FMRI""")
 
     ####################################################################
     # Backends
@@ -205,8 +205,11 @@ def define_parser():
         Statsmodels.""")
 
     backends.add_argument('--backend',
-            default='numba',
-            help="""Detect the foreground in the FMRI""")
+        default='numba',
+        choices=['numba', 'jit', 'statsmodels'],
+        help="""Choose your backend. Backends numba and jit are two
+        names for the same backend. JIT is fast, statsmodels is slow.
+        Statsmodels also calculates a Durbin-Watson type statistics.""")
 
     ####################################################################
     # File handling

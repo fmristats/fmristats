@@ -186,7 +186,7 @@ def call(args):
     study = get_study(args)
 
     if study is None:
-        print('No study found. Nothing to do.')
+        print('Nothing to do.')
         return
 
     study.update_layout({

@@ -147,8 +147,16 @@ def define_parser():
 
     control_multiprocessing.add_argument('-j', '--cores',
             type=int,
-            help="""Number of cores to use. Default is the number of
-            cores on the machine.""")
+            default=1,
+            help="""Number of threads to use. The implementation will
+            usually try to run as many calculations and loops as
+            possible in parallel -- this may suggest that it may be
+            adventurous to process all entries in the study protocol
+            sequentially (and this is the default). It is possible,
+            however, to generate a thread for each protocol entry. Note
+            that this may generate a lot of I/O-operations.
+            If you set CORES to 0, then the number of cores on the
+            machine will be used.""")
 
     return parser
 
@@ -195,7 +203,8 @@ def call(args):
     study = get_study(args)
 
     if study is None:
-        sys.exit()
+        print('Nothing to do.')
+        return
 
     study_iterator = study.iterate('stimulus', new=['stimulus'],
             integer_index=True)
@@ -275,6 +284,9 @@ def call(args):
             return
 
     ####################################################################
+
+    if args.cores == 0:
+        args.cores = None
 
     if len(df) > 1 and ((args.cores is None) or (args.cores > 1)):
         try:

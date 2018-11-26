@@ -462,17 +462,17 @@ class Study:
         elif len(j) == 2:
             j = slice(j[0], j[1])
 
-        protocol = self.protocol.sort_index()
-
-        if len(protocol) < 1:
-            print('No valid entries in the protocol')
+        if len(self.protocol) < 1:
+            print('No entries in the protocol')
             return
+
+        protocol = self.protocol.sort_index()
 
         try:
             protocol = protocol.loc(axis=0)[(cohort, j, paradigm)]
         except KeyError as e:
             print("""
-            Unable to find the query combination:
+            Unable to process the query combination:
                 cohort   = {},
                 id       = {},
                 paradigm = {}.
@@ -481,19 +481,29 @@ class Study:
 
         if len(protocol) < 1:
             print('No entries left in the protocol')
-            return
+            protocol = None
 
         if self.covariates is not None:
+            if len(self.covariates) < 1:
+                print('No entries in the covariates set')
+                return
+
             covariates = self.covariates.sort_index()
 
-            if len(covariates) < 1:
-                print('No valid entries in the covariates data set')
-                return
+            try:
+                covariates = covariates.loc(axis=0)[(cohort, j)]
+            except KeyError as e:
+                print("""
+                Unable to process the query combination:
+                    cohort   = {},
+                    id       = {},
+                Failed due to {}""".format( cohort, j, e))
+                raise
 
             covariates = covariates.loc(axis=0)[(cohort, j)]
 
             if len(covariates) < 1:
-                print('No entries left in the covariates data set')
+                print('No entries left in the covariates set')
                 return
         else:
             covariates = None

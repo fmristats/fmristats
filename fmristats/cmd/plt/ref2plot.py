@@ -218,7 +218,7 @@ def call(args):
         # Get slice times and outlying
         ####################################################################
 
-        slice_times     = reference_maps.slice_time[:,0]
+        slice_times     = reference_maps.slice_timing[:,0]
         outlying        = reference_maps.outlying
         values          = reference_maps.values
         outlying_cycles = reference_maps.outlying_cycles

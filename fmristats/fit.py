@@ -39,7 +39,7 @@ from statsmodels.stats.stattools import durbin_watson
 
 ########################################################################
 
-def data_at(coordinate, data, scale:float, radius:float):
+def data_at(coordinate, data, epi_code:int, scale:float, radius:float):
     r = radius**2
     s = -2*scale**2
     squared_distances = ((data[...,:3] - coordinate)**2).sum(axis=1)
@@ -47,7 +47,7 @@ def data_at(coordinate, data, scale:float, radius:float):
     weights = np.exp(squared_distances[valid] / s)
     data = data[valid]
 
-    dataframe = DataFrame({
+    df = DataFrame({
         'x'      : data[...,0],
         'y'      : data[...,1],
         'z'      : data[...,2],
@@ -59,33 +59,38 @@ def data_at(coordinate, data, scale:float, radius:float):
         'slice'  : data[...,8],
         'weight' : weights})
 
-    return dataframe
+    if abs(epi_code) == 3:
+        sortvar = ['time', 'z', 'x', 'y']
+    elif abs(epi_code) == 2:
+        sortvar = ['time', 'y', 'z', 'x']
+    elif abs(epi_code) == 1:
+        sortvar = ['time', 'x', 'y', 'z']
 
-def model_at(formula, also_return_data=False, **kwargs):
+    df.sort_values(by=sortvar, inplace=True)
+
+    return df
+
+def model_at(formula, **kwargs):
     data = data_at(**kwargs)
     model = smf.wls(formula, weights=data.weight, data=data)
-
-    if also_return_data:
-        return model, data
-    else:
-        return model
+    return model, data
 
 def fit_at(formula, **kwargs):
-    model, data = model_at(
-            formula=formula,
-            also_return_data=True, **kwargs)
-
+    model, data = model_at(formula=formula, **kwargs)
     fit = model.fit()
-    data['reweighted_residual'] = data.weight * fit.resid
-    data.sort_values(by=sortvar, inplace=True)
-    fit.durbin_watson = durbin_watson(df.reweighted_residual)
-    return fit
+
+    data['expected_signal'] = fit.predict()
+    data['residual']          = fit.resid
+    data['weighted_residual'] = data.weight * fit.resid
+    fit.durbin_watson = durbin_watson(data.weighted_residual)
+
+    return fit, model, data
 
 def extract_field(field, param, value, parameter_dict, value_dict):
     return field[..., value_dict[value], parameter_dict[param]]
 
-def fit_field(coordinates, mask, data, design, ep:int, scale:float,
-        radius:float, verbose=True, backend='numba'):
+def fit_field(coordinates, mask, data, design, epi_code:int,
+        scale:float, radius:float, verbose=True, backend='numba'):
     """
     Parameters
     ----------
@@ -107,33 +112,33 @@ def fit_field(coordinates, mask, data, design, ep:int, scale:float,
             - [..., 8] = slice number
     design : ndarray, shape (…,p), dtype: float
         The design matrix.
-    ep : int
+    epi_code : int
     scale : float
     radius : float
     verbose : boo
     """
 
     ###################################################################
-    # Asssets
+    # Asserts
     ###################################################################
 
     assert coordinates.shape[:-1] == mask.shape, \
             'shapes of coordinates and mask do not match'
     assert data.shape[:-1] == design.shape[:-1], \
             'shapes of data and design do not match'
-    assert ep in [0,1,2], 'ep must be one of 0, 1, or 2'
+    assert epi_code in [-3,-2,-1,1,2,3], 'epi_code must be within [-3,3] but not 0'
 
     ###################################################################
     # In case you need the Durbin-Watson statistics
     ###################################################################
 
     if backend == 'statsmodels':
-        if ep == 2:
-            sortvar = ['time', 'k', 'i', 'j']
-        elif ep == 1:
-            sortvar = ['time', 'j', 'k', 'i']
-        elif ep == 0:
-            sortvar = ['time', 'i', 'j', 'k']
+        if abs(epi_code) == 3:
+            sortvar = ['time', 'z', 'x', 'y']
+        elif abs(epi_code) == 2:
+            sortvar = ['time', 'y', 'z', 'x']
+        elif abs(epi_code) == 1:
+            sortvar = ['time', 'x', 'y', 'z']
 
     ###################################################################
     # Position of statistics in the statistics field
@@ -144,7 +149,7 @@ def fit_field(coordinates, mask, data, design, ep:int, scale:float,
             'df':3, 'degrees_of_freedom':3,
             'dw':3, 'durbin_watson':3}
 
-    if durbin_watson:
+    if backend == 'statsmodels':
         parameter_dict = {
                 'mse':0,
                 'df':1, 'degrees_of_freedom':1,
@@ -153,7 +158,6 @@ def fit_field(coordinates, mask, data, design, ep:int, scale:float,
         parameter_dict = {
                 'mse':0,
                 'df':1, 'degrees_of_freedom':1}
-
 
     ###################################################################
     # Hyperparameters
@@ -174,27 +178,24 @@ def fit_field(coordinates, mask, data, design, ep:int, scale:float,
     # Reshape result, coordinates, and mask
     ###################################################################
 
-    rmask = mask.reshape((-1,))
     rcoordinates = coordinates.reshape((-1,3))
     rresult = result.reshape((-1,4,max(design.shape[-1],3)))
+
+    if mask is None:
+        to_fit = range(rcoordinates.shape[0])
+    else:
+        to_fit, = np.where(mask.reshape((-1,)))
+        to_fit  = to_fit.tolist()
 
     ###################################################################
     # Fit the model
     ###################################################################
 
     if backend == 'statsmodels':
-        if mask is None:
-            fit_sm_nm_dw(rresult, rcoordinates, data, design, r, s, sortvar)
-        else:
-            fit_sm_wm_dw(rresult, rcoordinates, rmask, data, design, r, s, sortvar)
+        fit_sm(rresult, rcoordinates, to_fit, data, design, r, s, sortvar)
 
     else:
-        if mask is None:
-            print('JIT with no mask')
-            fit_nm(rresult, rcoordinates, data, design, r, s)
-        else:
-            print('JIT with mask')
-            fit_wm(rresult, rcoordinates, rmask, data, design, r, s)
+        fit_nb(rresult, rcoordinates, to_fit, data, design, r, s)
 
     return result, parameter_dict, value_dict
 
@@ -202,89 +203,37 @@ def fit_field(coordinates, mask, data, design, ep:int, scale:float,
 # Backends
 ###################################################################
 
-def fit_sm_nm_dw(result, coordinates, data, design, r, s, sortvar):
-    num = coordinates.shape[0]
-    for i in range(num):
+def fit_sm(result, coordinates, to_fit, data, design, r, s, sortvar):
+    for i in to_fit:
         squared_distances = ((data[...,:3] - coordinates[i])**2).sum(axis=1)
         valid = np.where(squared_distances < r)
         if valid[0].size > 120:
             weights = np.exp(squared_distances[valid] / s)
+
             fit = sm.WLS(
                 endog    = data[valid][...,3],
                 exog     = design[valid],
                 weights  = weights,
                 hasconst = True).fit()
+
             result[i,0]   = fit.params
             result[i,1]   = fit.bse
             result[i,2]   = fit.tvalues
             result[i,3,0] = fit.mse_resid
             result[i,3,1] = fit.df_resid
 
-            #df = dataframe[valid].copy()
-            #df['reweighted_residual'] = weights * fit.resid
-            #df.sort_values(by=sortvar, inplace=True)
-            #result[i,3,2] = durbin_watson(df.reweighted_residual)
+            df = DataFrame({
+                'x'      : data[valid][...,0],
+                'y'      : data[valid][...,1],
+                'z'      : data[valid][...,2],
+                'time'   : data[valid][...,4]})
+            df['weighted_residual'] = weights * fit.resid
+            df.sort_values(by=sortvar, inplace=True)
+            result[i,3,2] = durbin_watson(df.weighted_residual)
 
-def fit_sm_wm_dw(result, coordinates, mask, data, design, r, s, sortvar):
-    num = coordinates.shape[0]
-    for i in range(num):
-        if mask[i]:
-            squared_distances = ((data[...,:3] - coordinates[i])**2).sum(axis=1)
-            valid = np.where(squared_distances < r)
-            if valid[0].size > 120:
-                weights = np.exp(squared_distances[valid] / s)
-                fit = sm.WLS(
-                    endog    = data[valid][...,3],
-                    exog     = design[valid],
-                    weights  = weights,
-                    hasconst = True).fit()
-                result[i,0]   = fit.params
-                result[i,1]   = fit.bse
-                result[i,2]   = fit.tvalues
-                result[i,3,0] = fit.mse_resid
-                result[i,3,1] = fit.df_resid
-
-def fit_sm_nm(result, coordinates, data, design, r, s):
-    num = coordinates.shape[0]
-    for i in range(num):
-        squared_distances = ((data[...,:3] - coordinates[i])**2).sum(axis=1)
-        valid = np.where(squared_distances < r)
-        if valid[0].size > 120:
-            weights = np.exp(squared_distances[valid] / s)
-            fit = sm.WLS(
-                endog    = data[valid][...,3],
-                exog     = design[valid],
-                weights  = weights,
-                hasconst = True).fit()
-            result[i,0]   = fit.params
-            result[i,1]   = fit.bse
-            result[i,2]   = fit.tvalues
-            result[i,3,0] = fit.mse_resid
-            result[i,3,1] = fit.df_resid
-
-def fit_sm_wm(result, coordinates, mask, data, design, r, s):
-    num = coordinates.shape[0]
-    for i in range(num):
-        if mask[i]:
-            squared_distances = ((data[...,:3] - coordinates[i])**2).sum(axis=1)
-            valid = np.where(squared_distances < r)
-            if valid[0].size > 120:
-                weights = np.exp(squared_distances[valid] / s)
-                fit = sm.WLS(
-                    endog    = data[valid][...,3],
-                    exog     = design[valid],
-                    weights  = weights,
-                    hasconst = True).fit()
-                result[i,0]   = fit.params
-                result[i,1]   = fit.bse
-                result[i,2]   = fit.tvalues
-                result[i,3,0] = fit.mse_resid
-                result[i,3,1] = fit.df_resid
-
-@jit(nopython=True, fastmath=True, parallel=True)
-def fit_nm(result, coordinates, data, design, r, s):
-    num = coordinates.shape[0]
-    for i in range(num):
+@jit(nopython=True, fastmath=True) #, parallel=True)
+def fit_nb(result, coordinates, to_fit, data, design, r, s):
+    for i in to_fit:
         squared_distances = ((data[...,:3] - coordinates[i])**2).sum(axis=1)
         valid = np.where(squared_distances < r)
         if valid[0].size > 120:
@@ -305,29 +254,3 @@ def fit_nm(result, coordinates, data, design, r, s):
             result[i,2]   = params / bse
             result[i,3,0] = mse_resid
             result[i,3,1] = df_resid
-
-@jit(nopython=True, fastmath=True, parallel=True)
-def fit_wm(result, coordinates, mask, data, design, r, s):
-    num = coordinates.shape[0]
-    for i in range(num):
-        if mask[i]:
-            squared_distances = ((data[...,:3] - coordinates[i])**2).sum(axis=1)
-            valid = np.where(squared_distances < r)
-            if valid[0].size > 120:
-                weights = np.exp(squared_distances[valid] / s)
-                endog   = data[valid][...,3]
-                exog    = design[valid]
-
-                W = np.diag(weights)
-                V_inverse = exog.T.dot(W).dot(exog)
-                params    = solve(V_inverse, exog.T.dot(W).dot(endog))   # regression parameters
-                residuals = endog - exog.dot(params)                     # residuals
-                df_resid  = exog.shape[0] - exog.shape[1]                # degrees of freedom
-                mse_resid = residuals.T.dot(W).dot(residuals) / df_resid # mean squared error
-                bse       = np.sqrt(mse_resid*np.diag(inv(V_inverse)))   # standard error
-
-                result[i,0]   = params
-                result[i,1]   = bse
-                result[i,2]   = params / bse
-                result[i,3,0] = mse_resid
-                result[i,3,1] = df_resid

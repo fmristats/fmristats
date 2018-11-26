@@ -594,7 +594,9 @@ def get_study(args):
 
     try:
         study.filter(cohort=args.cohort, j=args.id, paradigm=args.paradigm, inplace=True)
-    except:
+        print(study.protocol)
+    except Exception as e:
+        print(e)
         return
 
     if args.protocol_query:
@@ -602,6 +604,9 @@ def get_study(args):
 
     if args.covariates_query:
         study.query(args.covariates_query, inplace=True)
+
+    if (study.protocol is None) or (len(study.protocol) < 1):
+        return
 
     ###################################################################
     # Change working direction

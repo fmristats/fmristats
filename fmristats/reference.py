@@ -77,7 +77,7 @@ class ReferenceMaps:
         self.ep = abs(self.epi_code)-1
 
         self.temporal_resolution = session.temporal_resolution
-        self.slice_time = session.slice_time
+        self.slice_timing = session.slice_timing
 
         if use_raw:
             scan_references, w = fit_by_pca(

@@ -379,6 +379,7 @@ class SignalModel:
 
         return data_at(coordinate=x,
                 data=self.data,
+                epi_code=self.epi_code,
                 scale=self.scale,
                 radius=self.radius)
 
@@ -434,9 +435,9 @@ class SignalModel:
         assert hasattr(self, 'data'), 'first set data'
 
         return model_at(formula=formula,
-                also_return_data=also_return_data,
                 coordinate=x,
                 data=self.data,
+                epi_code=self.epi_code,
                 scale=self.scale,
                 radius=self.radius)
 
@@ -490,6 +491,7 @@ class SignalModel:
 
         return fit_at(formula=formula,
                 coordinate=x,
+                epi_code=self.epi_code,
                 data=self.data,
                 scale=self.scale,
                 radius=self.radius)
@@ -624,7 +626,8 @@ class SignalModel:
 
         return coordinates, mask
 
-    def fit_at_subject_coordinates(self, coordinates, mask=None, verbose=True):
+    def fit_at_subject_coordinates(self, coordinates, mask=None,
+            verbose=True, backend='numba'):
         """
         Fit the signal model to data
 
@@ -683,7 +686,7 @@ class SignalModel:
                 mask        = mask,
                 data        = self.data,
                 design      = self.design,
-                ep          = self.ep,
+                epi_code    = self.epi_code,
                 scale       = self.scale,
                 radius      = self.radius,
                 verbose     = verbose,
@@ -715,7 +718,7 @@ class SignalModel:
         coordinates = self.population_map.diffeomorphism.apply_to_indices(indices)
         return self.fit_at_subject_coordinates(coordinates = coordinates, **kwargs)
 
-    def fit(self, mask=True, verbose=True):
+    def fit(self, mask=True, verbose=True, backend='numba'):
         """
         Fit the signal model to data
 
@@ -737,7 +740,8 @@ class SignalModel:
 
         return self.fit_at_subject_coordinates(
                 coordinates = coordinates,
-                mask        = mask)
+                mask        = mask,
+                backend     = backend)
 
     ###################################################################
     # Descriptive statistics of this session
