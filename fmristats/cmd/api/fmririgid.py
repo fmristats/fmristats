@@ -71,6 +71,15 @@ def define_parser():
         information is used. When setting --grubbs in fmrifit, outlier
         estimation is performed again.""")
 
+    specific.add_argument('--window-radius',
+        type=int,
+        default=1,
+        help="""Calculate the mean rigid transformation using the this
+        window. A --window-radius of 1 does not do anything (the
+        default). A WINDOW_RADIUS of n corresponds to all rigid
+        transformation n scan cycle before and after each time point
+        (including the boundary).""")
+
     specific.add_argument('--new-rigids',
             default='pcm',
             help="""Name of the rigid transformations.""")
@@ -194,6 +203,8 @@ def call(args):
     cycle  = args.cycle
     grubbs = args.grubbs
 
+    window_radius = args.window_radius
+
     ####################################################################
     # Study
     ####################################################################
@@ -303,6 +314,13 @@ def call(args):
             else:
                 print("""{}: Reference cycle is {:d}.""".format(name.name(), cycle[0]))
                 reference_maps.reset_reference_space(cycle=cycle[0])
+
+        if window_radius != 1:
+            if verbose:
+                print('{}: Take mean in windows of radius: {}'.format(
+                    name.name(), window_radius))
+
+            reference_maps.mean(window_radius)
 
         try:
             if verbose:

@@ -163,7 +163,12 @@ def qc_plot(x, o, t, outlying_cycles, ax, studenise=False):
     """
     #palette = sb.color_palette("muted", n_colors=3)
     if studenise:
-        x = (x.T - x[...,~outlying_cycles].mean(axis=1)) / x[...,~outlying_cycles].std(axis=1)
+        std = x[...,~outlying_cycles].std(axis=1)
+        if np.isclose(std, 0).any():
+            x = (x.T - x[...,~outlying_cycles].mean(axis=1))
+        else:
+            print('No variance!')
+            x = (x.T - x[...,~outlying_cycles].mean(axis=1)) / std
         x = x.T
     ax.plot(t[~o[0]], x[0,~o[0]], '-', label='1st coordinate')#, c=palette[0])
     ax.plot(t[~o[1]], x[1,~o[1]], '-', label='2nd coordinate')#, c=palette[1])
@@ -224,16 +229,17 @@ def call(args):
 
         slice_times     = reference_maps.slice_timing[:,0]
         outlying        = reference_maps.outlying
-        values          = reference_maps.values
         outlying_cycles = reference_maps.outlying_cycles
 
         #######################################################################
         # Studenised Semi axis norms
         #######################################################################
 
+        semi_axis_norms = reference_maps.semi_axis_norms.T
+
         fig, ax = pt.subplots()
         qc_plot(
-                values[:3],
+                semi_axis_norms,
                 outlying[:3],
                 slice_times,
                 outlying_cycles,
@@ -253,9 +259,11 @@ def call(args):
         # Calculate Euler angles for all head movements
         #######################################################################
 
+        euler = reference_maps.acquisition_maps.euler().T
+
         fig, ax = pt.subplots()
         qc_plot(
-                np.degrees(values[6:]),
+                np.degrees(euler),
                 outlying[6:],
                 slice_times,
                 outlying_cycles,
@@ -273,7 +281,7 @@ def call(args):
 
         fig, ax = pt.subplots()
         qc_plot(
-                values[6:],
+                euler,
                 outlying[6:],
                 slice_times,
                 outlying_cycles,
@@ -294,9 +302,11 @@ def call(args):
         # Plot barycentre of the head with respect to different references
         #######################################################################
 
+        bary_centre = reference_maps.acquisition_maps.affines[:,:3,3].T
+
         fig, ax = pt.subplots()
         qc_plot(
-                values[3:6],
+                bary_centre,
                 outlying[3:6],
                 slice_times,
                 outlying_cycles,
@@ -313,7 +323,7 @@ def call(args):
 
         fig, ax = pt.subplots()
         qc_plot(
-                values[3:6],
+                bary_centre,
                 outlying[3:6],
                 slice_times,
                 outlying_cycles,

@@ -386,11 +386,13 @@ class Affines:
         """
         # https://en.wikipedia.org/wiki/Spherical_coordinate_system
         # https://en.wikipedia.org/wiki/Mean_of_circ
-        return Affine(self.affines.mean(axis=0))
+        m = self.affines.mean(axis=0)
+        m[3] = (0,0,0,1)
+        return Affine(m)
 
     def mean_rigid(self):
         """
-        Calculates the mean affine transformation of rigid
+        Calculates the mean rigid transformation of rigid
         transformations
 
         Returns
@@ -407,6 +409,26 @@ class Affines:
         u, s, v = svd(m[:3,:3])
         m[:3,:3] = u.dot(v)
         return Affine(m)
+
+    def mean_within_windows(self, r):
+        """
+        Calculates the mean rigid transformation of the rigid
+        transformation within a window of [-r,r] around each
+        transformation.
+        """
+        assert self.rigid, 'affines must be rigid'
+        assert r >= 1, 'r must be positive'
+
+        mean_affines = self.affines.copy()
+
+        if r > 1:
+            for t in range(self.n):
+                xs = self.affines[max(0,t-r):t+r+1]
+                xm = Affines(xs).mean_rigid().affine
+                mean_affines[t] = xm
+
+        mean_affines[:,3] = (0,0,0,1)
+        return Affines(mean_affines)
 
     def euler(self):
         """

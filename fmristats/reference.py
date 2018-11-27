@@ -243,11 +243,16 @@ class ReferenceMaps:
         new_acquisition_maps = x.dot(self.acquisition_maps)
         self.set_acquisition_maps(maps = new_acquisition_maps)
 
+    def mean(self, r):
+        assert r >= 1, 'r must be strictly greater than 1'
+        if r > 1:
+            self.acquisition_maps = self.acquisition_maps.mean_within_windows(r)
+
     ####################################################################
     # Outlier detection
     ####################################################################
 
-    def detect_outlying(self, sgnf):
+    def detect_outlying_scans(self, sgnf):
         """
         Detect outlying scans
 
@@ -312,23 +317,15 @@ class ReferenceMaps:
         _, args7 = grubbs(euler[1], sgnf)
         _, args8 = grubbs(euler[2], sgnf)
 
-        values = np.vstack((
-            w0, w1, w2,
-            x0, x1, x2,
-            euler[0], euler[1], euler[2]))
-
         outlying = np.vstack((
             args0, args1, args2,
             args3, args4, args5,
             args6, args7, args8))
 
         self.outlying = outlying
-        self.values   = values
-
-    def detect_outlying_scans(self, sgnf):
-        self.detect_outlying(sgnf)
 
         self.outlying_cycles = self.outlying.any(axis=0)
+
         self.outlying_scans = np.repeat(
                 self.outlying_cycles,
                 self.shape[-1]).reshape(self.shape)
@@ -337,11 +334,11 @@ class ReferenceMaps:
     # Descriptive statistics
     ####################################################################
 
-    def descriptive_statistics(self, sgnf=.1):
+    def descriptive_statistics(self):
         """
         Give descriptive statistics of the instance
         """
-        self.detect_outlying_scans(sgnf=sgnf)
+        # TODO: check if outlying_cycles exists!
         n, m = self.shape
         o = self.outlying_cycles.sum()
         return n, m*n, o, m*o
@@ -350,10 +347,12 @@ class ReferenceMaps:
         """
         Give a description of the instance
         """
+        # TODO: check if outlying_cycles exists!
         description = """
         Scans:        {:>4d}
         Valid:        {:>4d}
         Outlying:     {:>4d} ({:.2f}%)
+
         Scan cycles:  {:>4d}
         Valid:        {:>4d}
         Outlying:     {:>4d} ({:.2f}%)
