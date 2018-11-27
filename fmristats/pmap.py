@@ -454,23 +454,20 @@ def pmap_scanner(session, reference_maps=None, scan_cycle=None,
 
     Notes
     -----
-    When only studying a single subject, it makes perfect sense to
-    set the population space equal to an isometric image of the
-    subject's head, i.e. to a population space which preserves distances
-    with respect to the subject.
+    When only studying a single subject, it is possible to set the
+    standard space to an isometric image of the subject's head, i.e. to
+    a space which preserves distances with respect to the subject.
 
-    In other words, for a single subject, the population space can be
+    In other words, for a single subject, the standard space can be
     set equal to the subject reference space :math:`R` or to
-    :math:`ρ_s[R]` for some scan reference :math:`ρ_s`. This function
-    will do the former and sets the resolution to the given value.
+    :math:`ρ_t[R]` for any time point :math:`t` in the Session.
 
-    It only makes sense, though, to set the population space equal to
-    the coordinate system of the FMRI session, if this space is *close*
-    to the subject reference space of the FMRI session. This may be
-    archived by calling :func:`reset_reference_space` of the reference
-    maps. If called without arguments, this will have the effect that
-    the population space is then equal to the mean location of the
-    subject in the scanner.
+    You may even set :math:`R` identical to :math:`S` if scanner and
+    subject reference space are reasonable »close«. This may be archived
+    by calling :func:`reset_reference_space` of the reference maps. If
+    called without arguments, this will have the effect that the
+    population space is then equal to the mean location of the subject
+    in the scanner.
     """
     if (resolution is None) or (resolution == 'native') or np.isclose(resolution, 0):
         reference = session.reference
@@ -492,7 +489,7 @@ def pmap_scanner(session, reference_maps=None, scan_cycle=None,
         if scan_cycle is None:
             diffeomorphism = AffineTransformation(
                     reference=reference,
-                    affine=reference_maps.scan_references.inv().mean_rigid(),
+                    affine=reference_maps.acquisition_maps.mean_rigid().inv(),
                     shape=session.shape,
                     vb=session.name.name(),
                     nb=session.name,
@@ -500,7 +497,7 @@ def pmap_scanner(session, reference_maps=None, scan_cycle=None,
         else:
             diffeomorphism = AffineTransformation(
                     reference=reference,
-                    affine=reference_maps.scan_references.inv().affines[scan_cycle],
+                    affine=Affine(reference_maps.acquisition_maps.affines[scan_cycle]).inv(),
                     shape=session.shape,
                     vb=session.name.name(),
                     nb=session.name,

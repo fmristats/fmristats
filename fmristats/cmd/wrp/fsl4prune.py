@@ -114,7 +114,7 @@ def call(args):
     force         = args.force_mask_overwrite
     verbose       = args.verbose
     threshold_df  = args.threshold
-    proportion_df = args.proportion
+    proportion_df = args.fraction
 
     cmd_bet = args.cmd_bet
     variante = args.variante

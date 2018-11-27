@@ -88,14 +88,14 @@ class SignalModel:
         self.ep = abs(self.epi_code) - 1 # ep in [0,1,2]
         assert self.ep in [0,1,2], 'ep is not in [0,1,2]'
 
-        # Affine maps from the index space of the Session to
-        # the reference space of the ReferenceMaps.
+        # The references defined here are the affine maps that map from
+        # the *index space* of the Session to the subject reference
+        # space defined by the acquisition maps in the ReferenceMaps.
+
+        self.references = reference_maps.acquisition_maps.dot(session.reference)
 
         # TODO: when having added the option: --reference-maps None,
         # replace this with something reasonable
-        self.references = reference_maps.scan_references.inv().dot(session.reference)
-
-        self.tsr = self.session.temporal_resolution / self.shape[1]
 
     #######################################################################
     # Set hyperparameters for the fit

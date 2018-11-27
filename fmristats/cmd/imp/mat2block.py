@@ -83,12 +83,25 @@ def define_parser():
     ####################################################################
 
     control_verbosity  = parser.add_argument_group(
-            """Control the level of verbosity""")
+        """Control the level of verbosity""")
 
     control_verbosity.add_argument('-v', '--verbose',
-            action='count',
-            default=0,
-            help="""Increase output verbosity""")
+        action='count',
+        default=0,
+        help="""Increase output verbosity""")
+
+    ####################################################################
+    # Push
+    ####################################################################
+
+    control_verbosity  = parser.add_argument_group(
+        """Control whether to save the modified (thus overwrite the
+        existing) study instance.""")
+
+    control_verbosity.add_argument('-p', '--push',
+        action='store_true',
+        help="""Will save the modified (and thus overwrite the existing)
+        study instance.""")
 
     ####################################################################
     # Multiprocessing
@@ -98,9 +111,9 @@ def define_parser():
             """Multiprocessing""")
 
     control_multiprocessing.add_argument('-j', '--cores',
-            type=int,
-            help="""Number of cores to use. Default is the number of
-            cores on the machine.""")
+        type=int,
+        help="""Number of cores to use. Default is the number of
+        cores on the machine.""")
 
     return parser
 
@@ -317,7 +330,7 @@ def call(args):
 
         study.save(args.out)
 
-    else:
+    if args.push:
         if args.verbose:
             print('Save: {}'.format(args.study))
         study.save(args.study)

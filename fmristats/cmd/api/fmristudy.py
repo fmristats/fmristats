@@ -25,9 +25,6 @@ Handling studies
 
 import argparse
 
-# TODO: --protocol_from_csv
-# TODO: --covariates_from_csv
-
 def add_study_arguments(parser):
 
     study_parser = parser.add_argument_group(
@@ -177,7 +174,7 @@ def add_study_arguments(parser):
 
     study_parser.add_argument('--rigids',
         help="""Name of the method that has been used to fit the head
-        movements. This will overwrite any entires in the protocol. Use
+        movements. This will overwrite any entries in the protocol. Use
         with care.""")
 
     study_parser.add_argument('--scale-type',
@@ -356,7 +353,8 @@ def get_study(args):
     elif args.study is None:
         dir_home = str(Path.home())
         dir_curr = '.'
-        dir_n = args.traverse_upwards
+        dir_n = args.traverse_upwards + 1
+        assert dir_n > 0, 'traverse_upwards must non-negativ'
 
         for n in range(dir_n):
             if args.verbose > 1:
@@ -560,7 +558,7 @@ def get_study(args):
 
         if args.rigids is not None:
             if args.verbose > 1:
-                print('Set (or reset) rigids to: {}'.format(
+                print('Set (or reset) rigid transformations to: {}'.format(
                     args.rigids))
             study.set_rigids(args.rigids)
 

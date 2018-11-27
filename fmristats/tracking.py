@@ -28,7 +28,7 @@ import numpy as np
 
 from fmristats.affines import Affine, Affines, cartesian2homogeneous
 
-def fit_by_pca(data, reference):
+def fit_by_pcm(data, reference):
     """
     Tracking a rigid body
 
@@ -44,13 +44,14 @@ def fit_by_pca(data, reference):
 
     Returns
     -------
-    scan_references : Affines
-        Rigid body transformations mapping from the given coordinate
-        system (specified by `reference`_) **to** the coordinate system
-        of the body, in which zero corresponds to the bary centre of the
-        body and the base axis correspond to its principle axis'.
+    scan_inverse_references : Affines
+        Rigid body transformations that map from the given coordinate
+        system (specified by the affine `reference`) to the coordinate
+        system of the body, in which zero corresponds to the bary centre
+        of the body and the base axis correspond to its principle axis.
 
-        This is the other way around!
+        Note that this is the other way around: In the terminology of
+        the MB estimator, this corresponds to :math:`ρ_t^{-1}`.
     w : ndarray, shape (n,3)
         Principle semi axis lengths of the rigid body.
 
@@ -59,7 +60,7 @@ def fit_by_pca(data, reference):
     The function implements a (or the) principle axis method for rigid
     body tracking.  The method fits a orthonormal base (i.e. a
     coordinate system) onto data, such that the base vectors correspond
-    to the principle axis (v) of the body.  The returned scan_references
+    to the principle axis (v) of the body.  The returned scan_inverse_references
     are affine transformations that map from the specified coordinate
     system to the coordinates of these points in the body.
     """
@@ -92,9 +93,9 @@ def fit_by_pca(data, reference):
     var = np.moveaxis(var, -1, 0)
     w, v = np.linalg.eig(var)
 
-    # scan references
-    scan_references = np.empty((numob,4,4))
+    # scan inverse references
+    scan_inverse_references = np.empty((numob,4,4))
     for t in range(numob):
-        scan_references[t] = cartesian2homogeneous(v[t], com[:,t])
+        scan_inverse_references[t] = cartesian2homogeneous(v[t], com[:,t])
 
-    return Affines(scan_references), w
+    return Affines(scan_inverse_references), w

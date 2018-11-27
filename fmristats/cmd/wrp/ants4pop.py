@@ -115,6 +115,19 @@ def define_parser():
         help="""Increase output verbosity""")
 
     ####################################################################
+    # Push
+    ####################################################################
+
+    control_verbosity  = parser.add_argument_group(
+        """Control whether to save the modified (thus overwrite the
+        existing) study instance.""")
+
+    control_verbosity.add_argument('-p', '--push',
+        action='store_true',
+        help="""Will save the modified (and thus overwrite the existing)
+        study instance.""")
+
+    ####################################################################
     # Multiprocessing
     ####################################################################
 
@@ -462,7 +475,7 @@ def call(args):
 
         study.save(args.out)
 
-    else:
+    if args.push:
         if args.verbose:
             print('Save: {}'.format(args.study))
         study.save(args.study)

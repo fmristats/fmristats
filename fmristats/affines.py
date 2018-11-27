@@ -353,8 +353,11 @@ class Affines:
         affines : ndarray, shape (n,4,4)
             Affine transformations in homologous coordinates.
         """
-        # TODO: allow for higher dimensional indices: affines.shape =
-        # (m,n,4,4)
+        # TODO: allow higher dimensional indices: affines.shape = (m,n,4,4)
+
+        if type(affines) is Affines:
+            affines = affines.affines
+
         n, x, y = affines.shape
         assert (x,y) == (4,4), 'affines must be given in homologous coordinates'
         assert np.isclose(affines[:,3], np.array((0,0,0,1))).all(), 'last row must be [0,0,0,1]'

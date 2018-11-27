@@ -253,6 +253,19 @@ def define_parser():
         help="""Increase output verbosity""")
 
     ####################################################################
+    # Push
+    ####################################################################
+
+    control_verbosity  = parser.add_argument_group(
+        """Control whether to save the modified (thus overwrite the
+        existing) study instance.""")
+
+    control_verbosity.add_argument('-p', '--push',
+        action='store_true',
+        help="""Will save the modified (and thus overwrite the existing)
+        study instance.""")
+
+    ####################################################################
     # Multiprocessing
     ####################################################################
 
@@ -261,8 +274,15 @@ def define_parser():
 
     control_multiprocessing.add_argument('-j', '--cores',
         type=int,
-        help="""Number of cores to use. Default is the number of cores
-        on the machine.""")
+        default=1,
+        help="""Number of threads to use. The implementation will
+        usually try to run as many calculations and loops as possible in
+        parallel -- this may suggest that it may be adventurous to
+        process all entries in the study protocol sequentially (and this
+        is the default). It is possible, however, to generate a thread
+        for each protocol entry. Note that this may generate a lot of
+        I/O-operations. If you set CORES to 0, then the number of cores
+        on the machine will be used.""")
 
     return parser
 
@@ -635,3 +655,8 @@ def call(args):
            os.makedirs(dfile)
 
         study.save(args.out)
+
+    if args.push:
+        if args.verbose:
+            print('Save: {}'.format(args.study))
+        study.save(args.study)

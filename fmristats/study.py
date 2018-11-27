@@ -217,7 +217,8 @@ class Study:
         ----
         This will overwrite all entries in the protocol! Use with care.
         """
-        if (rigids_name is None) and ('rigids' not in self.protocol.columns):
+        if rigids_name is None:
+            if 'rigids' not in self.protocol.columns:
                 self.protocol['rigids'] = 'undefined'
         else:
             self.protocol['rigids'] = rigids_name
@@ -237,7 +238,8 @@ class Study:
         ----
         This will overwrite all entries in the protocol! Use with care.
         """
-        if (diffeomorphism_name is None) and ('diffeomorphism' not in self.protocol.columns):
+        if diffeomorphism_name is None:
+            if 'diffeomorphism' not in self.protocol.columns:
                 self.protocol['diffeomorphism'] = 'undefined'
         else:
             self.protocol['diffeomorphism'] = diffeomorphism_name
@@ -255,7 +257,8 @@ class Study:
         ----
         This will overwrite all entries in the protocol! Use with care.
         """
-        if (vb_name is None) and ('standard_space' not in self.protocol.columns):
+        if vb_name is None:
+            if 'standard_space' not in self.protocol.columns:
                 self.protocol['standard_space'] = 'undefined'
         else:
             self.protocol['standard_space'] = vb_name

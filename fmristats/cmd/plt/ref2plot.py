@@ -87,17 +87,17 @@ def define_parser():
         help="""Increase output verbosity""")
 
     ####################################################################
-    # Multiprocessing
+    # Push
     ####################################################################
 
-    control_multiprocessing  = parser.add_argument_group(
-        """Multiprocessing""")
+    control_verbosity  = parser.add_argument_group(
+        """Control whether to save the modified (thus overwrite the
+        existing) study instance.""")
 
-    control_multiprocessing.add_argument('-j', '--cores',
-        type=int,
-        help="""Number of cores to use. Default is the number of cores
-        on the machine.""")
-
+    control_verbosity.add_argument('-p', '--push',
+        action='store_true',
+        help="""Will save the modified (and thus overwrite the existing)
+        study instance.""")
     return parser
 
 from ..api.fmristudy import add_study_arguments
@@ -189,7 +189,8 @@ def call(args):
         print('Nothing to do.')
         return
 
-    study_iterator = study.iterate('reference_maps')
+    study_iterator = study.iterate('reference_maps',
+        integer_index=True)
 
     df = study_iterator.df.copy()
 
@@ -201,7 +202,7 @@ def call(args):
     if directory and not isdir(directory):
        os.makedirs(directory)
 
-    def wm(name, reference_maps):
+    def wm(index, name, reference_maps):
         pt.ioff()
 
         if (grubbs is not None) and (not np.isclose(grubbs, 1)):
@@ -209,11 +210,13 @@ def call(args):
                 print('{}: Detect outlying scans'.format(name.name()))
             reference_maps.detect_outlying_scans(grubbs)
 
-        file1 = join(directory, name.name() + '-radii.' + args.extension)
-        file2 = join(directory, name.name() + '-euler.' + args.extension)
-        file3 = join(directory, name.name() + '-euler-studenised.' + args.extension)
-        file4 = join(directory, name.name() + '-bary.' + args.extension)
-        file5 = join(directory, name.name() + '-bary-studenised.' + args.extension)
+        method = df.ix[index,'rigids']
+
+        file1 = join(directory, name.name() + '-' + method + '-radii.' + args.extension)
+        file2 = join(directory, name.name() + '-' + method + '-euler.' + args.extension)
+        file3 = join(directory, name.name() + '-' + method + '-euler-studenised.' + args.extension)
+        file4 = join(directory, name.name() + '-' + method + '-bary.' + args.extension)
+        file5 = join(directory, name.name() + '-' + method + '-bary-studenised.' + args.extension)
 
         ####################################################################
         # Get slice times and outlying
@@ -328,36 +331,10 @@ def call(args):
 
     ####################################################################
 
-    if args.cores != 1:
-        if verbose:
-            print('Multiprocessing not implemented yet.')
-        args.cores = 1
-
-    if len(df) > 1 and ((args.cores is None) or (args.cores > 1)):
-        try:
-            pool = ThreadPool(args.cores)
-            for name, instances in study_iterator:
-                reference_maps  = instances['reference_maps']
-                if reference_maps is not None:
-                    pool.apply_async(wm, args=(name, reference_maps))
-            pool.close()
-            pool.join()
-        except Exception as e:
-            pool.close()
-            pool.terminate()
-            print('Pool execution has been terminated')
-            print(e)
-        finally:
-            pass
-    else:
-        try:
-            print('Process protocol entries sequentially')
-            for name, instances in study_iterator:
-                reference_maps = instances['reference_maps']
-                if reference_maps is not None:
-                    wm(name, reference_maps)
-        finally:
-            pass
+    for index, name, instances in study_iterator:
+        reference_maps = instances['reference_maps']
+        if reference_maps is not None:
+            wm(index, name, reference_maps)
 
     ####################################################################
     # Write study to disk
@@ -373,7 +350,7 @@ def call(args):
 
         study.save(args.out)
 
-    else:
+    if args.push:
         if args.verbose:
             print('Save: {}'.format(args.study))
         study.save(args.study)

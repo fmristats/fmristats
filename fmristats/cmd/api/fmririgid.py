@@ -71,6 +71,10 @@ def define_parser():
         information is used. When setting --grubbs in fmrifit, outlier
         estimation is performed again.""")
 
+    specific.add_argument('--new-rigids',
+            default='pcm',
+            help="""Name of the rigid transformations.""")
+
     ####################################################################
     # File handling
     ####################################################################
@@ -111,6 +115,19 @@ def define_parser():
         action='count',
         default=0,
         help="""Increase output verbosity""")
+
+    ####################################################################
+    # Push
+    ####################################################################
+
+    control_verbosity  = parser.add_argument_group(
+        """Control whether to save the modified (thus overwrite the
+        existing) study instance.""")
+
+    control_verbosity.add_argument('-p', '--push',
+        action='store_true',
+        help="""Will save the modified (and thus overwrite the existing)
+        study instance.""")
 
     ####################################################################
     # Multiprocessing
@@ -187,7 +204,7 @@ def call(args):
         print('Nothing to do.')
         return
 
-    study.set_rigids('pca')
+    study.set_rigids(args.new_rigids)
 
     ####################################################################
     # Iterator
@@ -366,7 +383,7 @@ def call(args):
 
         study.save(args.out)
 
-    else:
+    if args.push:
         if args.verbose:
             print('Save: {}'.format(args.study))
         study.save(args.study)

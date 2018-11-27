@@ -41,7 +41,7 @@ def add_arguments(parser):
 
     handling_df_cutoff = parser.add_mutually_exclusive_group()
 
-    handling_df_cutoff.add_argument('-p', '--proportion',
+    handling_df_cutoff.add_argument('--fraction',
             type=float,
             default=.6842,
             help="""estimates which degrees of freedom are below the
@@ -73,6 +73,19 @@ def add_arguments(parser):
         action='count',
         default=0,
         help="""Increase output verbosity""")
+
+    ####################################################################
+    # Push
+    ####################################################################
+
+    control_verbosity  = parser.add_argument_group(
+        """Control whether to save the modified (thus overwrite the
+        existing) study instance.""")
+
+    control_verbosity.add_argument('-p', '--push',
+        action='store_true',
+        help="""Will save the modified (and thus overwrite the existing)
+        study instance.""")
 
     ####################################################################
     # Multiprocessing
@@ -144,7 +157,7 @@ def call(args):
     force         = args.force_mask_overwrite
     verbose       = args.verbose
     threshold_df  = args.threshold
-    proportion_df = args.proportion
+    proportion_df = args.fraction
 
     ####################################################################
     # Create the iterator

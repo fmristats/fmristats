@@ -19,9 +19,37 @@
 
 """
 
-The reference maps which map from a subject specific reference space to
-the location and orientation of the subject's brain in the scanner
-during the course of a FMRI session at a given time.
+Subjects may tend to move their head in the scanner ever so slightly,
+which means that the tilt and position of the head during the FMRI
+session may change over time. For this reason, we need to track the
+subject head in the scanner, i.e. we need to find and estimate its tilt
+and position at a given time point. Mathematically, head movements are
+affine transformations (rigid body transformations) that map from a
+space with a subject-specific coordinate system to the scanner space (or
+in other words from a coordinate system that is fixed with respect to
+the subject to a coordinate system that is fixed with respect to the
+scanner). The *subject reference space* will always be denoted by
+:math:`R`, and the scanner space by :math:`S`. We may then identify head
+movements with the maps:
+
+.. math::
+
+    ρ_t : R \\to S.
+
+These maps will be called reference maps: :math:`ρ_t` is called the
+*reference map of scan* :math:`t`. Reference maps :math:`ρ_t` are
+functions that map from subject reference space to the location and
+orientation of the subject brain in the scanner at a given time point.
+
+The inverse of :math:`ρ_t` will be called the *acquisition map of scan*
+:math:`t`:
+
+.. math::
+
+    ρ_t^{-1} : S \\to R.
+
+Hence, the acquisition map of scan :math:`t` maps from scanner space to
+subject reference space.
 
 """
 
@@ -31,7 +59,7 @@ from .affines import Affine, Affines
 
 from .grubbs import grubbs
 
-from .tracking import fit_by_pca
+from .tracking import fit_by_pcm
 
 from .euler import rotation_matrix_to_euler_angles
 
@@ -43,13 +71,14 @@ import pickle
 
 class ReferenceMaps:
     """
-    The reference maps which map from a subject specific reference space
-    to the location and orientation of the subject's brain in the
-    scanner during the course of a FMRI session at a given time.
+    Reference maps are functions that map from the subject reference
+    space to the location and orientation of the subject brain in the
+    scanner at a given time point.
 
     Parameters
     ----------
     name : Identifier
+        The identifier of the subject
     """
 
     def __init__(self, name):
@@ -59,17 +88,20 @@ class ReferenceMaps:
         """
         Fit head movement
 
-        This will fit rigid body transformations to the data that estimate
-        position and bearing of the head.
+        This will fit rigid body transformations to the data, i.e. it
+        will estimate the position and bearing of the head in each scan
+        cycle.
 
         Parameters
         ----------
         session : Session
+            The FMRI session data of the subject.
         use_raw : bool
+            Use the raw data or only the data in the foreground.
 
         Notes
         -----
-        The function implements the principle axis method for rigid body
+        The function implements a principle axis method for rigid body
         tracking.
         """
         self.shape = (session.numob, session.shape[session.ep])
@@ -80,62 +112,45 @@ class ReferenceMaps:
         self.slice_timing = session.slice_timing
 
         if use_raw:
-            scan_references, w = fit_by_pca(
+            acquisition_maps, w = fit_by_pcm(
                     data=session.raw,
                     reference=session.reference)
         else:
-            scan_references, w = fit_by_pca(
+            acquisition_maps, w = fit_by_pcm(
                     data=session.data,
                     reference=session.reference)
 
-        self.reference = session.reference
-
+        self.reference       = session.reference
         self.semi_axis_norms = w
 
-        self.set_scan_references(scan_references=scan_references)
+        self.set_acquisition_maps(maps = acquisition_maps)
 
     ####################################################################
     # Flights between space and time
     ####################################################################
 
-    def set_scan_references(self, scan_references):
+    def set_acquisition_maps(self, maps):
         """
-        Sets the reference space of the fMRI experiment
+        The subject reference space of the fMRI experiment
 
-        This will define the reference space of an fMRI experiment and
-        calculates the corresponding observation grid of to this space.
+        This will define the subject reference space of an FMRI
+        experiment.
 
         Parameters
         ----------
-        scan_references : Affines or ndarray, shape (n,4,4), dtype: float
-            The rigid body transformations.  Affine transformations that
-            map coordinates, given with respect to the rigid body, to
-            the coordinates of these points in (physical) scanner space
-            at the time of the respected scan.
+        maps : Affines or ndarray, shape (n,4,4), dtype: float
+            Acquisition maps. Rigid body transformations that
+            map from scanner space to subject reference space.
 
         Notes
         -----
-        In particular, this function will set the scan references and
-        their respected inverses.  In fact, the reference space is
-        solely defined through these affine transformations.  A scan
-        reference is a rigid body transformation that maps a point in
-        the reference space :math:`R` to the coordinates of this point
-        in in scanner space :math:`V` during the respected scan, in
-        signs:
-
-        :math:`ρ_t: R \to V`
-
-        Note that the map goes from *reference* to *specific* (from
-        *the* scan to *some* scan or from *fixed* to *moving*).
-
-        The reference space is typically set by a function that fits
-        head movements to observed intensities at a fixed (say, scanner
-        specific) grid, e.g., `fit`.
+        The subject reference space is uniquely defined by these
+        affine transformations.
         """
-        if type(scan_references) is Affines:
-            self.scan_references = scan_references
+        if type(maps) is Affines:
+            self.acquisition_maps = maps
         else:
-            self.scan_references = Affines(scan_references)
+            self.acquisition_maps = Affines(maps)
 
     def reset_reference_space(self, x=None, cycle=None):
         """
@@ -144,47 +159,89 @@ class ReferenceMaps:
         Parameters
         ----------
         x : None or Affine or ndarray, shape (4,4), dtype: float
-            an affine transformation or None (default)
-        cycle : int
-            index of a scan cycle or None
+            An affine transformation or None (default)
+        cycle : None or int
+            Index of a scan cycle or None
 
         Notes
         -----
-        This will reset the coordinates system of the reference space by
-        moving origin and base vectors to the new position specified by
-        the affine transformation x.  The affine transformation goes
-        **from this** reference space **to the new** reference. If the
-        affine transformation has the form Ax+b, then b is the new
-        origin and A defines the new orientation.
-
-        If x=None, then x will be set to the mean of the scan
-        references.
-
-        Scan references are the maps :math:`ρ_t` which go from scanner
-        space to reference space. If the new reference space is
-        :math:`R':=x[R]`, then the new scan references are
+        This will reset the coordinates system of the subject reference
+        space by moving origin and base vectors to the new position
+        specified by the transformation x. The affine transformation
+        :math:`x` goes **from this** reference space **to the new**
+        reference space.
 
         .. math::
 
-            ρ'_t = x ∘ ρ_t
+            x : R \\to R'.
 
-        **Warning**: this makes all population maps which have been
-        defined for this reference space obsolete. You should thus
-        perform this operation prior to fitting any population maps.
+        If the affine transformation has the form
+        x(:math:`x`)= :math:`Ax+b`, then :math:`b` is the new origin and
+        :math:`A` defines the new orientation.
+
+        If x=None, then x will be set to the inverse of the mean of the
+        acquisition maps. This has the consequence that the new
+        reference space is identical to the average position of the
+        subject head in the scanner. If x=None and cycle is
+        integer :math:`t_0`, then :math:`x` is set to:
+
+        .. math::
+
+            x = ρ_{t_0}.
+
+        This has the consequence that the new subject reference space
+        equals the position of the subject head during scan cycle
+        :math:`t_0`.
+
+        References maps are the maps :math:`ρ_t` which map from subject
+        reference space to scanner:
+
+        .. math::
+
+            ρ_t : R \\to S.
+
+        Acquisition maps are the inverses of the maps :math:`ρ_t` and
+        map from scanner space to subject reference space:
+
+        .. math::
+
+            ρ_t^{-1} : S \\to R.
+
+        The new subject reference space :math:`R'` is equal to
+        :math:`R':=x[R]`, and the new acquisition maps are therefore:
+
+        .. math::
+
+            ρ_t^{'-1} = x ∘ ρ^{-1}_t
+
+        Then:
+
+        .. math::
+
+            ρ'_t : R' \\to S
+
+        **Warning**: Resetting the reference space makes all population
+        maps which have been defined for this subject reference space
+        obsolete. You should thus perform this operation prior to
+        fitting any population maps.
         """
         if x is None:
             if cycle is None:
-                x = self.scan_references.mean_rigid().inv()
+                x = self.acquisition_maps.mean_rigid().inv()
             else:
-                x = Affine(self.scan_references.affines[cycle]).inv()
+                x = Affine(self.acquisition_maps.affines[cycle]).inv()
 
         if type(x) is not Affine:
             x = Affine(x)
 
         assert type(x) is Affine, 'x must be Affine'
+        assert x.is_rigid, 'x must be rigid'
 
-        scan_references  = x.dot(self.scan_references)
-        self.set_scan_references(scan_references=scan_references)
+        self.x = x
+        self.cycle = cycle
+
+        new_acquisition_maps = x.dot(self.acquisition_maps)
+        self.set_acquisition_maps(maps = new_acquisition_maps)
 
     ####################################################################
     # Outlier detection
@@ -207,13 +264,13 @@ class ReferenceMaps:
 
         Notes
         -----
-        Uses the eigenvalues of the pcm method to for outlier detection.
+        Uses the eigenvalues of the pcm method for outlier detection.
         (Currently only full scan cycles supported.)
 
-        Remove scan cycles which have eigenvalues which differ
-        significantly from all other volumes, as these likely are the
-        result of severe head movement during this particular
-        measurement period.
+        The algorithm will mark scan cycles as False which have
+        eigenvalues which differ significantly from the eigenvalues all
+        other scan cycles, as this likely is the result of severe head
+        movement during the measurement of this cycle.
 
         Grubbs' test is used recursively for the outlier detection. The
         norm of all three semi axis length and each single semi axis
@@ -240,14 +297,14 @@ class ReferenceMaps:
         _, args2 = grubbs(w2, sgnf)
 
         # Look at the bary centres of the scan cycles
-        x0 = self.scan_references.affines[:,0,3]
-        x1 = self.scan_references.affines[:,1,3]
-        x2 = self.scan_references.affines[:,2,3]
+        x0 = self.acquisition_maps.affines[:,0,3]
+        x1 = self.acquisition_maps.affines[:,1,3]
+        x2 = self.acquisition_maps.affines[:,2,3]
         _, args3 = grubbs(x0, sgnf)
         _, args4 = grubbs(x1, sgnf)
         _, args5 = grubbs(x2, sgnf)
 
-        euler = self.scan_references.euler().T
+        euler = self.acquisition_maps.euler().T
 
         euler[ abs(euler) > tau / 5 ] = np.nan
 
