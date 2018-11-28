@@ -79,8 +79,8 @@ def bet(intercept, intercept_file, mask_file, cmd='fsl5.0-bet', variante='R',
     template = nii2image(mask)
     return template
 
-def fit_warpcoef(nb_file, warpcoef_file, preimage_file=None,
-        vb_file=None, vb_mask=None, nb_mask=None,
+def fnirt(warpcoef_file, nb_nii, vb_estimate_nii=None,
+        vb_nii=None, vb_mask=None, nb_mask=None,
         config='T1_2_MNI152_2mm', cmd='fsl5.0-fnirt', verbose=True):
     """
     Run FNIRT to fit a diffeomorphism :math:`ψ` given data :math:`M` in
@@ -89,38 +89,36 @@ def fit_warpcoef(nb_file, warpcoef_file, preimage_file=None,
 
     Parameters
     ----------
-    nb_file : str
-        File name where to find the data of :math:`R=ψ[M]` which shall
-        be used as reference for the image space (nb) of the
-        diffeomorphism.
     warpcoef_file : str
         File name in which to save the warp coefficients.
-    target_file : None or str
-        File name in which to save the target :math:`ψ^{-1}[R]`. If
-        None, the target will not be saved. This is the default.
-    config : str
-        Name of the configuration file FNIRT shall use.
-    vb_file : None or str
-        File name where to find the data of :math:`M` (the template)
-        which shall be used as reference for the domain space (nb) of
+    nb_nii : str
+        File name where to find :math:`ψ[m]`.
+    vb_estimate_nii : None or str
+        File name where to save :math:`ψ^{-1}[r]`.
+    vb_nii : None or str
+        File name where to find the data of :math:`m` (the template) in
+        standard space that is used as reference for the domain (nb) of
         the diffeomorphism.
     vb_mask : None or str
-        Name of file with mask in reference space. May be provided if
-        vb_file is given.
+        Name of file with mask in standard space.
+    nb_mask : None or str
+        Name of file with mask in subject reference space.
+    config : str
+        Name of the configuration file for FNIRT.
     cmd : str
-        Name of the FSL's FNIRT command line program.
+        Name of the FSL FNIRT command line program.
     verbose : bool
-        Print command to stdout
+        Control verbosity.
     """
     command = [cmd]
 
-    command.append('--in={}'.format(nb_file))
+    command.append('--in={}'.format(nb_nii))
 
     if nb_mask:
         command.append('--inmask={}'.format(nb_mask))
 
-    if vb_file:
-        command.append('--ref={}'.format(vb_file))
+    if vb_nii:
+        command.append('--ref={}'.format(vb_nii))
 
     if vb_mask:
         command.append('--refmask={}'.format(vb_mask))
@@ -128,8 +126,8 @@ def fit_warpcoef(nb_file, warpcoef_file, preimage_file=None,
     if config:
         command.append('--config={}'.format(config))
 
-    if preimage_file:
-        command.append('--iout={}'.format(preimage_file))
+    if vb_estimate_nii:
+        command.append('--iout={}'.format(vb_estimate_nii))
 
     command.append('--cout={}'.format(warpcoef_file))
 
@@ -149,83 +147,65 @@ def fit_warpcoef(nb_file, warpcoef_file, preimage_file=None,
         print('Failed with: {}'.format(e))
         return False
 
-def warpcoef2pmap(warpcoef_file, vb_file, vb_name, nb_file, nb_name,
-        cpopulation_file, csubject_file, vb=None, name='fnirt',
+def splines2warp(warpcoef_file, vb, vb_nii, nb_nii, name,
+        coefficients_vb, coefficients_nb, new_diffeomorphism='fnirt',
         cmd='fsl5.0-std2imgcoord'):
     """
-    Run FSL's img2stdcoord to turn the warp coefficient file produced by
-    FNIRT into a fmristats' diffeomorphism intance.
+    This will run FSL img2stdcoord to turn the spline coefficient file
+    produced by FNIRT into a diffeomorphism instance.
 
     Parameters
     ----------
-    vb_file : str
-        file name where to find the data of :math:`M` (the template)
-        which shall be used as reference for the domain space (nb) of
-        the diffeomorphism, i.e. file name in which the template is
-        stored.
-    nb_file : str
-        file name where to find the data of :math:`R=ψ[M]` which shall
-        be used as reference for the image space (nb) of the
-        diffeomorphism.
-    vb_name :
-        name or identifier for the domain (vb).
-    nb_name :
-        name or identifier for the image (nb).
     warpcoef_file : str
-        File name of the warp coefficient file.
+        File name of the spline coefficient file.
+    vb : Image
+        Standard space (VB).
+    vb_nii : Image
+        Path to standard space (VB) as Nifti1.
+    nb_name : str or Identifier
+        name or identifier for the image (nb).
     cmd : str
-        Name of FSL's std2imgcoord command line program.
-    cpopulation_file : str
-        Coordinates of the template's image grid in population space
-    csubject_file : str
-        Coordinates of the template's image grid in subject space
+        Path to FSL std2imgcoord.
+    coefficients_vb : str
+        Coordinates of the template's image grid in standard space.
+    coefficients_nb : str
+        Coordinates of the template's image grid in subject space.
 
     Returns
     -------
-    ndarray, shape template.shape
-        The coordinates.
+    Warp : The diffeomorphism as a warp field.
     """
-    vb_image = nii2image(ni.load(vb_file), name=vb_name)
-    vb_grid = vb_image.coordinates()
+    vb_grid = vb.coordinates()
     vb_grid = vb_grid.reshape(-1,3)
-    np.savetxt(cpopulation_file, X=vb_grid, delimiter=' ', fmt='%.2f')
+    np.savetxt(coefficients_vb, X=vb_grid, delimiter=' ', fmt='%.2f')
 
     command = '{} -std {} -img {} -warp {} -mm {} > {}'.format(
-            cmd, vb_file, nb_file, warpcoef_file,
-            cpopulation_file, csubject_file)
+            cmd, vb_nii, nb_nii, warpcoef_file,
+            coefficients_vb, coefficients_nb)
 
     try:
         soutput = run([command], shell=True, stdout=PIPE, check=True)
     except Exception as e:
-        print('Unable to run: {}'.format(command))
-        print('Failed with: {}'.format(e))
+        print('Unable to run: {}, {}'.format(command, e))
         return
 
     try:
-        coordinates = np.loadtxt(csubject_file)
+        coordinates = np.loadtxt(coefficients_nb)
     except Exception as e:
-        print('Unable to read: {}'.format(csubject_file))
-        print('Failed with: {}'.format(e))
+        print('Unable to read: {}, {}'.format(coefficients_nb, e))
         return
 
-    coordinates = coordinates.reshape(vb_image.shape+(3,))
+    coordinates = coordinates.reshape(vb.shape+(3,))
 
-    nb_image = nii2image(ni.load(nb_file), name=nb_name)
-
-    diffeomorphism = Warp(
-            reference=vb_image.reference,
+    return Warp(
+            reference=vb.reference,
             warp=coordinates,
-            vb=vb_image.name,
-            nb=nb_image.name,
-            name=name,
+            vb=vb.name,
+            nb=name,
+            name=new_diffeomorphism,
             metadata={
-                'vb_file': vb_file,
-                'nb_file': nb_file,
-                'warp_coefficient_file' : warpcoef_file,
+                'vb_nii': vb_nii,
+                'nb_nii': nb_nii,
+                'splines' : warpcoef_file,
                 }
-            )
-
-    return PopulationMap(diffeomorphism,
-            vb=vb_image,
-            nb=nb_image,
             )
