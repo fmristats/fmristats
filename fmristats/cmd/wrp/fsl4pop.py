@@ -1,4 +1,4 @@
-# Copyright 2016-2017 Thomas W. D. Möbius
+# Copyright 2016-2018 Thomas W. D. Möbius
 #
 # This file is part of fmristats.
 #
@@ -19,18 +19,20 @@
 
 """
 
-On the one hand, this tool is a wrapper to ``std2imgcoord`` and converts
-a FSL warp coefficient file produced by ``fnirt`` and produces
-population map for the corresponding session.  On the other hand, it can
-be used as a wrapper to the FSL command line tools ``fnirt`` to estimate
-former warp coefficient file from the intercept field of a signal model
-and a given template brain.  The resulting population diffeomorphism is
-save to disk.
+Set the standard space to the given image and fit a diffeomorphism from
+standard space to subject space using a wrapper to FSL_ FNIRT_.
+
+On the one hand, this is a wrapper to ``std2imgcoord`` and converts a
+given FSL warp coefficient file produced by FNIRT_ to the population map
+of the corresponding session. On the other hand, it can be used as a
+wrapper to the FSL_ command line tools FNIRT_ to estimate this warp
+coefficient file.
+
+.. _FNIRT: https://fsl.fmrib.ox.ac.uk/fsl/fslwiki/FNIRT
+
+.. _FSL: https://fsl.fmrib.ox.ac.uk/fsl/fslwiki/
 
 """
-
-#import warnings
-#warnings.simplefilter(action='ignore', category=FutureWarning)
 
 ########################################################################
 #
@@ -38,219 +40,158 @@ save to disk.
 #
 ########################################################################
 
-import fmristats.cmd.hp as hp
+from ...epilog import epilog
 
 import argparse
 
-def create_argument_parser():
+def define_parser():
     parser = argparse.ArgumentParser(
             description=__doc__,
-            epilog=hp.epilog)
+            epilog=epilog)
 
-########################################################################
-# Input arguments
-########################################################################
+    ####################################################################
+    # Specific arguments
+    ####################################################################
 
-    parser.add_argument('--template',
-            default='/usr/share/data/fsl-mni152-templates/MNI152_T1_2mm.nii.gz',
-            help=hp.template)
+    specific = parser.add_argument_group(
+        """Creating a standard space isometric to the reference space.""")
 
-    parser.add_argument('--template-mask',
-            default='/usr/share/data/fsl-mni152-templates/MNI152_T1_2mm_brain.nii.gz',
-            help=hp.template_mask)
+    specific.add_argument('--diffeomorphism-nb',
+        choices=['scan_cycle', 'fit'],
+        help="""Type of diffeomorphism.""")
 
-########################################################################
-# Output arguments
-########################################################################
+    specific.add_argument('--cycle',
+        type=int,
+        nargs='+',
+        help="""Use the data in scan cycle CYCLE as a template for
+        the subject reference space. Enumeration starts at 0 (i.e. the
+        first scan cycle is cycle 0). It will be checked whether the
+        specified cycle has been marked as a potential outlier (i.e. a
+        scan cycle that shows more head movements that usual). You won't
+        be able to set an outlying scan cycle as reference. More than
+        one cycle can be specified, though, and the list will be used as
+        fall backs.""")
 
-    parser.add_argument('--population-space',
-            default='fnirt',
-            help='output name;' + hp.vb_name)
+    specific.add_argument('--new-diffeomorphism',
+        default='fnirt',
+        help="""Name to use for the fitted diffeomorphisms.""")
 
-    parser.add_argument('--image',
-            default='../data/vbs/{}.image',
-            help='output name;' + hp.population_space_directory)
+    specific.add_argument('--fnirt-prefix',
+            default='warping-by-fnirt/{cohort}-{id:04d}/{cohort}-{id:04d}-{paradigm}-{date}-{space}-',
+            help="""Prefix for FNIRT files.""")
 
-    parser.add_argument('--population-map',
-            default='../data/pop/{2}/{4}/{0}-{1:04d}-{2}-{3}-{4}.pop',
-            help='output file;' + hp.population_map)
+    ########################################################################
+    # Additional input arguments when warp coefficient files are
+    ########################################################################
 
-    parser.add_argument('-o', '--protocol-log',
-            default='logs/{}-fsl4pop.pkl',
-            help=hp.protocol_log)
+    specific.add_argument('--fnirt-subject-reference-space',
+        default='subject-reference-space.nii.gz',
+        help="""Image used as template for the subject in subject
+        reference space""")
 
-########################################################################
-# Additional input arguments when warp coefficient files provided
-########################################################################
+    specific.add_argument('--fnirt-spline-coefficients',
+        default='warpcoef.nii.gz',
+        help="""Spline or warp coefficient file created by FNIRT.""")
 
-    parser.add_argument('--reference-space',
-            default='warping/{0}-{1:04d}-{2}-{3}-reference-space.nii.gz',
-            help='reference image used for the subject.')
+    specific.add_argument('--ignore-existing-spline-coefficients',
+        action='store_true',
+        help="""By default existing spline coefficient files will be
+        used, as it is assumed that you have created them manually
+        to fit your needs. When this flag is set, it will re-fit the
+        spline coefficients using some reasonable defaults.""")
 
-    parser.add_argument('--warpcoef',
-            default='warping/{0}-{1:04d}-{2}-{3}-warpcoef.nii.gz',
-            help='warp coefficient file created by fnirt.')
+    specific.add_argument('--cmd-fnirt',
+        default='fsl5.0-fnirt',
+        help="""FSL fnirt command. Must be in your path.""")
 
-    parser.add_argument('--ignore-existing-warpcoef',
-            action='store_true',
-            help="""by default ``fsl4pop`` will use the warp coefficient
-            files it finds on disk, as it will assume that you will have
-            created them to fit your needs. When this flag is set,
-            ``fsl4pop`` will re-fit the warp coefficients using FNIRT
-            using some reasonable defaults.""")
+    specific.add_argument('--cmd-config',
+        default='T1_2_MNI152_2mm',
+        help="""Config file for FSL FNIRT.""")
 
-########################################################################
-# Additional input arguments when no warp coefficient files provided
-########################################################################
+    specific.add_argument('--cmd-std2imgcoord',
+        default='fsl5.0-std2imgcoord',
+        help="""FSL std2imgcoord command. Must be in your path.""")
 
-    parser.add_argument('--session',
-            default='../data/ses/{2}/{0}-{1:04d}-{2}-{3}.ses',
-            help=hp.session)
+    ####################################################################
+    # File handling
+    ####################################################################
 
-    parser.add_argument('--cycle',
-            type=int,
-            help="""cycle to pick as reference""")
+    file_handling = parser.add_argument_group(
+        """File handling""")
 
-    parser.add_argument('--fit',
-            default='../data/fit/{2}/{4}/{5}/{0}-{1:04d}-{2}-{3}-{4}-{5}.fit',
-            help="""if warp coefficient files are provided or orking
-            with session files, you don't need this""" + hp.sfit)
+    lock_handling = file_handling.add_mutually_exclusive_group()
 
-    parser.add_argument('--scale-type',
-            default='max',
-            choices=['diagonal','max','min'],
-            help="""only needed if part of the template for --nb-fit""" + hp.scale_type)
+    lock_handling.add_argument('-r', '--remove-lock',
+        action='store_true',
+        help="""Remove lock, if file is locked. This is useful, if used
+        together with -s/--skip to remove orphan locks.""")
 
-    parser.add_argument('--nb',
-            default='reference',
-            help="""name of the population space that was originally
-            used for the fit"""  + hp.population_space)
+    lock_handling.add_argument('-i', '--ignore-lock',
+        action='store_true',
+        help="""Ignore lock, if file is locked. Together with -s/--skip
+        this will also remove orphan locks.""")
 
-########################################################################
-# (optional) Controlling the behaviour of FNIRT
-########################################################################
+    skip_force = file_handling.add_mutually_exclusive_group()
 
-    parser.add_argument('--cmd-fnirt',
-            default='fsl5.0-fnirt',
-            help="""FSL fnirt command. Must be in your path.""")
+    skip_force.add_argument('-f', '--force',
+        action='store_true',
+        help="""Force re-writing any files""")
 
-    parser.add_argument('--cmd-config',
-            default='T1_2_MNI152_2mm',
-            help="""Config file for FSL FNIRT.""")
+    skip_force.add_argument('-s', '--skip',
+        action='store_true',
+        help="""Do not perform any calculations.""")
 
-    parser.add_argument('--cmd-std2imgcoord',
-            default='fsl5.0-std2imgcoord',
-            help="""FSL std2imgcoord command. Must be in your path.""")
+    ####################################################################
+    # Verbosity
+    ####################################################################
 
-    parser.add_argument('--cmd-bet',
-            default='fsl5.0-bet',
-            help="""FSL bet command. Must be in your path.""")
+    control_verbosity  = parser.add_argument_group(
+        """Control the level of verbosity""")
 
-    parser.add_argument('--variante',
-            default='R',
-            help="""FSL bet command. Must be in your path.""")
+    control_verbosity.add_argument('-v', '--verbose',
+        action='count',
+        default=0,
+        help="""Increase output verbosity""")
 
-    # parser.add_argument('--provide-fnirt-with-templates',
-    #         action='store_true',
-    #         help="""by default FNIRT will use the reference in
-    #         CMD_CONFIG. If this flag is set, the TEMPLATE will replace
-    #         the default defined therin.""")
+    ####################################################################
+    # Push
+    ####################################################################
 
-########################################################################
-# (optional) Intermediate or temporary files
-########################################################################
+    control_verbosity  = parser.add_argument_group(
+        """Control whether to save the modified (thus overwrite the
+        existing) study instance.""")
 
-    parser.add_argument('--preimage',
-            default='warping/{0}-{1:04d}-{2}-{3}-preimage.nii.gz',
-            help='warped INTERCEPT image estimated by fnirt.')
+    control_verbosity.add_argument('-p', '--push',
+        action='store_true',
+        help="""Will save the modified (and thus overwrite the existing)
+        study instance.""")
 
-    parser.add_argument('--ccycle',
-            default='warping/{0}-{1:04d}-{2}-{3}-cycle.nii.gz',
-            help="""coordinates of the template's image grid in
-            population space""")
+    ####################################################################
+    # Multiprocessing
+    ####################################################################
 
-    parser.add_argument('--cpopulation',
-            default='warping/{0}-{1:04d}-{2}-{3}-cpopulation.txt',
-            help="""coordinates of the template's image grid in
-            population space""")
+    control_multiprocessing  = parser.add_argument_group(
+        """Multiprocessing""")
 
-    parser.add_argument('--csubject',
-            default='warping/{0}-{1:04d}-{2}-{3}-csubject.txt',
-            help="""coordinates of the template's image grid in subject
-            space""")
-
-########################################################################
-# Arguments specific for using the protocol API
-########################################################################
-
-    to_process = parser.add_argument_group(
-            """specifying the protocol entries to process""",
-            """Arguments which give control which protocol entries to
-            process. If no protocol file is given, it will be checked
-            if files being processed comply to the given information.""")
-
-    to_process.add_argument('--protocol',
-            help=hp.protocol)
-
-    to_process.add_argument('--cohort',
-            help=hp.cohort)
-
-    to_process.add_argument('--id',
-            type=int,
-            nargs='+',
-            help=hp.j)
-
-    to_process.add_argument('--datetime',
-            help=hp.datetime)
-
-    to_process.add_argument('--paradigm',
-            help=hp.paradigm)
-
-    to_process.add_argument('--strftime',
-            default='%Y-%m-%d-%H%M',
-            help=hp.strftime)
-
-########################################################################
-# Miscellaneous
-########################################################################
-
-    lock_handling = parser.add_mutually_exclusive_group()
-
-    lock_handling.add_argument('--remove-lock',
-            action='store_true',
-            help=hp.remove_lock.format('population space'))
-
-    lock_handling.add_argument('--ignore-lock',
-            action='store_true',
-            help=hp.ignore_lock.format('population space'))
-
-    file_handling = parser.add_mutually_exclusive_group()
-
-    file_handling.add_argument('-f', '--force',
-            action='store_true',
-            help=hp.force.format('population space'))
-
-    file_handling.add_argument('-s', '--skip',
-            action='store_true',
-            help=hp.skip.format('population space'))
-
-    parser.add_argument('-v', '--verbose',
-            action='count',
-            default=0,
-            help=hp.verbose)
-
-########################################################################
-# Multiprocessing
-########################################################################
-
-    parser.add_argument('-j', '--cores',
-            type=int,
-            help=hp.cores)
+    control_multiprocessing.add_argument('-j', '--cores',
+        type=int,
+        default=1,
+        help="""Number of threads to use. The implementation will
+        usually try to run as many calculations and loops as possible in
+        parallel -- this may suggest that it may be adventurous to
+        process all entries in the study protocol sequentially (and this
+        is the default). It is possible, however, to generate a thread
+        for each protocol entry. Note that this may generate a lot of
+        I/O-operations. If you set CORES to 0, then the number of cores
+        on the machine will be used.""")
 
     return parser
 
+from ..api.fmristudy import add_study_arguments
+
 def cmd():
-    parser = create_argument_parser()
+    parser = define_parser()
+    add_study_arguments(parser)
     args = parser.parse_args()
     call(args)
 
@@ -262,26 +203,6 @@ cmd.__doc__ = __doc__
 #
 ########################################################################
 
-from ..df import get_df
-
-from ...lock import Lock
-
-from ...load import load_session, load_result, load_population_map
-
-from ...name import Identifier
-
-from ...protocol import layout_sdummy, layout_dummy
-
-from ...diffeomorphisms import Image
-
-from ...nifti import image2nii, nii2image
-
-from ...fsl import fit_warpcoef, warpcoef2pmap, bet
-
-import pandas as pd
-
-import datetime
-
 import sys
 
 import os
@@ -290,216 +211,320 @@ from os.path import isfile, isdir, join
 
 from multiprocessing.dummy import Pool as ThreadPool
 
+import numpy as np
+
+from ..api.fmristudy import get_study
+
+from ...lock import Lock
+
+from ...study import Study
+
+from ...diffeomorphisms import Image
+
+from ...session import Session
+
+from ...reference import ReferenceMaps
+
+from ...pmap import PopulationMap
+
+from ...nifti import image2nii, nii2image
+
+from ...fsl import fit_warpcoef, warpcoef2pmap, bet
+
 import nibabel as ni
 
 ########################################################################
 
 def call(args):
-    try:
-        template = ni.load(args.template)
-    except Exception as e:
-        print('Unable to read template file: {}'.format(args.template))
-        print('Exception: {}'.format(e))
-        exit()
-
-    template = nii2image(nii=template, name=args.population_space)
-    fname = args.image.format(args.population_space)
-    dfile = os.path.dirname(fname)
-    if dfile and not isdir(dfile):
-       os.makedirs(dfile)
-
-    template.save(fname)
-
-    try:
-        template_mask = ni.load(args.template_mask)
-    except Exception as e:
-        print('Unable to read template_mask file: {}'.format(args.template_mask))
-        print('Exception: {}'.format(e))
-        exit()
-
-    template_mask = nii2image(nii=template_mask,
-            name=args.population_space)
-    fname = args.image.format(args.population_space+'-mask')
-    dfile = os.path.dirname(fname)
-    if dfile and not isdir(dfile):
-       os.makedirs(dfile)
-
-    template_mask.save(fname)
 
     ####################################################################
-
-    output = args.protocol_log.format(
-            datetime.datetime.now().strftime('%Y-%m-%d-%H%M'))
-
-    if args.strftime == 'short':
-        args.strftime = '%Y-%m-%d'
-
-    ####################################################################
-    # Parse protocol
+    # Options
     ####################################################################
 
-    df = get_df(args, fall_back=[args.session, args.fit])
+    remove_lock       = args.remove_lock
+    ignore_lock       = args.ignore_lock
+    force             = args.force
+    skip              = args.skip
+    verbose           = args.verbose
 
-    if df is None:
-        sys.exit()
+    if args.diffeomorphism_nb is None:
+        if args.cycle is None:
+            diffeomorphism_nb = 'fit'
+        else:
+            diffeomorphism_nb = 'scan_cycle'
+    else:
+        diffeomorphism_nb = args.diffeomorphism_nb
 
-    ####################################################################
-    # Add file layout
-    ####################################################################
+    new_diffeomorphism = args.new_diffeomorphism
+    cycle              = args.cycle
 
-    df_layout = df.copy()
+    cmd_fnirt        = args.cmd_fnirt
+    cmd_config       = args.cmd_config
+    cmd_std2imgcoord = args.cmd_std2imgcoord
 
-    layout_dummy(df_layout, 'ses',
-            template=args.session,
-            strftime=args.strftime
-            )
+    nb_file_template       = args.fnirt_subject_reference_space
+    vb_file_template       = 'vb.nii.gz'
+    warpcoef_file_template = args.fnirt_spline_coefficients
+    vb_estimate_template   = 'vb_estimate.nii.gz'
 
-    layout_sdummy(df_layout, 'fit',
-            template=args.fit,
-            urname=args.nb,
-            scale_type=args.scale_type,
-            strftime=args.strftime
-            )
+    cstandard_template = 'standard-space.txt'
+    csubject_template  = 'subject-reference-space.txt'
 
-    layout_dummy(df_layout, 'warpcoef',
-            template=args.warpcoef,
-            strftime=args.strftime
-            )
-
-    layout_dummy(df_layout, 'intercept',
-            template=args.reference_space,
-            strftime=args.strftime
-            )
-
-    layout_dummy(df_layout, 'preimage',
-            template=args.preimage,
-            strftime=args.strftime
-            )
-
-    layout_dummy(df_layout, 'ccycle',
-            template=args.ccycle,
-            strftime=args.strftime
-            )
-
-    layout_dummy(df_layout, 'cpopulation',
-            template=args.cpopulation,
-            strftime=args.strftime
-            )
-
-    layout_dummy(df_layout, 'csubject',
-            template=args.csubject,
-            strftime=args.strftime
-            )
-
-    layout_sdummy(df_layout, 'filename',
-            template=args.population_map,
-            urname=args.population_space,
-            scale_type=None,
-            strftime=args.strftime
-            )
+    ignore_existing_warpcoef = args.ignore_existing_spline_coefficients
 
     ####################################################################
-    # Apply wrapper
+    # Study
     ####################################################################
+
+    study = get_study(args)
+
+    if study is None:
+        print('No study found. Nothing to do.')
+        return
+
+    if study.vb is None:
+        print("""
+        You need to provide a template in standard space (for example by
+        either setting a template in the study or by providing a
+        template using --vb-image or --vb-nii).""")
+        return
+
+    study.set_rigids(None)
+    study.set_diffeomorphism(new_diffeomorphism)
+    study.set_standard_space(study.vb.name)
+
+    study.update_layout({'fnirt_prefix':args.fnirt_prefix})
+
+    ####################################################################
+    # Iterator
+    ####################################################################
+
+    study_iterator = study.iterate(
+            'session',
+            'reference_maps',
+            'result',
+            'population_map',
+            new=['population_map', 'fnirt_prefix'],
+            lookup=['result'],
+            integer_index=True,
+            verbose=verbose)
+
+    df = study_iterator.df.copy()
 
     df['locked'] = False
 
-    def wm(r):
-        name = Identifier(cohort=r.cohort, j=r.id, datetime=r.date, paradigm=r.paradigm)
+    ####################################################################
+    # Wrapper
+    ####################################################################
+
+    def wm(index, name, session, reference_maps, population_map, result,
+            file_population_map, fnirt_prefix):
+
+        if type(population_map) is Lock:
+            if remove_lock or ignore_lock:
+                if verbose:
+                    print('{}: Remove lock'.format(name.name()))
+                population_map.unlock()
+                if remove_lock:
+                    return
+            else:
+                if verbose:
+                    print('{}: Locked'.format(name.name()))
+                return
+
+        elif population_map is not None and not force:
+            if verbose:
+                print('{}: PopulationMap already exists. Use -f/--force to overwrite'.format(
+                    name.name()))
+            return
+
+        if skip:
+            return
+
+        if verbose:
+            print('{}: Lock: {}'.format(name.name(), file_population_map))
+
+        lock = Lock(name, 'fsl4pop', file_population_map)
+        df.ix[index, 'locked'] = True
+
+        dfile = os.path.dirname(file_population_map)
+        if dfile and not isdir(dfile):
+           os.makedirs(dfile)
+
+        lock.save(file_population_map)
+
+        nb_file = fnirt_prefix + nb_file_template
+        vb_file = fnirt_prefix + vb_file_template
+        warpcoef_file = fnirt_prefix + warpcoef_file_template
+        vb_estimate_file = fnirt_prefix + vb_estimate_template
+
+        cstandard = fnirt_prefix + cstandard_template
+        csubject  = fnirt_prefix + csubject_template
+
+        ####################################################################
+        # Get NB from a result instance
+        ####################################################################
+
+        if diffeomorphism_nb == 'fit':
+
+            if result is None:
+                print('{}: No Result found'.format(name.name()))
+                df.ix[index,'valid'] = False
+                lock.conditional_unlock(df, index, verbose)
+                return
+
+            result.mask()
+            nb = result.get_field('intercept', 'point')
+
+        ####################################################################
+        # Get NB from a session instance
+        ####################################################################
+
+        elif diffeomorphism_nb == 'scan_cycle':
+
+            if (session is None) or (cycle is None):
+                print('{}: No Session found or CYCLE defined'.format(name.name()))
+                df.ix[index,'valid'] = False
+                lock.conditional_unlock(df, index, verbose)
+                return
+
+            if reference_maps is None:
+                print('{}: No ReferenceMaps found, continue…'.format(name.name()))
+                scan_cycle_to_use = cycle[0]
+            else:
+                try:
+                    outlying_cycles = reference_maps.outlying_cycles
+                except:
+                    if verbose:
+                        print('{}: I have found no information about outlying scan cycles!'.format(
+                            name.name()))
+                    outlying_cycles = None
+
+                if outlying_cycles is None:
+                    scan_cycle_to_use = cycle[0]
+                else:
+                    if outlying_cycles[cycle].all():
+                        df.ix[index,'valid'] = False
+                        print("""{}:
+                        All suggested reference cycles have been marked as
+                        outlying. Unable to proceed. Please specify a
+                        different scan cycle (using --cycle) as
+                        reference.""".format(name.name()))
+                        lock.conditional_unlock(df, index, verbose, True)
+                        return
+                    elif outlying_cycles[cycle].any():
+                        for c, co in zip (cycle, outlying_cycles[cycle]):
+                            if co:
+                                if verbose:
+                                    print("""{}: Cycle {:d} marked as outlying, using fallback.""".format(
+                                        name.name(), c))
+                            else:
+                                scan_cycle_to_use = c
+                                break
+                    else:
+                        scan_cycle_to_use = cycle[0]
+
+            if verbose:
+                print('{}: NB equals subject position during scan cycle: {:d}'.format(
+                    name.name(), scan_cycle_to_use))
+
+            nb = Image(
+                reference=session.reference,
+                data=session.data[scan_cycle_to_use],
+                name=name.name()+'-{:d}'.format(scan_cycle_to_use))
+
+        else:
+            print('{}: Diffeomorphism type not supported'.format(name.name()))
+            return
+
+        dfile = os.path.dirname(fnirt_prefix)
+        if dfile and not isdir(dfile):
+           os.makedirs(dfile)
+
+        ni.save(image2nii(nb), nb_file)
+
+        if not isfile(warpcoef_file) or ignore_existing_warpcoef:
+
+            if verbose:
+                print('{}: Fit diffeomorphism'.format(name.name()))
+
+            status = fit_warpcoef(
+                        nb_file          = nb_file,
+                        nb_mask          = None,
+                        vb_file          = vb_file,
+                        vb_mask          = None,
+                        vb_estimate_file = vb_estimate_file,
+                        warpcoef_file    = warpcoef_file,
+                        config           = cmd_config,
+                        cmd              = cmd_fnirt,
+                        verbose          = verbose,
+                        )
+
+            if not status:
+                df.ix[index,'valid'] = False
+                print('{}: Unable to fit warp coefficients'.format(name.name()))
+                lock.conditional_unlock(df, index, verbose, True)
+                return
+        else:
+            if verbose:
+                print('{}: Use existing warp coefficients'.format(name.name()))
+
+        if verbose:
+            print('{}: Parse diffeomorphism and create population map'.format(name.name()))
+
+        population_map = warpcoef2pmap(
+                    warpcoef_file    = warpcoef_file,
+                    vb_file          = vb_file,
+                    nb_file          = nb_file,
+                    vb_name          = study.vb.name,
+                    nb_name          = name,
+                    name             = new_diffeomorphism ,
+                    cpopulation_file = cstandard,
+                    csubject_file    = csubject,
+                    cmd              = cmd_std2imgcoord)
+
+        if study.vb_background:
+            population_map.set_vb_background(study.vb_background)
 
         try:
-            dfile = os.path.dirname(r.filename)
-            if dfile and not isdir(dfile):
-                os.makedirs(dfile)
+            if verbose:
+                print('{}: Save: {}'.format(name.name(),
+                    file_population_map))
+
+            population_map.save(file_population_map)
+            df.ix[index,'locked'] = False
+
         except Exception as e:
-            print('{}: {}'.format(name.name(), e))
+            df.ix[index,'valid'] = False
+            print('{}: Unable to create: {}, {}'.format(name.name(),
+                file_population_map, e))
+            lock.conditional_unlock(df, index, verbose, True)
+            return
 
-        try:
-            dfile = os.path.dirname(r.warpcoef)
-            if dfile and not isdir(dfile):
-                os.makedirs(dfile)
-        except Exception as e:
-            print('{}: {}'.format(name.name(), e))
+        if verbose > 2:
+            print("""{}:
+                {}
+                {}""".format(name.name(),
+                    population_map.diffeomorphism.describe(),
+                    population_map.describe()))
 
-        try:
-            dfile = os.path.dirname(r.intercept)
-            if dfile and not isdir(dfile):
-                os.makedirs(dfile)
-        except Exception as e:
-            print('{}: {}'.format(name.name(), e))
+        return
 
-        try:
-            dfile = os.path.dirname(r.preimage)
-            if dfile and not isdir(dfile):
-                os.makedirs(dfile)
-        except Exception as e:
-            print('{}: {}'.format(name.name(), e))
+    ####################################################################
 
-        try:
-            dfile = os.path.dirname(r.ccycle)
-            if dfile and not isdir(dfile):
-                os.makedirs(dfile)
-        except Exception as e:
-            print('{}: {}'.format(name.name(), e))
-
-        try:
-            dfile = os.path.dirname(r.cpopulation)
-            if dfile and not isdir(dfile):
-                os.makedirs(dfile)
-        except Exception as e:
-            print('{}: {}'.format(name.name(), e))
-
-        try:
-            dfile = os.path.dirname(r.csubject)
-            if dfile and not isdir(dfile):
-                os.makedirs(dfile)
-        except Exception as e:
-            print('{}: {}'.format(name.name(), e))
-
-        wrapper(name              = name,
-                df                = df,
-                index             = r.Index,
-                remove_lock       = args.remove_lock,
-                ignore_lock       = args.ignore_lock,
-                force             = args.force,
-                skip              = args.skip,
-                verbose           = args.verbose,
-                file              = r.filename,
-
-                file_res          = r.fit,
-                file_ses          = r.ses,
-
-                warpcoef_file     = r.warpcoef,
-                intercept_file    = r.intercept,
-                preimage_file     = r.preimage,
-                ccycle            = r.ccycle,
-                cpopulation       = r.cpopulation,
-                csubject          = r.csubject,
-
-                vb                = args.population_space,
-                nb                = args.nb,
-                vb_file           = args.template,
-                vb_mask_file      = args.template_mask,
-                template          = template,
-                template_mask     = template_mask,
-
-                cycle             = args.cycle,
-                ignore_existing_warpcoef = args.ignore_existing_warpcoef,
-                #provide_fnirt_with_templates = args.provide_fnirt_with_templates,
-
-                cmd_fnirt        = args.cmd_fnirt,
-                cmd_config       = args.cmd_config,
-                cmd_std2imgcoord = args.cmd_std2imgcoord,
-                cmd_bet          = args.cmd_bet,
-                variante         = args.variante
-                )
-
-    it =  df_layout.itertuples()
-
-    if len(df_layout) > 1 and ((args.cores is None) or (args.cores > 1)):
+    if len(df) > 1 and ((args.cores is None) or (args.cores > 1)):
         try:
             pool = ThreadPool(args.cores)
-            results = pool.map(wm, it)
+            for index, name, files, instances in study_iterator:
+                session         = instances['session']
+                reference_maps  = instances['reference_maps']
+                population_map  = instances['population_map']
+                result          = instances['result']
+                file_population_map = files['population_map']
+                fnirt_prefix        = files['fnirt_prefix']
+                pool.apply_async(wm, args=(index, name, session,
+                    reference_maps, population_map, result,
+                    file_population_map, fnirt_prefix))
             pool.close()
             pool.join()
         except Exception as e:
@@ -508,211 +533,45 @@ def call(args):
             print('Pool execution has been terminated')
             print(e)
         finally:
-            files = df_layout.ix[df.locked, 'filename'].values
+            files = df.ix[df.locked, 'population_map'].values
             if len(files) > 0:
                 for f in files:
                     print('Unlock: {}'.format(f))
                     os.remove(f)
-            del df['locked']
     else:
         try:
             print('Process protocol entries sequentially')
-            for r in it:
-                wm(r)
+            for index, name, files, instances in study_iterator:
+                session         = instances['session']
+                reference_maps  = instances['reference_maps']
+                population_map  = instances['population_map']
+                result          = instances['result']
+                file_population_map = files['population_map']
+                fnirt_prefix        = files['fnirt_prefix']
+                wm(index, name, session, reference_maps, population_map,
+                        result, file_population_map, fnirt_prefix)
         finally:
-            files = df_layout.ix[df.locked, 'filename'].values
+            files = df.ix[df.locked, 'population_map'].values
             if len(files) > 0:
                 for f in files:
                     print('Unlock: {}'.format(f))
                     os.remove(f)
-            del df['locked']
 
     ####################################################################
-    # Write protocol
+    # Write study to disk
     ####################################################################
 
-    if args.verbose:
-        print('Save: {}'.format(output))
+    if args.out is not None:
+        if args.verbose:
+            print('Save: {}'.format(args.out))
 
-    dfile = os.path.dirname(output)
-    if dfile and not isdir(dfile):
-       os.makedirs(dfile)
+        dfile = os.path.dirname(args.out)
+        if dfile and not isdir(dfile):
+           os.makedirs(dfile)
 
-    df.to_pickle(output)
+        study.save(args.out)
 
-########################################################################
-
-def wrapper(name, df, index, remove_lock, ignore_lock, force, skip,
-        verbose, file, file_res, file_ses, warpcoef_file, intercept_file,
-        preimage_file, ccycle, cpopulation, csubject, vb, nb,
-        vb_file, vb_mask_file, template, template_mask, cycle,
-        ignore_existing_warpcoef, cmd_fnirt, cmd_config,
-        cmd_std2imgcoord, cmd_bet, variante):
-
-    if isfile(file):
-        instance = load_population_map(file, name, df, index, vb, verbose)
-        if type(instance) is Lock:
-            if remove_lock or ignore_lock:
-                if verbose:
-                    print('{}: Remove lock'.format(name.name()))
-                instance.unlock()
-                if remove_lock:
-                    return
-            else:
-                if verbose:
-                    print('{}: Locked'.format(name.name()))
-                return
-        else:
-            if df.ix[index,'valid'] and not force:
-                if verbose:
-                    print('{}: Valid'.format(name.name()))
-                return
-            else:
-                if skip:
-                    if verbose:
-                        print('{}: Invalid'.format(name.name()))
-                    return
-
-    if skip:
-        return
-
-    if verbose:
-        print('{}: Lock: {}'.format(name.name(), file))
-
-    lock = Lock(name, 'fsl4pop', file)
-    df.ix[index, 'locked'] = True
-    lock.save(file)
-    df.ix[index,'valid'] = True
-
-    ####################################################################
-    # Load or create warp coefficient file
-    ####################################################################
-
-    if not isfile(warpcoef_file) or ignore_existing_warpcoef:
-
-        if cycle is None:
-            result = load_result(file_res, name, df, index, nb, verbose)
-            if lock.conditional_unlock(df, index, verbose):
-                return
-
-            result.mask()
-            reference_space = result.get_field('intercept', 'point').round()
-            intercept = image2nii(reference_space)
-
-            try:
-                intercept.to_filename(intercept_file)
-            except Exception as e:
-                df.ix[index,'valid'] = False
-                print('{}: Unable to write: {}'.format(name.name(), intercept_file))
-                print('{}: Exception: {}'.format(name.name(), e))
-                lock.conditional_unlock(df, index, verbose, True)
-
-        else:
-            session = load_session(file_ses, name, df, index, verbose)
-            if lock.conditional_unlock(df, index, verbose):
-                return
-
-            reference_space = Image(
-                reference=session.reference,
-                data=session.raw[cycle],
-                name=session.name.name()+'-{:d}'.format(cycle))
-
-            reference_space = bet(
-                    intercept = reference_space,
-                    intercept_file = ccycle,
-                    mask_file = intercept_file,
-                    cmd = cmd_bet,
-                    variante = variante,
-                    verbose = verbose)
-
-            if reference_space is None:
-                df.ix[index,'valid'] = False
-                print('{}: Unable to bet'.format(name.name()))
-                lock.conditional_unlock(df, index, verbose, True)
-                return
-
-        #if provide_fnirt_with_templates:
-        #    if verbose:
-        #        print('{}: … nb-templates (and nb-masks) defined by user'.format(
-        #            name.name()))
-        #else:
-        #    if verbose:
-        #        print('{}: … nb-templates (and nb-masks) as defined in: {}'.format(
-        #            name.name(), cmd_config))
-        #    vb_file = None
-        #    vb_mask = None
-
-        if verbose:
-            print('{}: Reference space: {}'.format(name.name(), reference_space.name))
-            print('{}: {}'.format(name.name(), intercept_file))
-            print('{}: Fit warp coefficients...'.format(name.name()))
-
-        status = fit_warpcoef(
-                    nb_file        = intercept_file,
-                    vb_file        = None, #vb_file,
-                    vb_mask        = None, #vb_mask,
-                    warpcoef_file  = warpcoef_file,
-                    preimage_file  = preimage_file,
-                    config         = cmd_config,
-                    cmd            = cmd_fnirt,
-                    verbose        = verbose,
-                    )
-
-        if not status:
-            df.ix[index,'valid'] = False
-            print('{}: Unable to fit warp coefficients'.format(name.name()))
-            lock.conditional_unlock(df, index, verbose, True)
-            return
-    else:
-        if verbose:
-            print('{}: Use existing warp coefficients'.format(name.name()))
-
-    ####################################################################
-    # Create population map from warp coefficients file
-    ####################################################################
-
-    if verbose:
-        print('{}: Create population map'.format(name.name()))
-
-    population_map = warpcoef2pmap(
-                warpcoef_file    = warpcoef_file,
-                vb_file          = vb_file,
-                nb_file          = intercept_file,
-                vb_name          = vb,
-                nb_name          = name,
-                name             = 'fnirt',  # TODO: should be user choice
-                vb               = 'mni152', # TODO: should be user choice
-                cpopulation_file = cpopulation,
-                csubject_file    = csubject,
-                cmd              = cmd_std2imgcoord)
-
-    population_map.diffeomorphism.metadata['vb_mask'] = vb_mask_file
-    population_map.set_template_mask(template_mask)
-
-    if population_map is None:
-        df.ix[index,'valid'] = False
-        print('{}: Unable to create: {}'.format(name.name(), file))
-        print('{}: Exception: {}'.format(name.name(), e))
-        lock.conditional_unlock(df, index, verbose, True)
-        return
-
-    if isfile(preimage_file):
-        try:
-            preimage = ni.load(preimage_file)
-            population_map.set_target(nii2image(preimage, name='fnirt'))
-        except Exception as e:
-            df.ix[index,'valid'] = False
-            print('{}: Unable to read: {}'.format(name.name(), preimage_file))
-            print('{}: Exception: {}'.format(name.name(), e))
-
-    if verbose:
-        print('{}: Save: {}'.format(name.name(), file))
-
-    try:
-        population_map.save(file)
-        df.ix[index,'locked'] = False
-    except Exception as e:
-        df.ix[index,'valid'] = False
-        print('{}: Unable to write: {}'.format(name.name(), file))
-        print('{}: Exception: {}'.format(name.name(), e))
-        lock.conditional_unlock(df, index, verbose, True)
+    if args.push:
+        if args.verbose:
+            print('Save: {}'.format(args.study))
+        study.save(args.study)

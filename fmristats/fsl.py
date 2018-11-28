@@ -79,7 +79,7 @@ def bet(intercept, intercept_file, mask_file, cmd='fsl5.0-bet', variante='R',
     template = nii2image(mask)
     return template
 
-def fit_warpcoef(nb_file, warpcoef_file, preimage_file=None,
+def fit_warpcoef(nb_file, warpcoef_file, vb_estimate_file=None,
         vb_file=None, vb_mask=None, nb_mask=None,
         config='T1_2_MNI152_2mm', cmd='fsl5.0-fnirt', verbose=True):
     """
@@ -95,9 +95,9 @@ def fit_warpcoef(nb_file, warpcoef_file, preimage_file=None,
         diffeomorphism.
     warpcoef_file : str
         File name in which to save the warp coefficients.
-    target_file : None or str
-        File name in which to save the target :math:`ψ^{-1}[R]`. If
-        None, the target will not be saved. This is the default.
+    vb_estimate_file : None or str
+        File name in which to save :math:`ψ^{-1}[R]`. If None, the
+        target will not be saved. This is the default.
     config : str
         Name of the configuration file FNIRT shall use.
     vb_file : None or str
@@ -128,8 +128,8 @@ def fit_warpcoef(nb_file, warpcoef_file, preimage_file=None,
     if config:
         command.append('--config={}'.format(config))
 
-    if preimage_file:
-        command.append('--iout={}'.format(preimage_file))
+    if vb_estimate_file:
+        command.append('--iout={}'.format(vb_estimate_file))
 
     command.append('--cout={}'.format(warpcoef_file))
 
@@ -150,7 +150,7 @@ def fit_warpcoef(nb_file, warpcoef_file, preimage_file=None,
         return False
 
 def warpcoef2pmap(warpcoef_file, vb_file, vb_name, nb_file, nb_name,
-        cpopulation_file, csubject_file, vb=None, name='fnirt',
+        cpopulation_file, csubject_file, name='fnirt',
         cmd='fsl5.0-std2imgcoord'):
     """
     Run FSL's img2stdcoord to turn the warp coefficient file produced by

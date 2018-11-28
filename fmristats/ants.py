@@ -136,17 +136,19 @@ def fit_population_map(vb_image, nb_image, nb_name, output_prefix,
 
     try:
         vb_estimate_file = output_prefix + 'Warped.nii.gz'
-        vb_estimate = nii2image(ni.load(vb_estimate_file), name='vb_estimate')
+        vb_estimate = nii2image(ni.load(vb_estimate_file),
+                name='vb_estimate_ants')
     except Exception as e:
-        print('{}: Unable to read: {}'.format(nb_image.name.name(), vb_estimate_file))
-        print('{}: Exception: {}'.format(nb_image.name.name(), e))
+        print('{}: Unable to read: {}'.format(vb_image.name, vb_estimate_file))
+        print('{}: Exception: {}'.format(vb_image.name, e))
 
     try:
         nb_estimate_file = output_prefix + 'InverseWarped.nii.gz'
-        nb_estimate = nii2image(ni.load(nb_estimate_file), name='nb_estimate')
+        nb_estimate = nii2image(ni.load(nb_estimate_file),
+                name='nb_estimate_ants')
     except Exception as e:
-        print('{}: Unable to read: {}'.format(nb_image.name.name(), nb_estimate_file))
-        print('{}: Exception: {}'.format(nb_image.name.name(), e))
+        print('{}: Unable to read: {}'.format(nb_image.name, nb_estimate_file))
+        print('{}: Exception: {}'.format(nb_image.name, e))
 
     return PopulationMap(diffeomorphism,
             vb=vb_image,
