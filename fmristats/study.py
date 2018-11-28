@@ -507,7 +507,7 @@ class Study:
 
             if len(covariates) < 1:
                 print('No entries left in the covariates set')
-                return
+                covariates = None
         else:
             covariates = None
 

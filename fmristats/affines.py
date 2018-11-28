@@ -410,22 +410,24 @@ class Affines:
         m[:3,:3] = u.dot(v)
         return Affine(m)
 
-    def mean_within_windows(self, r):
+    def mean_within_windows(self, r=0, skip=None):
         """
         Calculates the mean rigid transformation of the rigid
         transformation within a window of [-r,r] around each
         transformation.
         """
         assert self.rigid, 'affines must be rigid'
-        assert r >= 1, 'r must be positive'
+        assert r >= 0, 'r must be non-negative'
 
         mean_affines = self.affines.copy()
 
-        if r > 1:
+        if r > 0:
             for t in range(self.n):
                 xs = self.affines[max(0,t-r):t+r+1]
-                xm = Affines(xs).mean_rigid().affine
-                mean_affines[t] = xm
+                wh = np.where(~skip[max(0,t-r):t+r+1])
+                xs = xs[wh]
+                if xs.shape[0] > 0:
+                    mean_affines[t] = Affines(xs).mean_rigid().affine
 
         mean_affines[:,3] = (0,0,0,1)
         return Affines(mean_affines)

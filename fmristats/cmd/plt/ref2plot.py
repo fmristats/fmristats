@@ -74,6 +74,15 @@ def define_parser():
         information is used. When setting --grubbs in fmrifit, outlier
         estimation is performed again.""")
 
+    specific.add_argument('--window-radius',
+        type=int,
+        default=0,
+        help="""Calculate the mean rigid transformation using the this
+        window. A --window-radius of 0 does not do anything (the
+        default). A WINDOW_RADIUS of n corresponds to all rigid
+        transformation n scan cycle before and after each time point
+        (including the boundary).""")
+
     ####################################################################
     # Verbosity
     ####################################################################
@@ -167,7 +176,6 @@ def qc_plot(x, o, t, outlying_cycles, ax, studenise=False):
         if np.isclose(std, 0).any():
             x = (x.T - x[...,~outlying_cycles].mean(axis=1))
         else:
-            print('No variance!')
             x = (x.T - x[...,~outlying_cycles].mean(axis=1)) / std
         x = x.T
     ax.plot(t[~o[0]], x[0,~o[0]], '-', label='1st coordinate')#, c=palette[0])
@@ -188,24 +196,43 @@ def qc_plot(x, o, t, outlying_cycles, ax, studenise=False):
 
 def call(args):
 
+    ####################################################################
+    # Options
+    ####################################################################
+
+    verbose   = args.verbose
+
+    dpi       = args.dpi
+    directory = args.directory
+
+    grubbs        = args.grubbs
+    window_radius = args.window_radius
+
+    ####################################################################
+    # Study
+    ####################################################################
+
     study = get_study(args)
 
     if study is None:
         print('Nothing to do.')
         return
 
+    ####################################################################
+    # Iterator
+    ####################################################################
+
     study_iterator = study.iterate('reference_maps',
         integer_index=True)
 
     df = study_iterator.df.copy()
 
-    verbose   = args.verbose
-    grubbs    = args.grubbs
-    dpi       = args.dpi
-    directory = args.directory
-
     if directory and not isdir(directory):
        os.makedirs(directory)
+
+    ####################################################################
+    # Wrapper
+    ####################################################################
 
     def wm(index, name, reference_maps):
         pt.ioff()
@@ -214,6 +241,12 @@ def call(args):
             if verbose:
                 print('{}: Detect outlying scans'.format(name.name()))
             reference_maps.detect_outlying_scans(grubbs)
+
+        if window_radius > 0:
+            if verbose:
+                print('{}: Flatten head movement estimates using a windows-radius of {} scans'.format(
+                    name.name(), window_radius))
+            reference_maps.mean(window_radius)
 
         method = df.ix[index,'rigids']
 
@@ -231,6 +264,9 @@ def call(args):
         outlying        = reference_maps.outlying
         outlying_cycles = reference_maps.outlying_cycles
 
+        # Little hack
+        ooo = np.vstack((outlying_cycles, outlying_cycles, outlying_cycles))
+
         #######################################################################
         # Studenised Semi axis norms
         #######################################################################
@@ -240,7 +276,7 @@ def call(args):
         fig, ax = pt.subplots()
         qc_plot(
                 semi_axis_norms,
-                outlying[:3],
+                ooo, #outlying[:3],
                 slice_times,
                 outlying_cycles,
                 ax, True)
@@ -264,7 +300,7 @@ def call(args):
         fig, ax = pt.subplots()
         qc_plot(
                 np.degrees(euler),
-                outlying[6:],
+                ooo, #outlying[6:],
                 slice_times,
                 outlying_cycles,
                 ax, False)
@@ -282,7 +318,7 @@ def call(args):
         fig, ax = pt.subplots()
         qc_plot(
                 euler,
-                outlying[6:],
+                ooo, #outlying[6:],
                 slice_times,
                 outlying_cycles,
                 ax, True)
@@ -307,7 +343,7 @@ def call(args):
         fig, ax = pt.subplots()
         qc_plot(
                 bary_centre,
-                outlying[3:6],
+                ooo, #outlying[3:6],
                 slice_times,
                 outlying_cycles,
                 ax, False)
@@ -324,7 +360,7 @@ def call(args):
         fig, ax = pt.subplots()
         qc_plot(
                 bary_centre,
-                outlying[3:6],
+                ooo, #outlying[3:6],
                 slice_times,
                 outlying_cycles,
                 ax, True)

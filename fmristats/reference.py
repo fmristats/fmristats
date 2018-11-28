@@ -83,6 +83,9 @@ class ReferenceMaps:
 
     def __init__(self, name):
         self.name = name
+        self.outlying_scans = None
+        self.outlying_cycles = None
+        self.outlying = None
 
     def fit(self, session, use_raw=True):
         """
@@ -243,10 +246,18 @@ class ReferenceMaps:
         new_acquisition_maps = x.dot(self.acquisition_maps)
         self.set_acquisition_maps(maps = new_acquisition_maps)
 
-    def mean(self, r):
-        assert r >= 1, 'r must be strictly greater than 1'
-        if r > 1:
-            self.acquisition_maps = self.acquisition_maps.mean_within_windows(r)
+    def mean(self, r, skip_outlying=True):
+        assert r >= 0, 'r must be non-negative'
+
+        if r > 0:
+            if skip_outlying \
+                    and (self.outlying_cycles is not None) \
+                    and  self.outlying_cycles.any():
+                self.acquisition_maps = self.acquisition_maps. \
+                        mean_within_windows(r, skip=self.outlying_cycles)
+            else:
+                self.acquisition_maps = self.acquisition_maps. \
+                        mean_within_windows(r, skip=None)
 
     ####################################################################
     # Outlier detection

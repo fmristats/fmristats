@@ -73,9 +73,9 @@ def define_parser():
 
     specific.add_argument('--window-radius',
         type=int,
-        default=1,
+        default=0,
         help="""Calculate the mean rigid transformation using the this
-        window. A --window-radius of 1 does not do anything (the
+        window. A --window-radius of 0 does not do anything (the
         default). A WINDOW_RADIUS of n corresponds to all rigid
         transformation n scan cycle before and after each time point
         (including the boundary).""")
@@ -200,9 +200,8 @@ def call(args):
     skip              = args.skip
     verbose           = args.verbose
 
-    cycle  = args.cycle
-    grubbs = args.grubbs
-
+    cycle         = args.cycle
+    grubbs        = args.grubbs
     window_radius = args.window_radius
 
     ####################################################################
@@ -304,7 +303,7 @@ def call(args):
             elif outlying_cycles[cycle].any():
                 for c, co in zip (cycle, outlying_cycles[cycle]):
                     if co:
-                        print("""{}: Suggested cycle    {:>4d} marked as outlying, using fallback.""".format(
+                        print("""{}: Cycle {:>4d} marked as outlying, using fallback.""".format(
                             name.name(), c))
                     else:
                         print("""{}: Reference cycle is {:>4d}.""".format(
@@ -315,11 +314,10 @@ def call(args):
                 print("""{}: Reference cycle is {:d}.""".format(name.name(), cycle[0]))
                 reference_maps.reset_reference_space(cycle=cycle[0])
 
-        if window_radius != 1:
+        if window_radius > 0:
             if verbose:
-                print('{}: Take mean in windows of radius: {}'.format(
+                print('{}: Flatten head movement estimates using a windows-radius of {} scans'.format(
                     name.name(), window_radius))
-
             reference_maps.mean(window_radius)
 
         try:

@@ -592,7 +592,6 @@ def get_study(args):
 
     try:
         study.filter(cohort=args.cohort, j=args.id, paradigm=args.paradigm, inplace=True)
-        print(study.protocol)
     except Exception as e:
         print(e)
         return

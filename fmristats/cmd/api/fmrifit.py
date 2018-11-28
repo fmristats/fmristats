@@ -176,7 +176,17 @@ def define_parser():
     detect = parser.add_argument_group(
         """Detections""",
         """If these things have not already happend, you may perform
-        these operations know.""")
+        these operations now. In particular, you may want to set a
+        window size for averaging the head movements.""")
+
+    specific.add_argument('--window-radius',
+        type=int,
+        default=0,
+        help="""Calculate the mean rigid transformation using the this
+        window. A --window-radius of 0 does not do anything (the
+        default). A WINDOW_RADIUS of n corresponds to all rigid
+        transformation n scan cycle before and after each time point
+        (including the boundary).""")
 
     detect.add_argument('--grubbs',
         type=float,
@@ -385,6 +395,7 @@ def call(args):
     offset               = args.offset_beginning
     preset               = args.offset_end
     sgnf                 = args.grubbs
+    window_radius        = args.window_radius
     detect_foreground    = args.detect_foreground
     burn_in              = args.acquisition_burn_in
     formula              = args.formula
@@ -470,6 +481,16 @@ def call(args):
             if verbose:
                 print('{}: Detect outlying scans'.format(name.name()))
             reference_maps.detect_outlying_scans(sgnf)
+
+        ####################################################################
+        # Average rigid body transformations
+        ####################################################################
+
+        if window_radius > 0:
+            if verbose:
+                print('{}: Flatten head movement estimates using a windows-radius of {} scans'.format(
+                    name.name(), window_radius))
+            reference_maps.mean(window_radius)
 
         ####################################################################
         # Inform about the standard space and diffeomorphism
