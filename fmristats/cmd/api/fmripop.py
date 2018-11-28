@@ -196,7 +196,7 @@ def call(args):
     skip              = args.skip
     verbose           = args.verbose
 
-    cycle              = args.cycle
+    scan_cycle         = args.cycle
     resolution         = args.resolution
     new_diffeomorphism = args.new_diffeomorphism
     diffeomorphism_nb  = args.diffeomorphism_nb
@@ -311,7 +311,7 @@ def call(args):
                 lock.conditional_unlock(df, index, verbose)
                 return
 
-            if cycle is None:
+            if scan_cycle is None:
                 population_map = pmap_scanner(
                         session=session,
                         reference_maps = reference_maps,
@@ -345,7 +345,7 @@ def call(args):
                 if outlying_cycles is None:
                     scan_cycle_to_use = cycle[0]
                 else:
-                    if outlying_cycles[cycle].all():
+                    if outlying_cycles[scan_cycle].all():
                         df.ix[index,'valid'] = False
                         print("""{}:
                         All suggested reference cycles have been marked as
@@ -354,23 +354,23 @@ def call(args):
                         reference.""".format(name.name()))
                         lock.conditional_unlock(df, index, verbose, True)
                         return
-                    elif outlying_cycles[cycle].any():
-                        for c, co in zip (cycle, outlying_cycles[cycle]):
+                    elif outlying_cycles[scan_cycle].any():
+                        for c, co in zip (scan_cycle, outlying_cycles[scan_cycle]):
                             if co:
                                 if verbose:
                                     print("""{}:
-                                    Suggested cycle {:>4d} marked as outlying,
+                                    Scan cycle {:d} marked as outlying,
                                     using fallback.""".format( name.name(), c))
                             else:
                                 scan_cycle_to_use = c
                                 break
                     else:
-                        scan_cycle_to_use = cycle[0]
+                        scan_cycle_to_use = scan_cycle[0]
 
                 population_map = pmap_scanner(
                         session=session,
                         reference_maps = reference_maps,
-                        cycle = scan_cycle_to_use,
+                        scan_cycle = scan_cycle_to_use,
                         resolution=resolution,
                         name=new_diffeomorphism)
 

@@ -303,10 +303,10 @@ def call(args):
             elif outlying_cycles[cycle].any():
                 for c, co in zip (cycle, outlying_cycles[cycle]):
                     if co:
-                        print("""{}: Cycle {:>4d} marked as outlying, using fallback.""".format(
+                        print("""{}: Cycle {:d} marked as outlying, using fallback.""".format(
                             name.name(), c))
                     else:
-                        print("""{}: Reference cycle is {:>4d}.""".format(
+                        print("""{}: Reference cycle is {:d}.""".format(
                             name.name(), c))
                         reference_maps.reset_reference_space(cycle=c)
                         break
