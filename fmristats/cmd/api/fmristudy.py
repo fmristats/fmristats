@@ -347,7 +347,7 @@ def get_study(args):
     # Find study file if it exists
     ###################################################################
 
-    if args.study in ['none', 'no']:
+    if (args.study in ['none', 'no']) or single_subject:
         study_file = None
         study_dir = None
     elif args.study is None:
@@ -494,6 +494,12 @@ def get_study(args):
         'result':args.fit,
         }
 
+    # if single_subject and (study is not None):
+    #     print("""
+    #     If you want to create a new single subject study, you need to
+    #     specify a new name using --study-name.""")
+    #     return
+
     if single_subject or (study is None):
         study = Study(
                 protocol=protocol,
@@ -593,7 +599,7 @@ def get_study(args):
     try:
         study.filter(cohort=args.cohort, j=args.id, paradigm=args.paradigm, inplace=True)
     except Exception as e:
-        print(e)
+        print('Could not filter study, {}'.format(e))
         return
 
     if args.protocol_query:

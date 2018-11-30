@@ -465,7 +465,7 @@ class Study:
         elif len(j) == 2:
             j = slice(j[0], j[1])
 
-        if len(self.protocol) < 1:
+        if (self.protocol is None) or (len(self.protocol) < 1):
             print('No entries in the protocol')
             return
 

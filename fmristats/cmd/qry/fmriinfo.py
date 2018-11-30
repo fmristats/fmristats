@@ -154,8 +154,8 @@ def print_info(x, f, verbose=False):
         print(x.describe())
 
     def data_frame_information(x):
-        print('First five entries:\n{}\n\nNumber of entries: {:d}\n'.format(
-            x.head(), len(x)))
+        print('Number of entries: {:d}'.format(len(x)))
+        print('First five entries in the protocol:\n{}\n'.format(x.head()))
 
         try:
             valid = x.groupby(['cohort','paradigm']).valid.agg(
@@ -178,24 +178,24 @@ def print_info(x, f, verbose=False):
                 columns={'sum':'valid', 'count':'total'},
                 inplace=True)
 
-        print('Number of valid entries:\n{}\n'.format(
-            valid[['valid', 'total']]))
+        if valid.valid.all():
+            print('All entries in the protocol are valid.')
+        else:
+            print('Number of valid entries in the protocol:\n{}\n'.format(
+                valid[['valid', 'total']]))
 
     if type(x) is Study:
         print('{}: study file\n'.format(f))
         print('Protocol:')
         print('---------')
         data_frame_information(x.protocol)
-        if x.covariates is None:
-            print('Covariates:')
-            print('-----------')
-            print(None)
-        else:
+        if x.covariates is not None:
             print('Covariates:')
             print('-----------')
             data_frame_information(x.covariates)
 
-        if verbose > 1:
+        if verbose > 0:
+            print()
             print('File layout:')
             print('------------')
             for k,v in x.file_layout.items():
