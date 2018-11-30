@@ -73,12 +73,15 @@ def define_parser():
 
     specific.add_argument('--window-radius',
         type=int,
-        default=0,
+        nargs='+',
+        default=[0],
         help="""Calculate the mean rigid transformation using the this
         window. A --window-radius of 0 does not do anything (the
         default). A WINDOW_RADIUS of n corresponds to all rigid
         transformation n scan cycle before and after each time point
-        (including the boundary).""")
+        (including the boundary). Can also be used iteratively by
+        providing more than one argument. This effectively produces a
+        weighted averaging of rigid transformations.""")
 
     specific.add_argument('--new-rigids',
             default='pcm',
@@ -282,6 +285,10 @@ def call(args):
         reference_maps.fit(session)
         reference_maps.reset_reference_space()
 
+        ####################################################################
+        # Detect outlying scan cycles
+        ####################################################################
+
         if not np.isclose(grubbs, 1):
             if verbose:
                 print('{}: Detect outlying scans'.format(name.name()))
@@ -289,6 +296,10 @@ def call(args):
             outlying_cycles = reference_maps.outlying_cycles
         else:
             outlying_cycles = None
+
+        ####################################################################
+        # Reset reference space
+        ####################################################################
 
         if (outlying_cycles is None) or (cycle is None):
             reference_maps.reset_reference_space(cycle=cycle)
@@ -314,11 +325,20 @@ def call(args):
                 print("""{}: Reference cycle is {:d}.""".format(name.name(), cycle[0]))
                 reference_maps.reset_reference_space(cycle=cycle[0])
 
-        if window_radius > 0:
-            if verbose:
-                print('{}: Flatten head movement estimates using a windows-radius of {} scans'.format(
-                    name.name(), window_radius))
-            reference_maps.mean(window_radius)
+        ####################################################################
+        # Average rigid body transformations
+        ####################################################################
+
+        for r in window_radius:
+            if r > 0:
+                if verbose:
+                    print('{}: Flatten head locations using a radius of {} scans'.format(
+                        name.name(), r))
+                reference_maps.mean(r)
+
+        ####################################################################
+        # Save to disk
+        ####################################################################
 
         try:
             if verbose:

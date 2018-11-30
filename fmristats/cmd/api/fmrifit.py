@@ -63,6 +63,15 @@ def define_parser():
         nargs='+',
         help="""The parameters to keep in the result field.""")
 
+    signal_model.add_argument('--window-radius',
+        type=int,
+        default=0,
+        help="""Calculate the mean rigid transformation using the this
+        window. A --window-radius of 0 does not do anything (the
+        default). A WINDOW_RADIUS of n corresponds to all rigid
+        transformation n scan cycle before and after each time point
+        (including the boundary).""")
+
     ####################################################################
     # Setting the stimulus
     ####################################################################
@@ -178,15 +187,6 @@ def define_parser():
         """If these things have not already happend, you may perform
         these operations now. In particular, you may want to set a
         window size for averaging the head movements.""")
-
-    specific.add_argument('--window-radius',
-        type=int,
-        default=0,
-        help="""Calculate the mean rigid transformation using the this
-        window. A --window-radius of 0 does not do anything (the
-        default). A WINDOW_RADIUS of n corresponds to all rigid
-        transformation n scan cycle before and after each time point
-        (including the boundary).""")
 
     detect.add_argument('--grubbs',
         type=float,
@@ -486,11 +486,12 @@ def call(args):
         # Average rigid body transformations
         ####################################################################
 
-        if window_radius > 0:
-            if verbose:
-                print('{}: Flatten head movement estimates using a windows-radius of {} scans'.format(
-                    name.name(), window_radius))
-            reference_maps.mean(window_radius)
+        for r in window_radius:
+            if r > 0:
+                if verbose:
+                    print('{}: Flatten head locations using a radius of {} scans'.format(
+                        name.name(), r))
+                reference_maps.mean(r)
 
         ####################################################################
         # Inform about the standard space and diffeomorphism
@@ -609,7 +610,7 @@ def call(args):
                 if reference_maps is None:
                     print('{}: No ReferenceMaps found'.format(name.name()))
                     skip = True
-                if reference_maps is None:
+                if population_map is None:
                     print('{}: No PopulationMap found'.format(name.name()))
                     skip = True
                 if skip:
@@ -648,7 +649,7 @@ def call(args):
                 if reference_maps is None:
                     print('{}: No ReferenceMaps found'.format(name.name()))
                     skip = True
-                if reference_maps is None:
+                if population_map is None:
                     print('{}: No PopulationMap found'.format(name.name()))
                     skip = True
                 if skip:
