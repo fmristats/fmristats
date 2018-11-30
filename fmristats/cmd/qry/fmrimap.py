@@ -30,14 +30,14 @@ the coordinates of the image space of a given map.
 #
 ########################################################################
 
-import fmristats.cmd.hp as hp
+from ...epilog import epilog
 
 import argparse
 
-def create_argument_parser():
+def define_parser():
     parser = argparse.ArgumentParser(
             description=__doc__,
-            epilog=hp.epilog)
+            epilog=epilog)
 
     parser.add_argument('input',
         help="""a population space, a population map, any
@@ -64,7 +64,7 @@ def create_argument_parser():
     return parser
 
 def cmd():
-    parser = create_argument_parser()
+    parser = define_parser()
     args = parser.parse_args()
     call(args)
 
@@ -83,8 +83,6 @@ from ...pmap import PopulationMap
 from ...smodel import Result
 
 from ...diffeomorphisms import Warp, Displacement
-
-import sys
 
 import numpy as np
 
@@ -143,9 +141,9 @@ and coordinates in the image:  {}""".format(
                 domain_coordinate = x.reference.apply_to_index(domain_index)
                 if args.verbose:
                     print(
-    """index (in RAS+): {}
-    has coordinates in the domain: {}
-    and coordinates in the image:  {}""".format(
+"""index (in RAS+): {}
+has coordinates in the domain: {}
+and coordinates in the image:  {}""".format(
                         domain_index,
                         domain_coordinate,
                         coordinate))

@@ -86,8 +86,6 @@ cmd.__doc__ = __doc__
 #
 ########################################################################
 
-import sys
-
 import os
 
 from os.path import isfile, isdir, join

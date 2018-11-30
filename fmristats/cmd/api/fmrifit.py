@@ -313,8 +313,6 @@ cmd.__doc__ = __doc__
 #
 ########################################################################
 
-import sys
-
 import os
 
 from os.path import isfile, isdir, join
@@ -593,6 +591,9 @@ def call(args):
         return
 
     ####################################################################
+
+    if args.cores == 0:
+        args.cores = None
 
     if len(df) > 1 and ((args.cores is None) or (args.cores > 1)):
         try:

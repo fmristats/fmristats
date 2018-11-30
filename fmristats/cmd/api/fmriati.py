@@ -30,14 +30,14 @@ image to given curvature.
 #
 ########################################################################
 
-import fmristats.cmd.hp as hp
+from ...epilog import epilog
 
 import argparse
 
-def create_argument_parser():
+def define_parser():
     parser = argparse.ArgumentParser(
             description=__doc__,
-            epilog=hp.epilog)
+            epilog=epilog)
 
     parser.add_argument('scale',
             type=float,
@@ -70,7 +70,7 @@ def create_argument_parser():
     return parser
 
 def cmd():
-    parser = create_argument_parser()
+    parser = define_parser()
     args = parser.parse_args()
     call(args)
 
@@ -117,11 +117,11 @@ def call(args):
     if args.ignore_mask:
         mask = None
     else:
-        mask          = img.get_mask()
+        mask = img.get_mask()
 
-    endog         = img.data.ravel()
-    exog          = np.ones_like(endog).reshape((-1,1))
-    agc           = coordinates.reshape((-1,3))
+    endog = img.data.ravel()
+    exog  = np.ones_like(endog).reshape((-1,1))
+    agc   = coordinates.reshape((-1,3))
 
     old_settings = np.seterr(divide='raise', invalid='raise')
     time0 = time.time()

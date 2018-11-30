@@ -23,8 +23,6 @@ Wrapper for FSL
 
 """
 
-from .pmap import PopulationMap
-
 from .diffeomorphisms import Warp
 
 from .nifti import nii2image, image2nii
@@ -37,7 +35,7 @@ from subprocess import run, PIPE
 
 import os
 
-from os.path import isfile, isdir, join
+from os.path import isdir
 
 def bet(intercept, intercept_file, mask_file, cmd='fsl5.0-bet', variante='R',
         verbose=0):

@@ -35,13 +35,11 @@ import numpy as np
 
 import os
 
-from os.path import isfile, isdir, join
+from os.path import isdir
 
 from nipype.interfaces.ants import RegistrationSynQuick, ApplyTransformsToPoints
 
 from contextlib import contextmanager
-
-import sys
 
 def fit_population_map(vb_image, nb_image, nb_name, output_prefix,
         name='ants', j=4, verbose=True):
