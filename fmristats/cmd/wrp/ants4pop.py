@@ -362,7 +362,7 @@ def call(args):
                         for c, co in zip (cycle, outlying_cycles[cycle]):
                             if co:
                                 if verbose:
-                                    print("""{}: Suggested cycle {:>4d} marked as outlying, using fallback.""".format(
+                                    print("""{}: Cycle {:d} marked as outlying, using fallback.""".format(
                                         name.name(), c))
                             else:
                                 scan_cycle_to_use = c
@@ -422,6 +422,9 @@ def call(args):
         return
 
     ####################################################################
+
+    if args.cores == 0:
+        args.cores = None
 
     if len(df) > 1 and ((args.cores is None) or (args.cores > 1)):
         try:

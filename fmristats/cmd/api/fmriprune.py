@@ -48,7 +48,7 @@ def add_arguments(parser):
             proportional threshold of the degrees of freedom in the
             effect field estimate are set to null.""")
 
-    handling_df_cutoff.add_argument('-t', '--threshold',
+    handling_df_cutoff.add_argument('--threshold',
             type=int,
             help="""estimates which degrees of freedom are below the
             threshold of the degrees of freedom in the effect field
@@ -186,7 +186,9 @@ def call(args):
 
         if hasattr(result.population_map, 'vb_mask') and not force:
             print("""{}:
-            VB mask already present, force overwrite with --force""".format(
+            VB mask already present, use
+            -f/--force-mask-overwrite
+            to overwrite existing mask""".format(
                 name.name()))
             return
 

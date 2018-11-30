@@ -256,7 +256,7 @@ def call(args):
         for r in window_radius:
             if r > 0:
                 if verbose:
-                    print('{}: Flatten head locations using a radius of {} scans'.format(
+                    print('{}: Flatten head locations using a radius of {} scan cycles'.format(
                         name.name(), r))
                 reference_maps.mean(r)
 

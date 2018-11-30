@@ -65,7 +65,8 @@ def define_parser():
 
     signal_model.add_argument('--window-radius',
         type=int,
-        default=0,
+        nargs='+',
+        default=[0],
         help="""Calculate the mean rigid transformation using the this
         window. A --window-radius of 0 does not do anything (the
         default). A WINDOW_RADIUS of n corresponds to all rigid
@@ -489,7 +490,7 @@ def call(args):
         for r in window_radius:
             if r > 0:
                 if verbose:
-                    print('{}: Flatten head locations using a radius of {} scans'.format(
+                    print('{}: Flatten head locations using a radius of {} scan cycles'.format(
                         name.name(), r))
                 reference_maps.mean(r)
 
@@ -613,12 +614,10 @@ def call(args):
                 if population_map is None:
                     print('{}: No PopulationMap found'.format(name.name()))
                     skip = True
-                if skip:
-                    break
-
-                pool.apply_async(wm, args=(index, name, session,
-                    reference_maps, population_map, result,
-                    file_result))
+                if not skip:
+                    pool.apply_async(wm, args=(index, name, session,
+                        reference_maps, population_map, result,
+                        file_result))
             pool.close()
             pool.join()
         except Exception as e:
@@ -652,11 +651,9 @@ def call(args):
                 if population_map is None:
                     print('{}: No PopulationMap found'.format(name.name()))
                     skip = True
-                if skip:
-                    break
-
-                wm(index, name, session, reference_maps, population_map,
-                        result, file_result)
+                if not skip:
+                    wm(index, name, session, reference_maps,
+                            population_map, result, file_result)
         finally:
             files = df.ix[df.locked, 'result'].values
             if len(files) > 0:

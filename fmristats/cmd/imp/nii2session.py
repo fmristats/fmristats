@@ -65,7 +65,7 @@ def define_parser():
         help="""Set the foreground to the image in FOREGROUND""")
 
     specific.add_argument('--foreground',
-        default='../raw/foreground/{paradigm}/{cohort}-{id:04d}-{paradigm}-{date}-foreground.nii.gz',
+        default='../raw/foreground/{cohort}-{id:04d}-{paradigm}-{date}-foreground.nii.gz',
         help="""A 4D-image that contains a mask for the foreground in
         the FMRI""")
 
@@ -132,8 +132,15 @@ def define_parser():
 
     control_multiprocessing.add_argument('-j', '--cores',
         type=int,
-        help="""Number of cores to use. Default is the number of cores
-        on the machine.""")
+        default=1,
+        help="""Number of threads to use. The implementation will
+        usually try to run as many calculations and loops as possible in
+        parallel -- this may suggest that it may be adventurous to
+        process all entries in the study protocol sequentially (and this
+        is the default). It is possible, however, to generate a thread
+        for each protocol entry. Note that this may generate a lot of
+        I/O-operations. If you set CORES to 0, then the number of cores
+        on the machine will be used.""")
 
     return parser
 
@@ -329,6 +336,9 @@ def call(args):
 
     ####################################################################
 
+    if args.cores == 0:
+        args.cores = None
+
     if len(df) > 1 and ((args.cores is None) or (args.cores > 1)):
         try:
             pool = ThreadPool(args.cores)
@@ -341,10 +351,10 @@ def call(args):
 
                 if stimulus is None:
                     print('{}: No Stimulus found'.format(name.name()))
-                    break
-
-                pool.apply_async(wm, args=\
-                    (index, name, session, stimulus, file_session, file_nii, file_foreground)
+                else:
+                    pool.apply_async(wm, args=\
+                    (index, name, session, stimulus, file_session,
+                        file_nii, file_foreground)
                     )
 
             pool.close()
@@ -372,9 +382,9 @@ def call(args):
 
                 if stimulus is None:
                     print('{}: No Stimulus found'.format(name.name()))
-                    break
-
-                wm(index, name, session, stimulus, file_session, file_nii, file_foreground)
+                else:
+                    wm(index, name, session, stimulus, file_session,
+                            file_nii, file_foreground)
         finally:
             files = df.ix[df.locked, 'session'].values
             if len(files) > 0:

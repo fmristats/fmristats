@@ -46,20 +46,20 @@ def define_parser():
         """Prune the statistics field with BET""")
 
     specific.add_argument('--cmd-bet',
-            default='fsl5.0-bet',
-            help="""FSL bet command. Must be in your path.""")
+        default='fsl5.0-bet',
+        help="""FSL bet command. Must be in your path.""")
 
     specific.add_argument('--variante',
-            default='R',
-            help="""FSL bet command. Must be in your path.""")
+        default='R',
+        help="""FSL bet command. Must be in your path.""")
 
     specific.add_argument('--vb-file',
-            default='pruning/{0}-{1:04d}-{2}-{3}-{4}-{5}-intercept.nii.gz',
-            help="""brain mask in image space.""")
+        default='pruning/{cohort}-{id:04d}-{paradigm}-{date}-intercept.nii.gz',
+        help="""brain mask in image space.""")
 
     specific.add_argument('--vb-mask',
-            default='pruning/{0}-{1:04d}-{2}-{3}-{4}-{5}-mask.nii.gz',
-            help="""brain mask in image space.""")
+        default='pruning/{cohort}-{id:04d}-{paradigm}-{date}-mask.nii.gz',
+        help="""brain mask in image space.""")
 
     return parser
 
@@ -129,7 +129,8 @@ def call(args):
         })
 
     study_iterator = study.iterate('result',
-            new=['result', 'vb_file', 'vb_mask'])
+            new=['result', 'vb_file', 'vb_mask'],
+            verbose=verbose)
 
     df = study_iterator.df.copy()
 

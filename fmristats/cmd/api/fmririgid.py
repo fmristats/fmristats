@@ -150,8 +150,15 @@ def define_parser():
 
     control_multiprocessing.add_argument('-j', '--cores',
         type=int,
-        help="""Number of cores to use. Default is the number of cores
-        on the machine.""")
+        default=1,
+        help="""Number of threads to use. The implementation will
+        usually try to run as many calculations and loops as possible in
+        parallel -- this may suggest that it may be adventurous to
+        process all entries in the study protocol sequentially (and this
+        is the default). It is possible, however, to generate a thread
+        for each protocol entry. Note that this may generate a lot of
+        I/O-operations. If you set CORES to 0, then the number of cores
+        on the machine will be used.""")
 
     return parser
 
@@ -332,7 +339,7 @@ def call(args):
         for r in window_radius:
             if r > 0:
                 if verbose:
-                    print('{}: Flatten head locations using a radius of {} scans'.format(
+                    print('{}: Flatten head locations using a radius of {} scan cycles'.format(
                         name.name(), r))
                 reference_maps.mean(r)
 
@@ -356,6 +363,9 @@ def call(args):
 
     ####################################################################
 
+    if args.cores == 0:
+        args.cores = None
+
     if len(df) > 1 and ((args.cores is None) or (args.cores > 1)):
         try:
             pool = ThreadPool(args.cores)
@@ -366,9 +376,8 @@ def call(args):
 
                 if session is None:
                     print('{}: No Session found'.format(name.name()))
-                    break
-
-                pool.apply_async(wm, args=\
+                else:
+                    pool.apply_async(wm, args=\
                     (index, name, session, reference_maps, file_reference_maps)
                     )
 
@@ -395,9 +404,8 @@ def call(args):
 
                 if session is None:
                     print('{}: No Session found'.format(name.name()))
-                    break
-
-                wm(index, name, session, reference_maps, file_reference_maps)
+                else:
+                    wm(index, name, session, reference_maps, file_reference_maps)
         finally:
             files = df.ix[df.locked, 'reference_maps'].values
             if len(files) > 0:
