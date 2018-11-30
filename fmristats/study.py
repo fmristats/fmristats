@@ -25,8 +25,8 @@ Study Layout
 
 from .name import Identifier
 
-from .load import load, load_block_stimulus, load_session, load_refmaps, \
-    load_population_map, load_result
+from .load import load, load_block_stimulus, load_session, \
+        load_refmaps, load_population_map, load_result
 
 import pandas as pd
 
