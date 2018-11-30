@@ -41,7 +41,7 @@ These maps will be called reference maps: :math:`ρ_t` is called the
 functions that map from subject reference space to the location and
 orientation of the subject brain in the scanner at a given time point.
 
-The inverse of :math:`ρ_t` are called the *acquisition map of scan*
+The inverse of :math:`ρ_t` is called the *acquisition map of scan*
 :math:`t`:
 
 .. math::
