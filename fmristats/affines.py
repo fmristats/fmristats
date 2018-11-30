@@ -422,12 +422,18 @@ class Affines:
         mean_affines = self.affines.copy()
 
         if r > 0:
-            for t in range(self.n):
-                xs = self.affines[max(0,t-r):t+r+1]
-                wh = np.where(~skip[max(0,t-r):t+r+1])
-                xs = xs[wh]
-                if xs.shape[0] > 0:
-                    mean_affines[t] = Affines(xs).mean_rigid().affine
+            if skip is None:
+                for t in range(self.n):
+                    xs = self.affines[max(0,t-r):t+r+1]
+                    if xs.shape[0] > 0:
+                        mean_affines[t] = Affines(xs).mean_rigid().affine
+            else:
+                for t in range(self.n):
+                    xs = self.affines[max(0,t-r):t+r+1]
+                    wh = np.where(~skip[max(0,t-r):t+r+1])
+                    xs = xs[wh]
+                    if xs.shape[0] > 0:
+                        mean_affines[t] = Affines(xs).mean_rigid().affine
 
         mean_affines[:,3] = (0,0,0,1)
         return Affines(mean_affines)
