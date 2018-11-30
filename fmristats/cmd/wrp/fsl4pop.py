@@ -458,15 +458,19 @@ def call(args):
             print('{}: Diffeomorphism type not supported'.format(name.name()))
             return
 
-        dfile = os.path.dirname(fnirt_prefix)
+        ####################################################################
+        # Spline coefficients file
+        ####################################################################
+
+        if verbose:
+            print('{}: Save subject reference image in NB to: {}'.format(
+                name.name(), nb_nii))
+
+        dfile = os.path.dirname(nb_nii)
         if dfile and not isdir(dfile):
            os.makedirs(dfile)
 
         ni.save(image2nii(nb), nb_nii)
-
-        ####################################################################
-        # Spline coefficients file
-        ####################################################################
 
         if ignore_existing_warpcoef:
             warpcoef_file = fnirt_prefix + warpcoef_file_template
@@ -484,6 +488,14 @@ def call(args):
             if verbose:
                 print('{}: Fit spline coefficients.'.format(
                     name.name()))
+
+            dfile = os.path.dirname(warpcoef_file)
+            if dfile and not isdir(dfile):
+               os.makedirs(dfile)
+
+            dfile = os.path.dirname(vb_estimate_nii)
+            if dfile and not isdir(dfile):
+               os.makedirs(dfile)
 
             status = fnirt(
                         warpcoef_file    = warpcoef_file,
