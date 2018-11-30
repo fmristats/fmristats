@@ -373,8 +373,11 @@ def call(args):
 
         lock.save(file_population_map)
 
-        nb_nii = fnirt_prefix + nb_file_template
+        ####################################################################
+        # File names
+        ####################################################################
 
+        nb_nii = fnirt_prefix + nb_file_template
         vb_estimate_nii = fnirt_prefix + vb_estimate_template
         coefficients_vb = fnirt_prefix + cvb
         coefficients_nb = fnirt_prefix + cnb
@@ -461,6 +464,10 @@ def call(args):
 
         ni.save(image2nii(nb), nb_nii)
 
+        ####################################################################
+        # Spline coefficients file
+        ####################################################################
+
         if ignore_existing_warpcoef:
             warpcoef_file = fnirt_prefix + warpcoef_file_template
         else:
@@ -469,10 +476,14 @@ def call(args):
             else:
                 warpcoef_file = fnirt_prefix + warpcoef_file_template
 
-        if not isfile(warpcoef_file) or ignore_existing_warpcoef:
+        if verbose:
+            print('{}: Spline coefficients file: {}'.format(
+                name.name(), warpcoef_file))
 
+        if not isfile(warpcoef_file) or ignore_existing_warpcoef:
             if verbose:
-                print('{}: Fit diffeomorphism'.format(name.name()))
+                print('{}: Fit spline coefficients.'.format(
+                    name.name()))
 
             status = fnirt(
                         warpcoef_file    = warpcoef_file,
@@ -493,8 +504,8 @@ def call(args):
                 return
         else:
             if verbose:
-                print('{}: Use existing warp coefficients: {}'.format(
-                    name.name(), warpcoef_file))
+                print('{}: Use existing spline coefficients.'.format(
+                    name.name()))
 
         if verbose:
             print('{}: Parse diffeomorphism and create population map'.format(name.name()))
