@@ -267,11 +267,11 @@ def define_parser():
     # Push
     ####################################################################
 
-    control_verbosity  = parser.add_argument_group(
+    control_push  = parser.add_argument_group(
         """Control whether to save the modified (thus overwrite the
         existing) study instance.""")
 
-    control_verbosity.add_argument('-p', '--push',
+    control_push.add_argument('-p', '--push',
         action='store_true',
         help="""Will save the modified (and thus overwrite the existing)
         study instance.""")
