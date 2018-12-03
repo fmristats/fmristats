@@ -210,6 +210,19 @@ def define_parser():
         default=0,
         help="""Increase output verbosity""")
 
+    ####################################################################
+    # Push
+    ####################################################################
+
+    control_push  = parser.add_argument_group(
+        """Control whether to save the modified (thus overwrite the
+        existing) study instance.""")
+
+    control_push.add_argument('-p', '--push',
+        action='store_true',
+        help="""Will save the modified (and thus overwrite the existing)
+        study instance.""")
+
     return parser
 
 def cmd():
@@ -347,7 +360,7 @@ def get_study(args):
     # Find study file if it exists
     ###################################################################
 
-    if (args.study in ['none', 'no']) or single_subject:
+    if (args.study in ['none', 'no', 'new']) or single_subject:
         study_file = None
         study_dir = None
     elif args.study is None:
@@ -629,6 +642,10 @@ def call(args):
     if study is None:
         return
 
+    ####################################################################
+    # Write study to disk
+    ####################################################################
+
     if args.out is not None:
         if args.verbose:
             print('Save: {}'.format(args.out))
@@ -638,3 +655,8 @@ def call(args):
            os.makedirs(dfile)
 
         study.save(args.out)
+
+    if args.push:
+        if args.verbose:
+            print('Save: {}'.format(args.study))
+        study.save(args.study)
