@@ -182,10 +182,15 @@ def fit_field(coordinates, mask, data, design, epi_code:int,
     rresult = result.reshape((-1,4,max(design.shape[-1],3)))
 
     if mask is None:
-        to_fit = range(rcoordinates.shape[0])
+        to_fit = np.ones(rcoordinates.shape[0]).astype(bool)
     else:
-        to_fit, = np.where(mask.reshape((-1,)))
-        to_fit  = to_fit.tolist()
+        to_fit = mask.reshape((-1,))
+
+    # if mask is None:
+    #     to_fit = range(rcoordinates.shape[0])
+    # else:
+    #     to_fit, = np.where(mask.reshape((-1,)))
+    #     to_fit  = to_fit.tolist()
 
     ###################################################################
     # Fit the model
@@ -204,53 +209,65 @@ def fit_field(coordinates, mask, data, design, epi_code:int,
 ###################################################################
 
 def fit_sm(result, coordinates, to_fit, data, design, r, s, sortvar):
-    for i in to_fit:
-        squared_distances = ((data[...,:3] - coordinates[i])**2).sum(axis=1)
-        valid = np.where(squared_distances < r)
-        if valid[0].size > 120:
-            weights = np.exp(squared_distances[valid] / s)
+    for i in range(coordinates.shape[0]):
+        if to_fit[i]:
+            squared_distances = ((data[...,:3] - coordinates[i])**2).sum(axis=1)
+            valid = np.where(squared_distances < r)
+            if valid[0].size > 120:
+                weights = np.exp(squared_distances[valid] / s)
 
-            fit = sm.WLS(
-                endog    = data[valid][...,3],
-                exog     = design[valid],
-                weights  = weights,
-                hasconst = True).fit()
+                fit = sm.WLS(
+                    endog    = data[valid][...,3],
+                    exog     = design[valid],
+                    weights  = weights,
+                    hasconst = True).fit()
 
-            result[i,0]   = fit.params
-            result[i,1]   = fit.bse
-            result[i,2]   = fit.tvalues
-            result[i,3,0] = fit.mse_resid
-            result[i,3,1] = fit.df_resid
+                result[i,0]   = fit.params
+                result[i,1]   = fit.bse
+                result[i,2]   = fit.tvalues
+                result[i,3,0] = fit.mse_resid
+                result[i,3,1] = fit.df_resid
 
-            df = DataFrame({
-                'x'      : data[valid][...,0],
-                'y'      : data[valid][...,1],
-                'z'      : data[valid][...,2],
-                'time'   : data[valid][...,4]})
-            df['weighted_residual'] = weights * fit.resid
-            df.sort_values(by=sortvar, inplace=True)
-            result[i,3,2] = durbin_watson(df.weighted_residual)
+                df = DataFrame({
+                    'x'      : data[valid][...,0],
+                    'y'      : data[valid][...,1],
+                    'z'      : data[valid][...,2],
+                    'time'   : data[valid][...,4]})
+                df['weighted_residual'] = weights * fit.resid
+                df.sort_values(by=sortvar, inplace=True)
+                result[i,3,2] = durbin_watson(df.weighted_residual)
+
+
+@jit(nopython=True)
+def penrose_fit(endog, exog, weights):
+    # set up
+    w_half        = np.sqrt(weights)
+    wendog        = w_half * endog
+    wexog         = w_half.reshape((-1,1)) * exog
+    # calculation
+    pinv_wexog    = np.linalg.pinv(wexog)
+    params        = pinv_wexog.dot(wendog)
+    fitted_values = exog.dot(params)
+    wresid        = wendog - wexog.dot(params)
+    df_resid      = wexog.shape[0] - wexog.shape[1]
+    mse           = np.dot(wresid, wresid) / df_resid
+    # variances, covariances, and standard errors
+    cov_params    = mse * np.dot(pinv_wexog, np.transpose(pinv_wexog))
+    bse           = np.sqrt(np.diag(cov_params))
+    return params, mse, df_resid, bse
 
 @jit(nopython=True, fastmath=True) #, parallel=True)
 def fit_nb(result, coordinates, to_fit, data, design, r, s):
-    for i in to_fit:
-        squared_distances = ((data[...,:3] - coordinates[i])**2).sum(axis=1)
-        valid = np.where(squared_distances < r)
-        if valid[0].size > 120:
+    for i in range(coordinates.shape[0]):
+        if to_fit[i]:
+            squared_distances = ((data[...,:3] - coordinates[i])**2).sum(axis=1)
+            valid = np.where(squared_distances < r)
             weights = np.exp(squared_distances[valid] / s)
             endog   = data[valid][...,3]
             exog    = design[valid]
-
-            W = np.diag(weights)
-            V_inverse = exog.T.dot(W).dot(exog)
-            params    = solve(V_inverse, exog.T.dot(W).dot(endog))   # regression parameters
-            residuals = endog - exog.dot(params)                     # residuals
-            df_resid  = exog.shape[0] - exog.shape[1]                # degrees of freedom
-            mse_resid = residuals.T.dot(W).dot(residuals) / df_resid # mean squared error
-            bse       = np.sqrt(mse_resid*np.diag(inv(V_inverse)))   # standard error
-
+            params, mse, degrees_of_freedom, bse = penrose_fit(endog, exog, weights)
             result[i,0]   = params
             result[i,1]   = bse
             result[i,2]   = params / bse
-            result[i,3,0] = mse_resid
-            result[i,3,1] = df_resid
+            result[i,3,0] = mse
+            result[i,3,1] = degrees_of_freedom
