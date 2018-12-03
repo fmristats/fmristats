@@ -161,7 +161,10 @@ def print_info(x, f, verbose=False):
 
     def data_frame_information(x):
         print('Number of entries: {:d}'.format(len(x)))
-        print('First five entries in the protocol:\n{}\n'.format(x.head()))
+        if len(x) <= 12:
+            print('Entries:\n{}\n'.format(x))
+        else:
+            print('First twelve entries:\n{}\n'.format(x.head(12)))
 
         try:
             valid = x.groupby(['cohort','paradigm']).valid.agg(
@@ -184,10 +187,10 @@ def print_info(x, f, verbose=False):
                 columns={'sum':'valid', 'count':'total'},
                 inplace=True)
 
-        if valid.valid.all():
-            print('All entries in the protocol are valid.')
+        if x.valid.all():
+            print('All entries are valid.\n')
         else:
-            print('Number of valid entries in the protocol:\n{}\n'.format(
+            print('Number of valid entries:\n{}\n'.format(
                 valid[['valid', 'total']]))
 
     if type(x) is Study:
