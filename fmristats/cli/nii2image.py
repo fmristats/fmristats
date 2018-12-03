@@ -29,7 +29,7 @@ Converts a Nifti1 image file to fmristats' image format
 #
 ########################################################################
 
-from ...epilog import epilog
+from ..epilog import epilog
 
 import argparse
 
@@ -62,7 +62,7 @@ cmd.__doc__ = __doc__
 #
 ########################################################################
 
-from ...nifti import nii2image
+from ..nifti import nii2image
 
 import nibabel as ni
 

@@ -29,7 +29,7 @@ Converts a csv-file to a protocol or covariate file
 #
 ########################################################################
 
-from ...epilog import epilog
+from ..epilog import epilog
 
 import argparse
 

@@ -30,7 +30,7 @@ image to given curvature.
 #
 ########################################################################
 
-from ...epilog import epilog
+from ..epilog import epilog
 
 import argparse
 
@@ -82,11 +82,11 @@ cmd.__doc__ = __doc__
 #
 ########################################################################
 
-from ... import load
+from .. import load
 
-from ...diffeomorphisms import Image
+from ..diffeomorphisms import Image
 
-from ...ati import fit_field, extract_field
+from ..ati import fit_field, extract_field
 
 import pandas as pd
 

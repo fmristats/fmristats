@@ -33,7 +33,7 @@ Fit FMRI data
 #
 ########################################################################
 
-from ...epilog import epilog
+from ..epilog import epilog
 
 import argparse
 
@@ -297,7 +297,7 @@ def define_parser():
 
     return parser
 
-from ..api.fmristudy import add_study_arguments
+from .fmristudy import add_study_arguments
 
 def cmd():
     parser = define_parser()
@@ -321,19 +321,19 @@ from multiprocessing.dummy import Pool as ThreadPool
 
 import numpy as np
 
-from ..api.fmristudy import get_study
+from .fmristudy import get_study
 
-from ...lock import Lock
+from ..lock import Lock
 
-from ...study import Study
+from ..study import Study
 
-from ...session import Session
+from ..session import Session
 
-from ...reference import ReferenceMaps
+from ..reference import ReferenceMaps
 
-from ...pmap import PopulationMap
+from ..pmap import PopulationMap
 
-from ...smodel import SignalModel
+from ..smodel import SignalModel
 
 ########################################################################
 

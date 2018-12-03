@@ -35,7 +35,7 @@ from .smodel import SignalModel, Result
 
 from .sample import Sample
 
-from .pmodel import MetaResult, PopulationModel
+from .pmodel import PopulationModel, PopulationResult
 
 from .tau import tau
 

@@ -20,12 +20,19 @@
 """
 
 Set the standard space to the given image and fit a diffeomorphism from
-standard space to subject space using a wrapper to ANTS
+standard space to subject space using a wrapper to FSL_ FNIRT_.
+
+On the one hand, this is a wrapper to ``std2imgcoord`` and converts a
+given FSL warp coefficient file produced by FNIRT_ to the population map
+of the corresponding session. On the other hand, it can be used as a
+wrapper to the FSL_ command line tools FNIRT_ to estimate this warp
+coefficient file.
+
+.. _FNIRT: https://fsl.fmrib.ox.ac.uk/fsl/fslwiki/FNIRT
+
+.. _FSL: https://fsl.fmrib.ox.ac.uk/fsl/fslwiki/
 
 """
-
-#import warnings
-#warnings.simplefilter(action='ignore', category=FutureWarning)
 
 ########################################################################
 #
@@ -33,7 +40,7 @@ standard space to subject space using a wrapper to ANTS
 #
 ########################################################################
 
-from ...epilog import epilog
+from ..epilog import epilog
 
 import argparse
 
@@ -66,12 +73,44 @@ def define_parser():
         fall backs.""")
 
     specific.add_argument('--new-diffeomorphism',
-            default='ants',
-            help="""Name to use for the fitted diffeomorphisms.""")
+        default='fnirt',
+        help="""Name to use for the fitted diffeomorphisms.""")
 
-    specific.add_argument('--ants-prefix',
-            default='warping-by-ants/{cohort}-{id:04d}/{cohort}-{id:04d}-{paradigm}-{date}-{space}-',
-            help="""Prefix for ANTS files.""")
+    specific.add_argument('--fnirt-prefix',
+            default='warping-by-fnirt/{cohort}-{id:04d}/{cohort}-{id:04d}-{paradigm}-{date}-{space}-',
+            help="""Prefix for FNIRT files.""")
+
+    ########################################################################
+    # Additional input arguments when warp coefficient files are
+    ########################################################################
+
+    specific.add_argument('--fnirt-subject-reference-space',
+        default='nb.nii.gz',
+        help="""Image used as template for the subject in subject
+        reference space""")
+
+    specific.add_argument('--fnirt-spline-coefficients',
+        default='warpcoef.nii.gz',
+        help="""Spline or warp coefficient file created by FNIRT.""")
+
+    specific.add_argument('--ignore-existing-spline-coefficients',
+        action='store_true',
+        help="""By default existing spline coefficient files will be
+        used, as it is assumed that you have created them manually
+        to fit your needs. When this flag is set, it will re-fit the
+        spline coefficients using some reasonable defaults.""")
+
+    specific.add_argument('--cmd-fnirt',
+        default='fsl5.0-fnirt',
+        help="""FSL fnirt command. Must be in your path.""")
+
+    specific.add_argument('--cmd-config',
+        default='T1_2_MNI152_2mm',
+        help="""Config file for FSL FNIRT.""")
+
+    specific.add_argument('--cmd-std2imgcoord',
+        default='fsl5.0-std2imgcoord',
+        help="""FSL std2imgcoord command. Must be in your path.""")
 
     ####################################################################
     # File handling
@@ -146,15 +185,9 @@ def define_parser():
         I/O-operations. If you set CORES to 0, then the number of cores
         on the machine will be used.""")
 
-    control_multiprocessing.add_argument('-j2', '--ants-cores',
-        type=int,
-        default=4,
-        help="""Number of cores to use in the ANTS routine. Default is
-        the number of cores on the machine.""")
-
     return parser
 
-from ..api.fmristudy import add_study_arguments
+from .fmristudy import add_study_arguments
 
 def cmd():
     parser = define_parser()
@@ -178,23 +211,23 @@ from multiprocessing.dummy import Pool as ThreadPool
 
 import numpy as np
 
-from ..api.fmristudy import get_study
+from .fmristudy import get_study
 
-from ...lock import Lock
+from ..lock import Lock
 
-from ...study import Study
+from ..study import Study
 
-from ...diffeomorphisms import Image
+from ..diffeomorphisms import Image
 
-from ...session import Session
+from ..session import Session
 
-from ...reference import ReferenceMaps
+from ..reference import ReferenceMaps
 
-from ...pmap import PopulationMap
+from ..pmap import PopulationMap
 
-from ...nifti import image2nii, nii2image
+from ..nifti import image2nii, nii2image
 
-from ...ants import fit_population_map
+from ..fsl import fnirt, splines2warp
 
 import nibabel as ni
 
@@ -222,7 +255,19 @@ def call(args):
 
     new_diffeomorphism = args.new_diffeomorphism
     cycle              = args.cycle
-    ants_cores         = args.ants_cores
+
+    cmd_fnirt        = args.cmd_fnirt
+    cmd_config       = args.cmd_config
+    cmd_std2imgcoord = args.cmd_std2imgcoord
+
+    nb_file_template       = args.fnirt_subject_reference_space
+    warpcoef_file_template = args.fnirt_spline_coefficients
+    vb_estimate_template   = 'vb-estimate.nii.gz'
+
+    cvb = 'vb.txt'
+    cnb = 'nb.txt'
+
+    ignore_existing_warpcoef = args.ignore_existing_spline_coefficients
 
     ####################################################################
     # Study
@@ -245,7 +290,7 @@ def call(args):
     study.set_diffeomorphism(new_diffeomorphism)
     study.set_standard_space(study.vb.name)
 
-    study.update_layout({'ants_prefix':args.ants_prefix})
+    study.update_layout({'fnirt_prefix':args.fnirt_prefix})
 
     ####################################################################
     # Iterator
@@ -256,7 +301,7 @@ def call(args):
             'reference_maps',
             'result',
             'population_map',
-            new=['population_map', 'ants_prefix'],
+            new=['population_map', 'fnirt_prefix'],
             lookup=['result'],
             integer_index=True,
             verbose=verbose)
@@ -266,11 +311,32 @@ def call(args):
     df['locked'] = False
 
     ####################################################################
+    # Save or look for template in standard space
+    ####################################################################
+
+    if args.vb_nii is None:
+        vb_nii = 'warping-by-fnirt/vb.nii.gz'
+
+        if verbose:
+            print('Save template in standard space to: {}'.format(vb_nii))
+
+        dfile = os.path.dirname(vb_nii)
+        if dfile and not isdir(dfile):
+           os.makedirs(dfile)
+
+        ni.save(image2nii(study.vb), vb_nii)
+    else:
+        vb_nii = args.vb_nii
+
+        if verbose:
+            print('Use existing template in standard space in: {}'.format(vb_nii))
+
+    ####################################################################
     # Wrapper
     ####################################################################
 
     def wm(index, name, session, reference_maps, population_map, result,
-            file_population_map, ants_prefix):
+            file_population_map, fnirt_prefix):
 
         if type(population_map) is Lock:
             if remove_lock or ignore_lock:
@@ -296,7 +362,7 @@ def call(args):
         if verbose:
             print('{}: Lock: {}'.format(name.name(), file_population_map))
 
-        lock = Lock(name, 'ants4pop', file_population_map)
+        lock = Lock(name, 'fsl4pop', file_population_map)
         df.ix[index, 'locked'] = True
 
         dfile = os.path.dirname(file_population_map)
@@ -306,7 +372,16 @@ def call(args):
         lock.save(file_population_map)
 
         ####################################################################
-        # Create population map instance from a result instance
+        # File names
+        ####################################################################
+
+        nb_nii = fnirt_prefix + nb_file_template
+        vb_estimate_nii = fnirt_prefix + vb_estimate_template
+        coefficients_vb = fnirt_prefix + cvb
+        coefficients_nb = fnirt_prefix + cnb
+
+        ####################################################################
+        # Get NB from a result instance
         ####################################################################
 
         if diffeomorphism_nb == 'fit':
@@ -321,7 +396,7 @@ def call(args):
             nb = result.get_field('intercept', 'point')
 
         ####################################################################
-        # Create population map instance from a session instance
+        # Get NB from a session instance
         ####################################################################
 
         elif diffeomorphism_nb == 'scan_cycle':
@@ -381,19 +456,100 @@ def call(args):
             print('{}: Diffeomorphism type not supported'.format(name.name()))
             return
 
-        if verbose:
-            print('{}: Fit diffeomorphism'.format(name.name()))
+        ####################################################################
+        # Spline coefficients file
+        ####################################################################
 
-        population_map = fit_population_map(
-                vb_image=study.vb,
-                nb_image=nb,
-                nb_name=name,
-                output_prefix = ants_prefix,
-                name=new_diffeomorphism,
-                j=ants_cores)
+        if verbose:
+            print('{}: Save subject reference image in NB to: {}'.format(
+                name.name(), nb_nii))
+
+        dfile = os.path.dirname(nb_nii)
+        if dfile and not isdir(dfile):
+           os.makedirs(dfile)
+
+        ni.save(image2nii(nb), nb_nii)
+
+        if ignore_existing_warpcoef:
+            warpcoef_file = fnirt_prefix + warpcoef_file_template
+        else:
+            if isfile(warpcoef_file_template):
+                warpcoef_file = warpcoef_file_template
+            else:
+                warpcoef_file = fnirt_prefix + warpcoef_file_template
+
+        if verbose:
+            print('{}: Spline coefficients file: {}'.format(
+                name.name(), warpcoef_file))
+
+        if not isfile(warpcoef_file) or ignore_existing_warpcoef:
+            if verbose:
+                print('{}: Fit spline coefficients.'.format(
+                    name.name()))
+
+            dfile = os.path.dirname(warpcoef_file)
+            if dfile and not isdir(dfile):
+               os.makedirs(dfile)
+
+            dfile = os.path.dirname(vb_estimate_nii)
+            if dfile and not isdir(dfile):
+               os.makedirs(dfile)
+
+            status = fnirt(
+                        warpcoef_file    = warpcoef_file,
+                        nb_nii           = nb_nii,
+                        vb_estimate_nii  = vb_estimate_nii,
+                        vb_nii           = vb_nii,
+                        nb_mask          = None,
+                        vb_mask          = None,
+                        config           = cmd_config,
+                        cmd              = cmd_fnirt,
+                        verbose          = verbose,
+                        )
+
+            if not status:
+                df.ix[index,'valid'] = False
+                print('{}: Unable to fit warp coefficients'.format(name.name()))
+                lock.conditional_unlock(df, index, verbose, True)
+                return
+        else:
+            if verbose:
+                print('{}: Use existing spline coefficients.'.format(
+                    name.name()))
+
+        if verbose:
+            print('{}: Parse diffeomorphism and create population map'.format(name.name()))
+
+        diffeomorphism = splines2warp(
+                    warpcoef_file      = warpcoef_file,
+                    vb                 = study.vb,
+                    vb_nii             = vb_nii,
+                    nb_nii             = nb_nii,
+                    name               = name,
+                    new_diffeomorphism = new_diffeomorphism,
+                    coefficients_vb    = coefficients_vb,
+                    coefficients_nb    = coefficients_nb,
+                    cmd                = cmd_std2imgcoord)
+
+        try:
+            vb_estimate = nii2image(ni.load(vb_estimate_nii),
+                    name='vb_estimate_fnirt')
+        except Exception as e:
+            print('{}: Unable to read: {}, {}'.format(
+                name.name(), vb_estimate_nii, e))
+            vb_estimate = None
 
         if study.vb_background:
-            population_map.set_vb_background(study.vb_background)
+            vb_background = study.vb_background
+        else:
+            vb_background = None
+
+        population_map = PopulationMap(diffeomorphism,
+                vb=study.vb,
+                nb=nb,
+                vb_estimate=vb_estimate,
+                vb_background = vb_background
+                )
 
         try:
             if verbose:
@@ -421,9 +577,6 @@ def call(args):
 
     ####################################################################
 
-    if args.cores == 0:
-        args.cores = None
-
     if len(df) > 1 and ((args.cores is None) or (args.cores > 1)):
         try:
             pool = ThreadPool(args.cores)
@@ -433,10 +586,10 @@ def call(args):
                 population_map  = instances['population_map']
                 result          = instances['result']
                 file_population_map = files['population_map']
-                ants_prefix         = files['ants_prefix']
+                fnirt_prefix        = files['fnirt_prefix']
                 pool.apply_async(wm, args=(index, name, session,
                     reference_maps, population_map, result,
-                    file_population_map, ants_prefix))
+                    file_population_map, fnirt_prefix))
             pool.close()
             pool.join()
         except Exception as e:
@@ -459,9 +612,9 @@ def call(args):
                 population_map  = instances['population_map']
                 result          = instances['result']
                 file_population_map = files['population_map']
-                ants_prefix         = files['ants_prefix']
+                fnirt_prefix        = files['fnirt_prefix']
                 wm(index, name, session, reference_maps, population_map,
-                        result, file_population_map, ants_prefix)
+                        result, file_population_map, fnirt_prefix)
         finally:
             files = df.ix[df.locked, 'population_map'].values
             if len(files) > 0:

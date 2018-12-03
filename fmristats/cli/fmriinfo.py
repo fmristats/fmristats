@@ -30,7 +30,7 @@ standard output
 #
 ########################################################################
 
-from ...epilog import epilog
+from ..epilog import epilog
 
 import argparse
 
@@ -68,31 +68,31 @@ cmd.__doc__ = __doc__
 #
 ########################################################################
 
-from ...lock import Lock
+from ..lock import Lock
 
-from ...affines import Affine
+from ..affines import Affine
 
-from ...diffeomorphisms import Image, Diffeomorphism
+from ..diffeomorphisms import Image, Diffeomorphism
 
-from ...stimulus import Stimulus, Block
+from ..stimulus import Stimulus, Block
 
-from ...session import Session
+from ..session import Session
 
-from ...reference import ReferenceMaps
+from ..reference import ReferenceMaps
 
-from ...pmap import PopulationMap
+from ..pmap import PopulationMap
 
-from ...smodel import SignalModel, Result
+from ..smodel import SignalModel, Result
 
-from ...study import Study
+from ..study import Study
 
-from ... import load
+from .. import load
 
-from ...sample import Sample
+from ..sample import Sample
 
-from ...study import Study
+from ..study import Study
 
-#from ...pmodel import PopulationModel, MetaResult
+from ..pmodel import PopulationModel, PopulationResult
 
 import pandas as pd
 
@@ -152,6 +152,12 @@ def print_info(x, f, verbose=False):
     if type(x) is Sample:
         print('{}: sample file'.format(f))
         print(x.describe())
+
+    if type(x) is PopulationModel:
+        print('{}: population model file'.format(f))
+
+    if type(x) is PopulationResult:
+        print('{}: population result file'.format(f))
 
     def data_frame_information(x):
         print('Number of entries: {:d}'.format(len(x)))

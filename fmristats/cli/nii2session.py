@@ -29,7 +29,7 @@ Command line tool to create a fmristats session instance
 #
 ########################################################################
 
-from ...epilog import epilog
+from ..epilog import epilog
 
 import argparse
 
@@ -144,7 +144,7 @@ def define_parser():
 
     return parser
 
-from ..api.fmristudy import add_study_arguments
+from .fmristudy import add_study_arguments
 
 def cmd():
     parser = define_parser()
@@ -168,15 +168,15 @@ from multiprocessing.dummy import Pool as ThreadPool
 
 import numpy as np
 
-from ..api.fmristudy import get_study
+from .fmristudy import get_study
 
-from ...lock import Lock
+from ..lock import Lock
 
-from ...study import Study
+from ..study import Study
 
-from ...session import Session, fmrisetup
+from ..session import Session, fmrisetup
 
-from ...nifti import nii2session
+from ..nifti import nii2session
 
 import nibabel as ni
 

@@ -30,7 +30,7 @@ movements of a subject within an FMRI
 #
 ########################################################################
 
-from ...epilog import epilog
+from ..epilog import epilog
 
 import argparse
 
@@ -136,15 +136,15 @@ from multiprocessing.dummy import Pool as ThreadPool
 
 import numpy as np
 
-from ..api.fmristudy import get_study
+from .fmristudy import get_study
 
-from ...lock import Lock
+from ..lock import Lock
 
-from ...study import Study
+from ..study import Study
 
-from ...reference import ReferenceMaps
+from ..reference import ReferenceMaps
 
-from ...euler import rotation_matrix_to_euler_angles
+from ..euler import rotation_matrix_to_euler_angles
 
 import scipy.stats.distributions as dist
 

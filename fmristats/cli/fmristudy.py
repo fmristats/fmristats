@@ -189,7 +189,7 @@ def add_study_arguments(parser):
     study_parser.add_argument('-o', '--out',
         help="""Save possibly modified study instance to OUT.""")
 
-from ...epilog import epilog
+from ..epilog import epilog
 
 def define_parser():
     parser = argparse.ArgumentParser(
@@ -225,13 +225,13 @@ cmd.__doc__ = __doc__
 #
 ########################################################################
 
-from ... import load
+from .. import load
 
-from ...name import Identifier
+from ..name import Identifier
 
-from ...study import Study
+from ..study import Study
 
-from ...stimulus import Block
+from ..stimulus import Block
 
 import pandas as pd
 

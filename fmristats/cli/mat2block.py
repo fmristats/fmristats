@@ -1,4 +1,4 @@
-# Copyright 2016-2017 Thomas W. D. Möbius
+# Copyright 2016-2018 Thomas W. D. Möbius
 #
 # This file is part of fmristats.
 #
@@ -19,35 +19,9 @@
 
 """
 
-Create a block stimulus instances
+Create a block stimulus instances from MATLAB coded logfiles
 
 """
-
-########################################################################
-
-onsetx = """Times of onsets of condition x, which will be interpreted
-as the control stimulus of the subject.  Should, e.g., be given in the
-form:
-
-                --onsetx 2 84 166 248 330
-
-to be parsed correctly.  If onsets are not given in order, they will be
-sorted automatically.  Must be specified if --stimulus is not."""
-
-onsety = """Times of onset of condition y, which will be interpreted as
-the stimulus stimulus of the subject.  Should, e.g., be given in the
-form:
-
-                --onsety 37 119 201 283
-
-to be parsed correctly.  If onsets are not given in order, they will be
-sorted automatically.  Must be specified if --stimulus is not."""
-
-durationx = """Duration of the stimulus of the subject under condition
-x.  Must be specified if --stimulus is not."""
-
-durationy = """Duration of the stimulus of the subject under condition
-y.  Must be specified if --stimulus is not."""
 
 ########################################################################
 #
@@ -55,7 +29,7 @@ y.  Must be specified if --stimulus is not."""
 #
 ########################################################################
 
-from ...epilog import epilog
+from ..epilog import epilog
 
 import argparse
 
@@ -69,74 +43,52 @@ def define_parser():
     ####################################################################
 
     specific = parser.add_argument_group(
-            """Setup of a two-block stimulus design""")
+        """Setup of a two-block stimulus design""")
 
-    specific.add_argument('--onsetsx',
-            type=float,
-            nargs='+',
-            help=onsetx)
-
-    specific.add_argument('--onsetsy',
-            type=float,
-            nargs='+',
-            help=onsety)
-
-    specific.add_argument('--durationsx',
-            type=float,
-            help=durationx)
-
-    specific.add_argument('--durationsy',
-            type=float,
-            help=durationy)
-
-    specific.add_argument('--namex',
-            default='control',
-            help="""name of block x""")
-
-    specific.add_argument('--namey',
-            default='stimulus',
-            help="""name of block y""")
+    specific.add_argument('--mat',
+        default='../raw/mat/{paradigm}/{cohort}-{id:04d}-{paradigm}-{date}.mat',
+        help = """A Matlab coded stimulus design""")
 
     ####################################################################
     # File handling
     ####################################################################
 
     file_handling = parser.add_argument_group(
-            """File handling""")
+        """File handling""")
 
     lock_handling = file_handling.add_mutually_exclusive_group()
 
     lock_handling.add_argument('-r', '--remove-lock',
-            action='store_true',
-            help="""Remove lock, if file is locked. This is useful, if
-            used together with -s/--skip to remove orphan locks.""")
+        action='store_true',
+        help="""Remove lock, if file is locked. This is useful, if
+        used together with -s/--skip to remove orphan locks.""")
 
     lock_handling.add_argument('-i', '--ignore-lock',
-            action='store_true',
-            help="""Ignore lock, if file is locked. Together with
-            -s/--skip this will also remove orphan locks.""")
+        action='store_true',
+        help="""Ignore lock, if file is locked. Together with
+        -s/--skip this will also remove orphan locks.""")
 
     skip_force = file_handling.add_mutually_exclusive_group()
 
     skip_force.add_argument('-f', '--force',
-            action='store_true',
-            help="""Force re-writing any files""")
+        action='store_true',
+        help="""Force re-writing any files""")
 
     skip_force.add_argument('-s', '--skip',
-            action='store_true',
-            help="""Do not perform any calculations.""")
+        action='store_true',
+        help="""Do not perform any calculations.""")
 
     ####################################################################
     # Verbosity
     ####################################################################
 
     control_verbosity  = parser.add_argument_group(
-            """Control the level of verbosity""")
+        """Control the level of verbosity""")
 
     control_verbosity.add_argument('-v', '--verbose',
-            action='count',
-            default=0,
-            help="""Increase output verbosity""")
+        action='count',
+        default=0,
+        help="""Increase output verbosity""")
 
     ####################################################################
     # Push
@@ -172,7 +124,7 @@ def define_parser():
 
     return parser
 
-from ..api.fmristudy import add_study_arguments
+from .fmristudy import add_study_arguments
 
 def cmd():
     parser = define_parser()
@@ -196,32 +148,27 @@ from multiprocessing.dummy import Pool as ThreadPool
 
 import numpy as np
 
-from ..api.fmristudy import get_study
+import scipy.io
 
-from ...lock import Lock
+from .fmristudy import get_study
 
-from ...name import Identifier
+from ..lock import Lock
 
-from ...study import Study
+from ..name import Identifier
 
-from ...stimulus import Block
+from ..study import Study
+
+from ..stimulus import Block
+
+from ..matlab import mat2block
 
 ########################################################################
 
 def call(args):
 
-    study = get_study(args)
-
-    if study is None:
-        print('Nothing to do.')
-        return
-
-    study_iterator = study.iterate('stimulus', new=['stimulus'],
-            integer_index=True)
-
-    df = study_iterator.df.copy()
-
-    df['locked'] = False
+    ####################################################################
+    # Options
+    ####################################################################
 
     remove_lock       = args.remove_lock
     ignore_lock       = args.ignore_lock
@@ -229,20 +176,41 @@ def call(args):
     skip              = args.skip
     verbose           = args.verbose
 
-    namex    = args.namex
-    namey    = args.namey
-    onsetsx  = np.asarray(args.onsetsx)
-    onsetsy  = np.asarray(args.onsetsy)
-    durationsx = np.asarray(args.durationsx)
-    durationsy = np.asarray(args.durationsy)
+    ####################################################################
+    # Study
+    ####################################################################
 
-    def wm(index, instance, filename, name):
+    study = get_study(args)
 
-        if type(instance) is Lock:
+    if study is None:
+        print('No study found. Nothing to do.')
+        return
+
+    ####################################################################
+    # Iterator
+    ####################################################################
+
+    study.update_layout({'mat':args.mat})
+
+    study_iterator = study.iterate('stimulus',
+            new=['stimulus', 'mat'],
+            integer_index=True)
+
+    df = study_iterator.df.copy()
+
+    df['locked'] = False
+
+    ####################################################################
+    # Wrapper
+    ####################################################################
+
+    def wm(index, stimulus, file_stimulus, file_mat, name):
+
+        if type(stimulus) is Lock:
             if remove_lock or ignore_lock:
                 if verbose:
                     print('{}: Remove lock'.format(name.name()))
-                instance.unlock()
+                stimulus.unlock()
                 if remove_lock:
                     return
             else:
@@ -250,7 +218,7 @@ def call(args):
                     print('{}: Locked'.format(name.name()))
                 return
 
-        if instance is not None and not force:
+        if stimulus is not None and not force:
             if verbose:
                 print('{}: Stimulus already exists. Use -f/--force to overwrite'.format(name.name()))
             return
@@ -259,39 +227,59 @@ def call(args):
             return
 
         if verbose:
-            print('{}: Lock: {}'.format(name.name(), filename))
+            print('{}: Lock: {}'.format(name.name(), file_stimulus))
 
-        lock = Lock(name, 'fmriblock', filename)
+        lock = Lock(name, 'fmriblock', file_stimulus)
         df.ix[index, 'locked'] = True
 
-        dfile = os.path.dirname(filename)
+        dfile = os.path.dirname(file_stimulus)
         if dfile and not isdir(dfile):
            os.makedirs(dfile)
 
-        lock.save(filename)
+        lock.save(file_stimulus)
+
+        ####################################################################
+        # Load MATLAB instance from disk
+        ####################################################################
+
+        try:
+            mat = scipy.io.loadmat(file_mat)
+            if verbose:
+                print('{}: Read: {}'.format(name.name(), file_mat))
+        except Exception as e:
+            df.ix[index,'valid'] = False
+            #study.protocol.ix[index,'valid'] = False
+            print('{}: Unable to read: {}, {}'.format(name.name(),
+                file_mat, e))
+
+        if lock.conditional_unlock(df, index, verbose):
+            df.ix[index,'valid'] = False
+            #study.protocol.ix[index,'valid'] = False
+            return
 
         ####################################################################
         # Create stimulus instance
         ####################################################################
 
         try:
-            stimulus = Block(name=name,
-                    names=[namex, namey],
-                    onsets={namex:onsetsx,namey:onsetsy},
-                    durations={namex:durationsx,namey:durationsy})
+            stimulus = mat2block(mat, name=name)
 
             if verbose:
-                print('{}: Save: {}'.format(name.name(), filename))
+                print('{}: Save {}'.format(name.name(), file_stimulus))
 
-            stimulus.save(filename)
+            stimulus.save(file_stimulus)
             df.ix[index,'locked'] = False
+            #study.protocol.ix[index,'valid'] = False
 
         except Exception as e:
             df.ix[index,'valid'] = False
-            print('{}: Unable to create: {}'.format(name.name(), filename))
-            print('{}: Exception: {}'.format(name.name(), e))
+            #study.protocol.ix[index,'valid'] = False
+            print('{}: Unable to create: {}, {}'.format(name.name(),
+                file_stimulus, e))
             lock.conditional_unlock(df, index, verbose, True)
             return
+
+        return
 
     ####################################################################
 
@@ -303,8 +291,10 @@ def call(args):
             pool = ThreadPool(args.cores)
             for index, name, files, instances in study_iterator:
                 stimulus = instances['stimulus']
-                filename = files['stimulus']
-                pool.apply_async(wm, args=(index, stimulus, filename, name))
+                file_stimulus = files['stimulus']
+                file_mat = files['mat']
+                pool.apply_async(wm, args=(index, stimulus,
+                    file_stimulus, file_mat, name))
 
             pool.close()
             pool.join()
@@ -324,8 +314,9 @@ def call(args):
             print('Process protocol entries sequentially')
             for index, name, files, instances in study_iterator:
                 stimulus = instances['stimulus']
-                filename = files['stimulus']
-                wm(index, stimulus, filename, name)
+                file_stimulus = files['stimulus']
+                file_mat = files['mat']
+                wm(index, stimulus, file_stimulus, file_mat, name)
         finally:
             files = df.ix[df.locked, 'stimulus'].values
             if len(files) > 0:

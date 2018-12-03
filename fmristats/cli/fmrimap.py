@@ -30,7 +30,7 @@ the coordinates of the image space of a given map.
 #
 ########################################################################
 
-from ...epilog import epilog
+from ..epilog import epilog
 
 import argparse
 
@@ -76,13 +76,13 @@ cmd.__doc__ = __doc__
 #
 ########################################################################
 
-from ...load import load
+from ..load import load
 
-from ...pmap import PopulationMap
+from ..pmap import PopulationMap
 
-from ...smodel import Result
+from ..smodel import Result
 
-from ...diffeomorphisms import Warp, Displacement
+from ..diffeomorphisms import Warp, Displacement
 
 import numpy as np
 

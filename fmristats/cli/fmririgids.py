@@ -29,7 +29,7 @@ Fit head movements of a subject in an FMRI session
 #
 ########################################################################
 
-from ...epilog import epilog
+from ..epilog import epilog
 
 import argparse
 
@@ -162,7 +162,7 @@ def define_parser():
 
     return parser
 
-from ..api.fmristudy import add_study_arguments
+from .fmristudy import add_study_arguments
 
 def cmd():
     parser = define_parser()
@@ -186,13 +186,13 @@ from multiprocessing.dummy import Pool as ThreadPool
 
 import numpy as np
 
-from ..api.fmristudy import get_study
+from .fmristudy import get_study
 
-from ...lock import Lock
+from ..lock import Lock
 
-from ...study import Study
+from ..study import Study
 
-from ...reference import ReferenceMaps
+from ..reference import ReferenceMaps
 
 ########################################################################
 

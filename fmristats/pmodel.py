@@ -114,18 +114,18 @@ class PopulationModel:
 
     def fit(self):
         """
-        Fit the population model to data
+        Fit the model to the data
 
         Returns
         -------
-        MetaResult
+        PopulationResult
         """
         statistics, p, parameter_names = fit_field(
                 obs=self.statistics,
                 design=self.exog,
                 mask=self.mask)
 
-        return MetaResult(statistics=statistics, model=self, p=p,
+        return PopulationResult(statistics=statistics, model=self, p=p,
                 parameter_names=parameter_names)
 
     ####################################################################
@@ -205,6 +205,3 @@ class PopulationResult:
         """
         with open(file, 'wb') as output:
             pickle.dump(self, output, **kwargs)
-
-class MetaResult(PopulationResult):
-    pass

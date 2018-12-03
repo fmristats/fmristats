@@ -30,43 +30,24 @@ setup(
         'statsmodels', 'matplotlib', 'nibabel', 'nipype'],
     entry_points={
         'console_scripts': [
-            # general api
-            'fmristudy      = fmristats.cmd.api.fmristudy:cmd',
-            'fmriassessment = fmristats.cmd.api.fmriassessment:cmd',
-            'fmriati        = fmristats.cmd.api.fmriati:cmd',
-            'fmrifit        = fmristats.cmd.api.fmrifit:cmd',
-            'fmriblock      = fmristats.cmd.api.fmriblock:cmd',
-            'fmririgid      = fmristats.cmd.api.fmririgid:cmd',
-            'fmripop        = fmristats.cmd.api.fmripop:cmd',
-            'fmriprune      = fmristats.cmd.api.fmriprune:cmd',
-            'fmrisample     = fmristats.cmd.api.fmrisample:cmd',
-
-            # wrappers
-            'fsl4prune = fmristats.cmd.wrp.fsl4prune:cmd',
-            'fsl4pop   = fmristats.cmd.wrp.fsl4pop:cmd',
-            'ants4pop   = fmristats.cmd.wrp.ants4pop:cmd',
-
-            # import from third party formats
-            'mat2block     = fmristats.cmd.imp.mat2block:cmd',
-            'nii2image     = fmristats.cmd.imp.nii2image:cmd',
-            'nii2session   = fmristats.cmd.imp.nii2session:cmd',
-            'csv2dataframe = fmristats.cmd.imp.csv2dataframe:cmd',
-
-            # plot
-            'fit2plot = fmristats.cmd.plt.fit2plot:cmd',
-            'ref2plot = fmristats.cmd.plt.ref2plot:cmd',
-            #'ses2plot = fmristats.cmd.plt.ses2plot:cmd',
-
-            # query
-            'fmrimap         = fmristats.cmd.qry.fmrimap:cmd',
-            'fmriinfo        = fmristats.cmd.qry.fmriinfo:cmd',
-            'fmriprotocol    = fmristats.cmd.qry.fmriprotocol:cmd',
-            'fmricovariate   = fmristats.cmd.qry.fmricovariate:cmd',
-
-            # export to third party formats
-            'fit2nii = fmristats.cmd.exp.fit2nii:cmd',
-            'session2nii = fmristats.cmd.exp.ses2nii:cmd',
-
+            'ants4pop      = fmristats.cli.ants4pop:cmd',
+            'csv2dataframe = fmristats.cli.csv2dataframe:cmd',
+            'fmriati       = fmristats.cli.fmriati:cmd',
+            'fmriblock     = fmristats.cli.fmriblock:cmd',
+            'fmrifit       = fmristats.cli.fmrifit:cmd',
+            'fmriinfo      = fmristats.cli.fmriinfo:cmd',
+            'fmrimap       = fmristats.cli.fmrimap:cmd',
+            'fmripop       = fmristats.cli.fmripop:cmd',
+            'fmriprune     = fmristats.cli.fmriprune:cmd',
+            'fmririgids    = fmristats.cli.fmririgids:cmd',
+            'fmrisample    = fmristats.cli.fmrisample:cmd',
+            'fmristudy     = fmristats.cli.fmristudy:cmd',
+            'fsl4pop       = fmristats.cli.fsl4pop:cmd',
+            'fsl4prune     = fmristats.cli.fsl4prune:cmd',
+            'mat2block     = fmristats.cli.mat2block:cmd',
+            'nii2image     = fmristats.cli.nii2image:cmd',
+            'nii2session   = fmristats.cli.nii2session:cmd',
+            'ref2plot      = fmristats.cli.ref2plot:cmd',
         ],
     },
 )

@@ -19,8 +19,8 @@
 
 """
 
-Create a standard space that is isometric to the reference space of a
-subject
+Set the standard space to the given image and fit a diffeomorphism from
+standard space to subject space using a wrapper to ANTS
 
 """
 
@@ -30,7 +30,7 @@ subject
 #
 ########################################################################
 
-from ...epilog import epilog
+from ..epilog import epilog
 
 import argparse
 
@@ -47,19 +47,8 @@ def define_parser():
         """Creating a standard space isometric to the reference space.""")
 
     specific.add_argument('--diffeomorphism-nb',
-        default='scanner',
-        choices=['scanner', 'identity', 'fit'],
-        help="""Image space of diffeomorphism.""")
-
-    specific.add_argument('--new-diffeomorphism',
-        default='scanner',
-        help="""Name to use for the fitted diffeomorphisms.""")
-
-    specific.add_argument('--resolution',
-        default=2.,
-        type=float,
-        help="""The resolution of the template in standard space. If set
-        to 0, the resolution of the scanner will be used.""")
+        choices=['scan_cycle', 'fit'],
+        help="""Type of diffeomorphism.""")
 
     specific.add_argument('--cycle',
         type=int,
@@ -71,8 +60,15 @@ def define_parser():
         scan cycle that shows more head movements that usual). You won't
         be able to set an outlying scan cycle as reference. More than
         one cycle can be specified, though, and the list will be used as
-        fall backs. If --cycle is given, DIFFEOMORPHISM_NB will be set
-        to scan_cycle.""")
+        fall backs.""")
+
+    specific.add_argument('--new-diffeomorphism',
+            default='ants',
+            help="""Name to use for the fitted diffeomorphisms.""")
+
+    specific.add_argument('--ants-prefix',
+            default='warping-by-ants/{cohort}-{id:04d}/{cohort}-{id:04d}-{paradigm}-{date}-{space}-',
+            help="""Prefix for ANTS files.""")
 
     ####################################################################
     # File handling
@@ -137,12 +133,25 @@ def define_parser():
 
     control_multiprocessing.add_argument('-j', '--cores',
         type=int,
-        help="""Number of cores to use. Default is the number of cores
-        on the machine.""")
+        default=1,
+        help="""Number of threads to use. The implementation will
+        usually try to run as many calculations and loops as possible in
+        parallel -- this may suggest that it may be adventurous to
+        process all entries in the study protocol sequentially (and this
+        is the default). It is possible, however, to generate a thread
+        for each protocol entry. Note that this may generate a lot of
+        I/O-operations. If you set CORES to 0, then the number of cores
+        on the machine will be used.""")
+
+    control_multiprocessing.add_argument('-j2', '--ants-cores',
+        type=int,
+        default=4,
+        help="""Number of cores to use in the ANTS routine. Default is
+        the number of cores on the machine.""")
 
     return parser
 
-from ..api.fmristudy import add_study_arguments
+from .fmristudy import add_study_arguments
 
 def cmd():
     parser = define_parser()
@@ -166,19 +175,25 @@ from multiprocessing.dummy import Pool as ThreadPool
 
 import numpy as np
 
-from ..api.fmristudy import get_study
+from .fmristudy import get_study
 
-from ...lock import Lock
+from ..lock import Lock
 
-from ...study import Study
+from ..study import Study
 
-from ...diffeomorphisms import Image
+from ..diffeomorphisms import Image
 
-from ...session import Session
+from ..session import Session
 
-from ...reference import ReferenceMaps
+from ..reference import ReferenceMaps
 
-from ...pmap import PopulationMap, pmap_scanner
+from ..pmap import PopulationMap
+
+from ..nifti import image2nii, nii2image
+
+from ..ants import fit_population_map
+
+import nibabel as ni
 
 ########################################################################
 
@@ -194,13 +209,17 @@ def call(args):
     skip              = args.skip
     verbose           = args.verbose
 
-    scan_cycle         = args.cycle
-    resolution         = args.resolution
-    new_diffeomorphism = args.new_diffeomorphism
-    diffeomorphism_nb  = args.diffeomorphism_nb
+    if args.diffeomorphism_nb is None:
+        if args.cycle is None:
+            diffeomorphism_nb = 'fit'
+        else:
+            diffeomorphism_nb = 'scan_cycle'
+    else:
+        diffeomorphism_nb = args.diffeomorphism_nb
 
-    if (resolution is None) or (resolution == 'native') or np.isclose(resolution, 0):
-        resolution = None
+    new_diffeomorphism = args.new_diffeomorphism
+    cycle              = args.cycle
+    ants_cores         = args.ants_cores
 
     ####################################################################
     # Study
@@ -212,19 +231,32 @@ def call(args):
         print('No study found. Nothing to do.')
         return
 
+    if study.vb is None:
+        print("""
+        You need to provide a template in standard space (for example by
+        either setting a template in the study or by providing a
+        template using --vb-image or --vb-nii).""")
+        return
+
+    study.set_rigids(None)
     study.set_diffeomorphism(new_diffeomorphism)
-    study.set_standard_space('isometric')
+    study.set_standard_space(study.vb.name)
+
+    study.update_layout({'ants_prefix':args.ants_prefix})
 
     ####################################################################
-    # Create iterator
+    # Iterator
     ####################################################################
 
     study_iterator = study.iterate(
             'session',
             'reference_maps',
             'result',
-            'population_map', new=['population_map'],
-            integer_index=True)
+            'population_map',
+            new=['population_map', 'ants_prefix'],
+            lookup=['result'],
+            integer_index=True,
+            verbose=verbose)
 
     df = study_iterator.df.copy()
 
@@ -235,7 +267,7 @@ def call(args):
     ####################################################################
 
     def wm(index, name, session, reference_maps, population_map, result,
-            file_population_map):
+            file_population_map, ants_prefix):
 
         if type(population_map) is Lock:
             if remove_lock or ignore_lock:
@@ -261,7 +293,7 @@ def call(args):
         if verbose:
             print('{}: Lock: {}'.format(name.name(), file_population_map))
 
-        lock = Lock(name, 'fmripop', file_population_map)
+        lock = Lock(name, 'ants4pop', file_population_map)
         df.ix[index, 'locked'] = True
 
         dfile = os.path.dirname(file_population_map)
@@ -271,79 +303,48 @@ def call(args):
         lock.save(file_population_map)
 
         ####################################################################
-        # Create population map from a session instance
+        # Create population map instance from a result instance
         ####################################################################
 
-        if session is None:
-            print('{}: No session found'.format(name.name()))
-            df.ix[index,'valid'] = False
-            lock.conditional_unlock(df, index, verbose)
-            return
+        if diffeomorphism_nb == 'fit':
 
-        if diffeomorphism_nb == 'identity':
-            population_map = pmap_scanner(
-                    session=session,
-                    resolution=resolution,
-                    name=new_diffeomorphism)
-
-            if verbose:
-                if resolution:
-                    print("""{}:
-                    Standard space equals scanner space. Diffeomorphism
-                    equals identity. Resolution is ({} mm)**3.""".format(
-                        name.name(), resolution))
-                else:
-                    print("""{}:
-                    Standard space equals scanner space. Diffeomorphism
-                    equals identity. Resolution is native.""".format(
-                        name.name()))
-
-        ####################################################################
-        # Create population map from a session and reference instance
-        ####################################################################
-
-        elif diffeomorphism_nb == 'scanner':
-            if reference_maps is None:
-                print('{}: No ReferenceMaps found'.format(name.name()))
+            if result is None:
+                print('{}: No Result found'.format(name.name()))
                 df.ix[index,'valid'] = False
                 lock.conditional_unlock(df, index, verbose)
                 return
 
-            if scan_cycle is None:
-                population_map = pmap_scanner(
-                        session=session,
-                        reference_maps = reference_maps,
-                        resolution=resolution,
-                        name=new_diffeomorphism)
+            result.mask()
+            nb = result.get_field('intercept', 'point')
 
-                if verbose:
-                    if resolution:
-                        print("""{}:
-                        Standard space equals scanner space. Diffeomorphism
-                        maps to the average position of the subject in the
-                        scanner. Resolution is ({} mm)**3.""".format(
-                            name.name(), resolution))
-                    else:
-                        print("""{}:
-                        Standard space equals scanner space. Diffeomorphism
-                        maps to the average position of the subject in the
-                        scanner. Resolution is native.""".format(
-                            name.name()))
+        ####################################################################
+        # Create population map instance from a session instance
+        ####################################################################
 
+        elif diffeomorphism_nb == 'scan_cycle':
+
+            if (session is None) or (cycle is None):
+                print('{}: No Session found or CYCLE defined'.format(name.name()))
+                df.ix[index,'valid'] = False
+                lock.conditional_unlock(df, index, verbose)
+                return
+
+            if reference_maps is None:
+                print('{}: No ReferenceMaps found, continue…'.format(name.name()))
+                scan_cycle_to_use = cycle[0]
             else:
                 try:
                     outlying_cycles = reference_maps.outlying_cycles
                 except:
                     if verbose:
-                        print("""{}:
-                        I have found no information
-                        about outlying scan cycles!""".format(name.name()))
+                        print('{}: I have found no information about outlying scan cycles!'.format(
+                            name.name()))
                     outlying_cycles = None
 
                 if outlying_cycles is None:
                     scan_cycle_to_use = cycle[0]
                 else:
-                    if outlying_cycles[scan_cycle].all():
+                    if outlying_cycles[cycle].all():
                         df.ix[index,'valid'] = False
                         print("""{}:
                         All suggested reference cycles have been marked as
@@ -352,73 +353,44 @@ def call(args):
                         reference.""".format(name.name()))
                         lock.conditional_unlock(df, index, verbose, True)
                         return
-                    elif outlying_cycles[scan_cycle].any():
-                        for c, co in zip (scan_cycle, outlying_cycles[scan_cycle]):
+                    elif outlying_cycles[cycle].any():
+                        for c, co in zip (cycle, outlying_cycles[cycle]):
                             if co:
                                 if verbose:
-                                    print("""{}:
-                                    Scan cycle {:d} marked as outlying,
-                                    using fallback.""".format( name.name(), c))
+                                    print("""{}: Cycle {:d} marked as outlying, using fallback.""".format(
+                                        name.name(), c))
                             else:
                                 scan_cycle_to_use = c
                                 break
                     else:
-                        scan_cycle_to_use = scan_cycle[0]
-
-                population_map = pmap_scanner(
-                        session=session,
-                        reference_maps = reference_maps,
-                        scan_cycle = scan_cycle_to_use,
-                        resolution=resolution,
-                        name=new_diffeomorphism)
-
-                population_map.set_nb(Image(
-                    reference=session.reference,
-                    data=session.data[scan_cycle_to_use],
-                    name=session.name.name()+'-{:d}'.format(scan_cycle_to_use)))
-
-                if verbose:
-                    if resolution:
-                        print("""{}:
-                        Standard space equals scanner space,
-                        diffeomorphism maps to subject position during
-                        scan cycle: {:d}. Resolution is ({} mm)**3.""".format(
-                            name.name(), scan_cycle_to_use, resolution))
-                    else:
-                        print("""{}:
-                        Standard space equals scanner space,
-                        diffeomorphism maps to subject position during
-                        scan cycle: {:d}. Resolution is native.""".format(
-                            name.name(), scan_cycle_to_use))
-
-        ####################################################################
-        # Create population map instance from a result instance
-        ####################################################################
-
-        elif (diffeomorphism_nb == 'fit'):
-
-            if result is None:
-                print('{}: No fit found'.format(name.name()))
-                df.ix[index,'valid'] = False
-                lock.conditional_unlock(df, index, verbose)
-                return
-
-            population_map = result.population_map
-            population_map.set_vb(template=result.get_field('intercept', 'point'))
+                        scan_cycle_to_use = cycle[0]
 
             if verbose:
-                print('{}: VB space equals reference space as given by fit'.format(
-                    name.name()))
+                print('{}: NB equals subject position during scan cycle: {:d}'.format(
+                    name.name(), scan_cycle_to_use))
+
+            nb = Image(
+                reference=session.reference,
+                data=session.data[scan_cycle_to_use],
+                name=name.name()+'-{:d}'.format(scan_cycle_to_use))
 
         else:
             print('{}: Diffeomorphism type not supported'.format(name.name()))
+            return
 
-        if verbose > 2:
-            print("""{}:
-                {}
-                {}""".format(name.name(),
-                    population_map.diffeomorphism.describe(),
-                    population_map.describe()))
+        if verbose:
+            print('{}: Fit diffeomorphism'.format(name.name()))
+
+        population_map = fit_population_map(
+                vb_image=study.vb,
+                nb_image=nb,
+                nb_name=name,
+                output_prefix = ants_prefix,
+                name=new_diffeomorphism,
+                j=ants_cores)
+
+        if study.vb_background:
+            population_map.set_vb_background(study.vb_background)
 
         try:
             if verbose:
@@ -435,9 +407,19 @@ def call(args):
             lock.conditional_unlock(df, index, verbose, True)
             return
 
+        if verbose > 2:
+            print("""{}:
+                {}
+                {}""".format(name.name(),
+                    population_map.diffeomorphism.describe(),
+                    population_map.describe()))
+
         return
 
     ####################################################################
+
+    if args.cores == 0:
+        args.cores = None
 
     if len(df) > 1 and ((args.cores is None) or (args.cores > 1)):
         try:
@@ -448,10 +430,10 @@ def call(args):
                 population_map  = instances['population_map']
                 result          = instances['result']
                 file_population_map = files['population_map']
-                wm
+                ants_prefix         = files['ants_prefix']
                 pool.apply_async(wm, args=(index, name, session,
                     reference_maps, population_map, result,
-                    file_population_map))
+                    file_population_map, ants_prefix))
             pool.close()
             pool.join()
         except Exception as e:
@@ -474,8 +456,9 @@ def call(args):
                 population_map  = instances['population_map']
                 result          = instances['result']
                 file_population_map = files['population_map']
+                ants_prefix         = files['ants_prefix']
                 wm(index, name, session, reference_maps, population_map,
-                        result, file_population_map)
+                        result, file_population_map, ants_prefix)
         finally:
             files = df.ix[df.locked, 'population_map'].values
             if len(files) > 0:
