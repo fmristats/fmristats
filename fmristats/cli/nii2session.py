@@ -46,13 +46,17 @@ def define_parser():
         """Setup of a two-block stimulus design""")
 
     specific.add_argument('--nii',
-        default='../raw/nii/{paradigm}/{cohort}-{id:04d}-{paradigm}-{date}.nii',
-        help="""The file should contain a 4D-image of a fMRI session in
-        any file format understood by the NiBabel project, e.g, any of
-        ANALYZE (plain, SPM99, SPM2 and later), GIFTI, NIfTI1, NIfTI2,
-        MINC1, MINC2, MGH and ECAT as well as Philips PAR/REC.  For more
-        details see http://nipy.org/nibabel/.  Please note that
-        fmristats has only been tested with Nifti1 files.""")
+        default='{cohort}-{id:04d}-{paradigm}-{date}.nii',
+        help="""Path to a file that should contain a 4D-image of a fMRI
+        session in any file format understood by the NiBabel project,
+        e.g, any of ANALYZE (plain, SPM99, SPM2 and later), GIFTI,
+        NIfTI1, NIfTI2, MINC1, MINC2, MGH and ECAT as well as Philips
+        PAR/REC.  For more details see http://nipy.org/nibabel/.  Please
+        note that fmristats has only been tested with Nifti1 files.""")
+
+    specific.add_argument('--nii-prefix',
+        default='raw/nii/{paradigm}',
+        help = """Prefix for the path in --nii.""")
 
     foreground_handling = specific.add_mutually_exclusive_group()
 
@@ -65,9 +69,13 @@ def define_parser():
         help="""Set the foreground to the image in FOREGROUND""")
 
     specific.add_argument('--foreground',
-        default='../raw/foreground/{cohort}-{id:04d}-{paradigm}-{date}-foreground.nii.gz',
+        default='{cohort}-{id:04d}-{paradigm}-{date}-foreground.nii.gz',
         help="""A 4D-image that contains a mask for the foreground in
-        the FMRI""")
+        the FMRI.""")
+
+    specific.add_argument('--foreground-prefix',
+        default='raw/foreground/{cohort}',
+        help="""Prefix for the path in --foreground.""")
 
     ####################################################################
     # File handling
@@ -208,8 +216,8 @@ def call(args):
         return
 
     study.update_layout({
-        'nii' : args.nii,
-        'foreground' : args.foreground,
+        'nii' : join(args.nii_prefix, args.nii),
+        'foreground' : join(args.foreground_prefix, args.foreground),
         })
 
     if not 'epi' in study.protocol.columns:

@@ -46,8 +46,12 @@ def define_parser():
         """Setup of a two-block stimulus design""")
 
     specific.add_argument('--mat',
-        default='../raw/mat/{paradigm}/{cohort}-{id:04d}-{paradigm}-{date}.mat',
-        help = """A Matlab coded stimulus design""")
+        default='{cohort}-{id:04d}-{paradigm}-{date}.mat',
+        help = """Path to Matlab coded stimulus designs.""")
+
+    specific.add_argument('--mat-prefix',
+        default='raw/mat/{paradigm}',
+        help = """Prefix for the path to Matlab coded stimulus designs.""")
 
     ####################################################################
     # File handling
@@ -190,7 +194,7 @@ def call(args):
     # Iterator
     ####################################################################
 
-    study.update_layout({'mat':args.mat})
+    study.update_layout({'mat':join(args.mat_prefix, args.mat)})
 
     study_iterator = study.iterate('stimulus',
             new=['stimulus', 'mat'],
