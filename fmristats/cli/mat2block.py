@@ -21,6 +21,23 @@
 
 Create a block stimulus instances from MATLAB coded logfiles
 
+From: 8.3 Factorial Design - `Multiple Conditions`_ (Page 65):
+
+    »If you have multiple conditions then entering the details a
+    condition at a time is very inefficient. This option can be used to
+    load all the required information in one go.
+
+    You will need to create a *.mat file containing the relevant
+    information. This *.mat file must include the following cell arrays:
+    names, onsets and durations eg. names{2}=’SSent-DSpeak’,
+    onsets{2}=[3 5 19 222], durations{2}=[0 0 0 0] contain the required
+    details of the second condition. These cell arrays may be made
+    available by your stimulus delivery program eg. COGENT. The duration
+    vectors can contain a single entry if the durations are identical
+    for all events.«
+
+.. _`Multiple Conditions`: http://www.fil.ion.ucl.ac.uk/spm/doc/manual.pdf
+
 """
 
 ########################################################################
