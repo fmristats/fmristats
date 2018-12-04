@@ -265,9 +265,12 @@ def fit_nb(result, coordinates, to_fit, data, design, r, s):
             weights = np.exp(squared_distances[valid] / s)
             endog   = data[valid][...,3]
             exog    = design[valid]
-            params, mse, degrees_of_freedom, bse = penrose_fit(endog, exog, weights)
-            result[i,0]   = params
-            result[i,1]   = bse
-            result[i,2]   = params / bse
-            result[i,3,0] = mse
-            result[i,3,1] = degrees_of_freedom
+            n = exog.shape[0]
+            p = exog.shape[1]
+            if (p < n-1) and (np.linalg.matrix_rank(exog) == p):
+                params, mse, degrees_of_freedom, bse = penrose_fit(endog, exog, weights)
+                result[i,0]   = params
+                result[i,1]   = bse
+                result[i,2]   = params / bse
+                result[i,3,0] = mse
+                result[i,3,1] = degrees_of_freedom
