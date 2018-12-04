@@ -616,10 +616,15 @@ def get_study(args):
         return
 
     if args.protocol_query:
-        study.query(args.protocol_query, inplace=True)
+        study.protocol = study.protocol.query(args.protocol_query).copy()
 
     if args.covariates_query:
-        study.query(args.covariates_query, inplace=True)
+        if study.covariates is not None:
+            study.covariates = study.covariates.query(args.covariates_query).copy()
+            if len(study.covariates) < 1:
+                return
+        else:
+            return
 
     if (study.protocol is None) or (len(study.protocol) < 1):
         return
