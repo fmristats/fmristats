@@ -68,6 +68,19 @@ def define_parser():
         default=0,
         help="""Increase output verbosity""")
 
+    ####################################################################
+    # Push
+    ####################################################################
+
+    control_push  = parser.add_argument_group(
+        """Control whether to save the modified (thus overwrite the
+        existing) study instance.""")
+
+    control_push.add_argument('-p', '--push',
+        action='store_true',
+        help="""Will save the modified (and thus overwrite the existing)
+        study instance.""")
+
     return parser
 
 from .fmristudy import add_study_arguments
@@ -218,19 +231,6 @@ def call(args):
     df = study_iterator.df.copy()
     del df['result']
 
-    # TODO: Delete print statement
-    print(df)
-
-    # TODO: Don't need this!
-    # if study.covariates is not None:
-    #     df = (df.join(up, on=['cohort', 'id'], lsuffix='_')
-    #             .assign(valid=lambda x: x.valid.fillna(False))
-    #             .assign(valid=lambda x: x.valid & x.valid_)
-    #             .drop('valid_', axis=1))
-
-    # # TODO: Delete print statement
-    # print(df)
-
     sample = Sample(
             covariates = df,
             statistics = statistics,
@@ -246,7 +246,7 @@ def call(args):
 
     try:
         if verbose:
-            print('{}: Save: {}'.format(name.name(), sample_file))
+            print('Save: {}'.format(sample_file))
 
         dfile = os.path.dirname(sample_file)
         if dfile and not isdir(dfile):
@@ -270,3 +270,8 @@ def call(args):
            os.makedirs(dfile)
 
         study.save(args.out)
+
+    if args.push:
+        if args.verbose:
+            print('Save: {}'.format(args.study))
+        study.save(args.study)
