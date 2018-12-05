@@ -151,7 +151,9 @@ def call(args):
 
         if hasattr(result.population_map, 'vb_mask') and not force:
             print("""{}:
-            VB mask already present, force overwrite with --force""".format(
+            VB mask already present, use
+            -f/--force-mask-overwrite
+            to overwrite existing mask""".format(
                 name.name()))
             return
 
@@ -197,6 +199,9 @@ def call(args):
                 filename, e))
 
     ###################################################################
+
+    if args.cores == 0:
+        args.cores = None
 
     if len(df) > 1 and ((args.cores is None) or (args.cores > 1)):
         try:
