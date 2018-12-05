@@ -65,7 +65,7 @@ def define_parser():
     parser.add_argument('-v', '--verbose',
             action='count',
             default=0,
-            help=hp.verbose)
+            help="""Increase verbosity""")
 
     return parser
 
@@ -86,7 +86,7 @@ from .. import load
 
 from ..diffeomorphisms import Image
 
-from ..ati import fit_field, extract_field
+from ..fit import fit_field, extract_field
 
 import pandas as pd
 
@@ -108,51 +108,50 @@ def call(args):
     else:
         name = img.name
 
-    if not args.ignore_mask:
-        img.mask()
-
     coordinates = img.coordinates()
     coordinates.shape
 
-    if args.ignore_mask:
-        mask = None
-    else:
+    if not args.ignore_mask:
+        img.mask()
         mask = img.get_mask()
+    else:
+        mask = None
 
-    endog = img.data.ravel()
-    exog  = np.ones_like(endog).reshape((-1,1))
-    agc   = coordinates.reshape((-1,3))
+    coord  = coordinates.reshape((-1,3))
+    greys  = img.data.reshape((-1,))[...,None]
+    data   = np.hstack((coord, greys))
+    design = np.ones_like(greys)
 
     old_settings = np.seterr(divide='raise', invalid='raise')
     time0 = time.time()
 
-    statistics, parameter_dict, value_dict = fit_field(
-            coordinates   = coordinates,
-            mask          = mask,
-            endog         = endog,
-            exog          = exog,
-            agc           = agc,
-            scale         = args.scale,
-            radius        = args.factor*args.scale,
-            verbose       = args.verbose,
-            name          = img.name)
+    result, parameter_dict, value_dict = fit_field(
+            coordinates,
+            mask,
+            data,
+            design,
+            epi_code=1,
+            scale=args.scale,
+            radius=args.factor * args.scale,
+            verbose=args.verbose,
+            backend='numba')
 
     time1 = time.time()
     np.seterr(**old_settings)
 
     field = extract_field(
-            field=statistics,
+            field=result,
             param='intercept',
             value='point',
             parameter_dict={'intercept':0},
             value_dict=value_dict)
 
-    result = Image(reference=img.reference, data=field, name=name)
-    result.save(args.output)
+    ati = Image(reference=img.reference, data=field, name=name)
+    ati.save(args.output)
 
     if args.verbose:
         time_spend = time1 - time0
         print('{}: Time needed for the fit: {:.2f} min'.format(
-            result.name, time_spend / 60))
+            ati.name, time_spend / 60))
         print('{}: Time needed for the fit: {:.2f} h'  .format(
-            result.name, time_spend / 60**2))
+            ati.name, time_spend / 60**2))
