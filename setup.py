@@ -10,7 +10,7 @@ with open(path.join(here, 'README.rst'), encoding='utf-8') as f:
 
 setup(
     name='fmristats',
-    version='0.0.6',
+    version='0.1.0',
     description='Modelling the data and not the images in FMRI',
     long_description=long_description,
     url='https://fmristats.github.io/',
@@ -22,7 +22,7 @@ setup(
         'Intended Audience :: Science/Research',
         'Topic :: Software Development :: Build Tools',
         'License :: OSI Approved :: GNU General Public License v3 or later (GPLv3+)',
-        'Programming Language :: Python :: 3.5',
+        'Programming Language :: Python :: 3.7',
     ],
     keywords='fmri neuroimaging neuroscience statistics',
     packages=find_packages(exclude=['contrib', 'docs', 'tests*']),
