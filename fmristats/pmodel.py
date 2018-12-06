@@ -46,11 +46,11 @@ class PopulationModel:
     Parameters
     ----------
     sample : Sample
-    formula_like : str
+    formula : str
         A formula like object that is understood by patsy.
-    exog : ndarray
-        If None, will be created from formula_like
-        Directly specifying a design matrix, i.e., providing exog
+    design : ndarray
+        If None, will be created from formula
+        Directly specifying a design matrix, i.e., providing design
         will take precedence from the formula interface.
     mask : None, bool, ndarray, or str
         If False or None, the population model will be fitted only
@@ -63,28 +63,37 @@ class PopulationModel:
         summary statistics for *all* fields in the sample.
     """
 
-    def __init__(self, sample, formula_like=None, exog=None, mask=True):
+    def __init__(self, sample, formula=None, design=None):
         assert type(sample) is Sample, 'sample must be of type Sample'
 
         self.sample     = sample
         self.covariates = sample.covariates
         self.statistics = sample.statistics
 
-        if (formula_like is not None) and (exog is None):
-            exog = np.asarray(dmatrix(
-                formula_like=formula_like,
-                data=self.covariates))
+        if (formula is not None) and (design is None):
+            dmat = dmatrix(formula, self.covariates, eval_env=-1)
+            parameter_names = dmat.design_info.column_names
+            design = np.asarray(dmat)
+        else:
+            parameter_names = ['Intercept']
 
-        datamask = Image(
-            self.sample.vb.reference,
-            np.isfinite(self.sample.statistics).all(axis=-2).sum(axis=-1))
+        self.formula = formula
+        self.parameter_names = parameter_names
+        self.design = design
 
-        datamask.mask()
+    def fit(self, mask=True):
+        """
+        Fit the model to the data
 
-        datamask = datamask.get_mask()
-
+        Returns
+        -------
+        PopulationResult
+        """
         if mask is True:
             mask = 'vb'
+
+        if mask is False:
+            mask = None
 
         if type(mask) is str:
             if mask == 'vb':
@@ -97,36 +106,22 @@ class PopulationModel:
                 mask = self.sample.vb_estimate.get_mask()
                 maskname = 'template estimate (vb_estimate)'
             else:
-                mask = datamask
-                maskname = 'data mask (foreground/background)'
-
-        assert mask.any(), 'mask is empty, i.e., there exist no valid pixels in this mask'
+                mask = None
+                maskname = 'default'
 
         if mask is not None:
             assert type(mask) is np.ndarray, 'mask must be an ndarray'
+            assert mask.any(), 'no valid points in mask'
             assert mask.dtype == bool, 'mask must be of dtype bool'
-            assert mask.shape == datamask.shape, 'shape of mask and image must match'
-            mask = mask & datamask
 
-        self.formula_like = formula_like
-        self.exog = exog
         self.mask = mask
 
-    def fit(self):
-        """
-        Fit the model to the data
+        result = fit_field(
+                statistics=self.statistics,
+                design=self.design,
+                mask=mask)
 
-        Returns
-        -------
-        PopulationResult
-        """
-        statistics, p, parameter_names = fit_field(
-                obs=self.statistics,
-                design=self.exog,
-                mask=self.mask)
-
-        return PopulationResult(statistics=statistics, model=self, p=p,
-                parameter_names=parameter_names)
+        return PopulationResult(statistics=result, model=self)
 
     ####################################################################
     # Save instance to and from disk
@@ -148,11 +143,10 @@ class PopulationModel:
 
 class PopulationResult:
 
-    def __init__(self, statistics, model, p, parameter_names):
+    def __init__(self, statistics, model):
         self.statistics = statistics
         self.model      = model
-        self.p          = p
-        self.parameter_names = parameter_names
+        self.parameter_names = model.parameter_names
 
     def get_parameter(self, p=0):
         f = np.moveaxis(self.statistics[...,0,:-1], -1, 0)
@@ -174,14 +168,14 @@ class PopulationResult:
         # TODO: also add a stderr to the h-estimate (Knapp-Hartung!)
 
         x  = self.statistics[index]
-        tstatistics = x[2,:self.p]
+        tstatistics = x[2,:-1]
         df = x[1,-1]
         pvalues = t.sf(tstatistics, df=df)
 
         df = pd.DataFrame({
             'parameter' : self.parameter_names + ['heterogeneity'],
             'point'     : x[0],
-            'stderr'    : np.hstack((x[1,:self.p], np.nan)),
+            'stderr'    : np.hstack((x[1,:-1], np.nan)),
             'tstatistic': np.hstack((tstatistics, np.nan)),
             'df'        : df,
             'pvalue'    : np.hstack((pvalues,np.nan))})

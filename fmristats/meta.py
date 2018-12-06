@@ -87,6 +87,7 @@ def hedge_type_estimator(y, d, x):
     λ : float
         The estimated heterogeneity.
     """
+    # TODO: do this with MP-pseudo inverse instead
     H  = x.dot(solve(x.T.dot(x), x.T))
     E  = np.eye(x.shape[0]) - H
     resid_df = -np.diff(x.shape)
@@ -177,36 +178,46 @@ def meta_regression(y, d, x):
     t   = b / adj_stderr
     return b, t, h, adj_stderr, rdf
 
-def fit_field(obs, design=None, mask=None):
+def fit_field(statistics, design=None, mask=None):
     """
     Random effect meta regression
 
     Will regress each point of an effect and certainty field onto the
     covariates in x using a random effects meta regression model
 
+    In the following, k is the number of subjects and p the number of
+    regression parameters in the meta regression model.
+
     Parameters
     ----------
-    obs : ndarray, shape (x,y,z,3,n)
-        The observations.
+    statistics : ndarray, shape (x,y,z,3,k)
+        The observations. In 0: BOLD effect, 1: BOLD stderr, 2: NA
     mask : ndarray, shape 3D-image
         A mask where to fit the field
-    x : ndarray, shape (k,p)
-        The covariates.
+    design : ndarray, shape (k,p)
+        The design matrix. If None, a meta analysis will be performed.
 
-    Notes
+    Returns
     -----
-    Results will be written into obs
+    ndarray, shape (x,y,z,3,p+1)
     """
+
+    ###################################################################
+    # Parameter names in the fit
+    ###################################################################
+
     if design is None:
         p  = 1
-        parameter_names = ['intercept']
     else:
         p  = design.shape[1]
-        parameter_names = ['intercept']
 
-    assert obs.shape[-1] > p+1, 'model not identifiable, too many parameters to fit'
+    assert statistics.shape[-1] > p+1, 'model not identifiable, too many parameters to fit'
 
-    sample_size = np.isfinite(obs).all(axis=-2).sum(axis=-1)
+    ###################################################################
+    # Check identifiability and create mask
+    ###################################################################
+
+    sample_size = np.isfinite(statistics).all(axis=-2).sum(axis=-1)
 
     # pixels are 'valid' if there exists enough data such that the meta
     # regression / analysis model is identifiable.
@@ -215,60 +226,94 @@ def fit_field(obs, design=None, mask=None):
     # pixels are 'fully valid' if there are no missing values along the
     # subject axis, i.e, for all subjects in the sample there is an
     # estimate available for this pixel.
-    fully_valid = np.isfinite(obs).all(axis=(-1,-2))
+    fully_valid = np.isfinite(statistics).all(axis=(-1,-2))
     fully_valid = fully_valid & valid
 
     if mask is None:
         mask = valid
         print("  … setting the mask to default.")
     else:
-        assert mask.dtype is np.dtype(bool), 'mask must be of dtype bool or None'
-        assert mask.shape == valid.shape, 'shape of mask does not fit'
+        assert mask.dtype is np.dtype(bool), 'mask must be dtype: bool or None'
+        assert mask.shape == valid.shape, 'shape of mask is wrong'
 
         if (~mask | valid).all():
             print('  … all points in the mask are identifiable.')
         else:
-            print('  … not all points in the mask are identifiable!')
+            print('  … not all points in the mask are identifiable.')
 
         if (~mask | fully_valid).all():
-            print('  … there are no points with missing data along the subject dimension.')
+            print('  … no points with missing data along subject dimension.')
         else:
-            print('  … some points have missing data along the subject dimension.')
+            print('  … points with missing data along subject dimension.')
+        mask = valid & mask
 
-        mask = mask & valid
+    assert mask.any(), 'no identifiable points in the mask'
 
-    print("  … mask has shape: {}".format(mask.shape))
+    ###################################################################
+    # Need the squared standard error of the BOLD estimator
+    ###################################################################
 
-    assert mask.any(), 'model not identifiable, no identifiable points in the mask'
+    stats = statistics.copy()
+    stats[:,:,:,1] **= 2
 
-    res = obs[mask]
-    print("  … number of pixels to be fitted: {}".format(len(res)))
+    ###################################################################
+    # Create result array
+    ###################################################################
 
-    it = iter(res)
+    result = np.zeros(mask.shape + (3, p+1), dtype=float)
+    result[...] = np.nan
+
+    ###################################################################
+    # Reshape result, statistics, and mask
+    ###################################################################
+
+    rresult = result.reshape((-1,result.shape[-2],result.shape[-1]))
+    rstats = stats.reshape((-1,stats.shape[-2],stats.shape[-1]))
+    to_fit  = mask.reshape((-1,))
+
+    print("  … number of points to estimate: {}".format(len(to_fit)))
+
+    ###################################################################
+    # Fit the model
+    ###################################################################
 
     if design is None:
-        print("  … a meta analysis will be performed")
-        for v in it:
-            b, t, h, adj_stderr, r = meta_analysis(y=v[0], d=v[1]**2)
-            v[0,0] = b
-            v[1,0] = adj_stderr
-            v[2,0] = t
-            v[0,1] = h
-            v[1,1] = r
-            v[2,1] = np.nan
+        print("  … perform a meta analysis")
+        fit_meta_analysis(rresult, to_fit, rstats)
     else:
-        print("  … a meta regression will be performed")
-        for v in it:
-            b, t, h, adj_stderr, r = meta_regression(y=v[0], d=v[1]**2, x=design)
-            v[0,:p] = b
-            v[1,:p] = adj_stderr
-            v[2,:p] = t
-            v[0,p]  = h
-            v[1,p]  = r
-            v[2,p]  = np.nan
+        print("  … perform a meta regression")
+        fit_meta_regression(rresult, to_fit, rstats, design)
 
-    result = np.zeros(mask.shape + (3,p+1,))
-    result[...] = np.nan
-    result[mask] = res[...,:p+1]
+    return result
 
-    return result, p, parameter_names
+###################################################################
+# Backends
+###################################################################
+
+def fit_meta_analysis(result, to_fit, statistics):
+    for i in range(result.shape[0]):
+        if to_fit[i]:
+            b, t, h, adj_stderr, r = meta_analysis(
+                    y = statistics[i,0][np.where(np.isfinite(statistics[i,0]))],
+                    d = statistics[i,1][np.where(np.isfinite(statistics[i,1]))])
+            result[i,0,0] = b
+            result[i,1,0] = adj_stderr
+            result[i,2,0] = t
+            result[i,0,1] = h
+            result[i,1,1] = r
+            result[i,2,1] = 0
+
+def fit_meta_regression(result, to_fit, statistics, design):
+    for i in range(result.shape[0]):
+        if to_fit[i]:
+            valid = np.where(np.isfinite(statistics[i,0]))
+            b, t, h, adj_stderr, r = meta_regression(
+                    y = statistics[i,0][valid],
+                    d = statistics[i,1][valid],
+                    x = design[valid])
+            result[i,0,:-1] = b
+            result[i,1,:-1] = adj_stderr
+            result[i,2,:-1] = t
+            result[i,0,-1]  = h
+            result[i,1,-1]  = r
+            result[i,2,-1]  = 0
