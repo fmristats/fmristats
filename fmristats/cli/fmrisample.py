@@ -124,7 +124,7 @@ from ..sample import Sample
 def call(args):
 
     if isfile(args.sample) and not args.force:
-        print('Sample file already exists, use --force to overwrite.')
+        print('Sample file already exists, use -f/--force to overwrite.')
         if args.verbose:
             print('Parse: {}'.format(args.sample))
         sample = load(args.sample)
@@ -186,7 +186,9 @@ def call(args):
     # Create the iterator
     ####################################################################
 
-    study_iterator = study.iterate('result', integer_index=True)
+    study_iterator = study.iterate('result',
+            verbose=args.verbose,
+            integer_index=True)
 
     df = study_iterator.df.copy()
 

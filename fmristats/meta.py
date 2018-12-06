@@ -226,20 +226,20 @@ def fit_field(obs, design=None, mask=None):
         assert mask.shape == valid.shape, 'shape of mask does not fit'
 
         if (~mask | valid).all():
-            print('  … all voxels in the mask are identifiable.')
+            print('  … all points in the mask are identifiable.')
         else:
-            print('  … not all voxels in the mask are identifiable!')
+            print('  … not all points in the mask are identifiable!')
 
         if (~mask | fully_valid).all():
-            print('  … there exist no voxels with missing data along the subject dimension.')
+            print('  … there are no points with missing data along the subject dimension.')
         else:
-            print('  … some voxel have missing data along the subject dimension.')
+            print('  … some points have missing data along the subject dimension.')
 
         mask = mask & valid
 
     print("  … mask has shape: {}".format(mask.shape))
 
-    assert mask.any(), 'model not identifiable, there are no identifiable pixels in this mask'
+    assert mask.any(), 'model not identifiable, no identifiable points in the mask'
 
     res = obs[mask]
     print("  … number of pixels to be fitted: {}".format(len(res)))

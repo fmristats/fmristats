@@ -45,7 +45,7 @@ def load_verbose(f, verbose=False, name=None):
             print('{}: Read {}'.format(name.name(), f))
         return instance
     except Exception as e:
-        if verbose > 1:
+        if verbose > 2:
             print('{}: Unable to read {}, {}'.format(name.name(), f, e))
         return None
 
