@@ -104,20 +104,24 @@ class SignalModel:
     def set_hyperparameters(self, scale_type='max', factor=3,
             scale=None, mass=None):
         """
-        Set up hyperparameters for field estimation
+        Set the hyperparameter for MB estimation
 
-        All parameters which control details the effect field estimation
-        and which are not per se sample design specific are called
-        Hyperparameters.
+        Set the width of the spatial weighting scheme for MB
+        estimation.
 
         Parameters
         ----------
         scale_type : str
             One of min, max (default), diagonal
-        scale : float
+        scale : None or float
             Standard deviation of the Gaussian used to weight
             observations with respect to distance to point.
-        mass : float (optional)
+        factor : float
+            Controls the centre mass of the Gaussian used to weight
+            observations with respect to distance to point.
+        mass : None or float (optional)
+            Centre mass of the Gaussian used to weight
+            observations with respect to distance to point.
 
         Notes
         -----
@@ -144,7 +148,7 @@ class SignalModel:
             self.scale = scale
 
         if factor is not None:
-            assert factor > 0, 'factor must be strictly positve'
+            assert factor > 0, 'factor must be strictly positive'
             self.factor = factor
             self.radius = factor * self.scale
             self.mass   = dist.norm.cdf(factor) - dist.norm.cdf(-factor)
@@ -199,6 +203,9 @@ class SignalModel:
         return coordinates
 
     def set_stimulus_design(self, **kwargs):
+        """
+        Create and set the stimulus design of the session
+        """
         self.stimulus_design = self.stimulus.design(
                 slice_timing=self.slice_timing, **kwargs)
         return self.stimulus_design
@@ -339,7 +346,7 @@ class SignalModel:
                 self.name.name(), valid.sum(), (~valid).sum()))
 
     def set_design(self, formula='C(task)/C(block, Sum)',
-            parameter=['intercept', 'task'], verbose=True):
+            parameter=['intercept', 'task']):
         """
         Create the design matrix
 
@@ -412,7 +419,7 @@ class SignalModel:
         return self.data_at_subject_coordinate(x)
 
     def model_at_subject_coordinate(self, x,
-            formula='signal~C(task)/C(block, Sum)', also_return_data=False):
+            formula='signal~C(task)/C(block, Sum)'):
         """
         Fit the signal model to data at specified coordinates given
         with respect to the coordinate system of the subject reference
@@ -424,11 +431,6 @@ class SignalModel:
             The coordinates at which to fit the model
         formula : str
             A formula.
-        also_return_data : bool
-            If the formula does not contain time, the design matrix
-            (design) will not contain time as a covariate. If
-            also_return_data is True, this will also return the data
-            matrix.
         """
         assert hasattr(self, 'scale'), 'first set hyperparameters'
         assert hasattr(self, 'radius'), 'first set hyperparameters'
@@ -479,11 +481,6 @@ class SignalModel:
             The coordinates at which to fit the model
         formula : str
             A formula.
-        also_return_data : bool
-            If the formula does not contain time, the design matrix
-            (design) will not contain time as a covariate. If
-            also_return_data is True, this will also return the data
-            matrix.
         """
         assert hasattr(self, 'scale'), 'first set hyperparameters'
         assert hasattr(self, 'radius'), 'first set hyperparameters'
@@ -602,7 +599,7 @@ class SignalModel:
         elif type(mask) is str:
             if mask == 'vb':
                 mask = self.population_map.vb.get_mask()
-                massname = 'template (vb)'
+                maskname = 'template (vb)'
             elif mask == 'vb_background':
                 mask = self.population_map.vb_background.get_mask()
                 maskname = 'template background (vb_background)'
@@ -757,8 +754,14 @@ class SignalModel:
                     'radius':self.radius,
                     }
         else:
-            print('Hyperparameters not set')
-            return
+            print('Hyperparameters not set!')
+            return {
+                    'scale_type': None,
+                    'scale': None,
+                    'factor': None,
+                    'mass': None,
+                    'radius': None,
+                    }
 
     def describe(self):
         description = """
@@ -950,7 +953,7 @@ class Result:
         elif type(mask) is str:
             if mask == 'vb':
                 mask = self.population_map.vb.get_mask()
-                massname = 'template (vb)'
+                maskname = 'template (vb)'
             elif mask == 'vb_background':
                 mask = self.population_map.vb_background.get_mask()
                 maskname = 'template background (vb_background)'

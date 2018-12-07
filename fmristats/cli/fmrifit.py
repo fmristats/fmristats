@@ -527,12 +527,9 @@ def call(args):
                 factor=factor,
                 mass=mass)
 
-        smodel.set_data(burn_in=burn_in, verbose=verbose)
+        smodel.set_data(burn_in = burn_in, verbose = verbose)
 
-        smodel.set_design(
-                formula=formula,
-                parameter=parameter,
-                verbose=verbose)
+        smodel.set_design(formula = formula, parameter = parameter)
 
         if verbose > 2:
             print("""{}: {}""".format(name.name(), smodel.describe()))
