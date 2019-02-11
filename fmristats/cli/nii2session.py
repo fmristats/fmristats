@@ -55,7 +55,8 @@ def define_parser():
         note that fmristats has only been tested with Nifti1 files.""")
 
     specific.add_argument('--nii-prefix',
-        default='raw/nii/{paradigm}',
+        #default='raw/nii/{paradigm}',
+        default='',
         help = """Prefix for the path in --nii.""")
 
     foreground_handling = specific.add_mutually_exclusive_group()

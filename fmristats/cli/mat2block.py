@@ -67,7 +67,8 @@ def define_parser():
         help = """Path to Matlab coded stimulus designs.""")
 
     specific.add_argument('--mat-prefix',
-        default='raw/mat/{paradigm}',
+        #default='raw/mat/{paradigm}',
+        default='',
         help = """Prefix for the path to Matlab coded stimulus designs.""")
 
     ####################################################################
