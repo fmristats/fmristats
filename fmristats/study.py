@@ -38,7 +38,7 @@ from os.path import isfile, isdir, join
 
 import pickle
 
-def load_verbose(f, verbose=False, name=None):
+def load_verbose(f, verbose=0, name=None):
     try:
         instance = load(f)
         if verbose:
@@ -50,7 +50,7 @@ def load_verbose(f, verbose=False, name=None):
         return None
 
 class StudyIterator:
-    def __init__(self, df, keys, new=None, verbose=True,
+    def __init__(self, df, keys, new=None, verbose=0,
             integer_index=False):
         assert type(df) is DataFrame, 'df must be DataFrame'
 
@@ -311,7 +311,7 @@ class Study:
 
     def iterate(self, *keys, new=None, lookup=None, vb_name=None,
             diffeomorphism_name=None, rigids_name=None,
-            integer_index=False, verbose=True):
+            integer_index=False, verbose=0):
         """
         If covariates in not None, then only subjects in the protocol are
         going to be processed which are also marked as valid in the

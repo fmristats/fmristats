@@ -435,7 +435,7 @@ def pmap_scanner(session, reference_maps=None, scan_cycle=None,
 
     Sets the standard space equal to the coordinate system of the
     scanner and the diffeomorphism from standard space to subject
-    reference space to different rigid body transformation.
+    reference space to different rigid body transformations.
 
     Parameters
     ----------

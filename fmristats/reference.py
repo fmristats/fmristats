@@ -304,13 +304,14 @@ class ReferenceMaps:
         # 3. Use as the reference distribution for grubbs only scans
         #    within blocks of stimulus
 
-        # Look at the length of the semi axis norms
-        w0 = self.semi_axis_norms[...,0]
-        w1 = self.semi_axis_norms[...,1]
-        w2 = self.semi_axis_norms[...,2]
-        _, args0 = grubbs(w0, sgnf)
-        _, args1 = grubbs(w1, sgnf)
-        _, args2 = grubbs(w2, sgnf)
+        if hasattr(self, 'semi_axis_norms'):
+            # Look at the length of the semi axis norms
+            w0 = self.semi_axis_norms[...,0]
+            w1 = self.semi_axis_norms[...,1]
+            w2 = self.semi_axis_norms[...,2]
+            _, args0 = grubbs(w0, sgnf)
+            _, args1 = grubbs(w1, sgnf)
+            _, args2 = grubbs(w2, sgnf)
 
         # Look at the bary centres of the scan cycles
         x0 = self.acquisition_maps.affines[:,0,3]
@@ -328,14 +329,19 @@ class ReferenceMaps:
         _, args7 = grubbs(euler[1], sgnf)
         _, args8 = grubbs(euler[2], sgnf)
 
-        outlying = np.vstack((
-            args0, args1, args2,
-            args3, args4, args5,
-            args6, args7, args8))
+        if hasattr(self, 'semi_axis_norms'):
+            outlying = np.vstack((
+                args0, args1, args2,
+                args3, args4, args5,
+                args6, args7, args8))
+        else:
+            outlying = np.vstack((
+                args3, args4, args5,
+                args6, args7, args8))
 
-        self.outlying = outlying
+        #self.outlying = outlying
 
-        self.outlying_cycles = self.outlying.any(axis=0)
+        self.outlying_cycles = outlying.any(axis=0)
 
         self.outlying_scans = np.repeat(
                 self.outlying_cycles,

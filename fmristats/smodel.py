@@ -70,10 +70,13 @@ class SignalModel:
     population_map : PopulationMap
         A population map
     """
-    def __init__(self, session, reference_maps, population_map):
+    def __init__(self, session, reference_maps, population_map,
+            formula='C(task)/C(block, Sum)', parameter=['intercept', 'task']):
         assert type(session) is Session, 'session must be of type Session'
-        assert type(reference_maps) is ReferenceMaps, 'reference_maps must be of type ReferenceMaps'
-        assert type(population_map) is PopulationMap, 'population_map must be of type PopulationMap'
+        assert type(reference_maps) is ReferenceMaps, \
+                'reference_maps must be of type ReferenceMaps'
+        assert type(population_map) is PopulationMap, \
+                'population_map must be of type PopulationMap'
 
         self.session = session
         self.stimulus = session.stimulus
@@ -91,11 +94,24 @@ class SignalModel:
         # The references defined here are the affine maps that map from
         # the *index space* of the Session to the subject reference
         # space defined by the acquisition maps in the ReferenceMaps.
-
-        self.references = reference_maps.acquisition_maps.dot(session.reference)
-
+        #
         # TODO: when having added the option: --reference-maps None,
         # replace this with something reasonable
+        self.references = reference_maps.acquisition_maps.dot(session.reference)
+
+        # Attributes that are set various other functions below:
+        self.scale = None
+        self.radius = None
+        self.factor = None
+        self.mass = None
+        self.radius = None
+
+        self.formula   = formula
+        self.parameter = parameter
+        self.parameter_dict = None
+
+        self.data = None
+        self.dataframe = None
 
     #######################################################################
     # Set hyperparameters for the fit
@@ -227,7 +243,10 @@ class SignalModel:
             [..., 7] = scan cycle
             [..., 8] = slice number
         """
-        assert hasattr(self, 'stimulus_design'), 'first set the stimulus design'
+        if self.stimulus_design is None:
+            print('first run .set_stimulus_design()')
+            return
+
         n,x,y,z = self.session.data.shape
 
         observations = np.zeros((n,x,y,z,9))
@@ -248,26 +267,28 @@ class SignalModel:
 
         return observations
 
-    def set_data(self, burn_in=4, demean=True, dropna=True,
+    def set_data(self, burn_in=4, demean=False, dropna=True,
             include_background=False, verbose=True):
         """
         Set the observation matrix
 
+        This will set the attributes .observations, .valid, .data, and
+        .dataframe.
+
         Notes
         -----
-
-        The observations will be an array of the following shape:
+        The observations are an array of the following shape:
 
             ndarray, shape (n,x,y,z,9), dtype: float
                 [...,:3] = coordinates of observation
-                [..., 3] = MR signal response
+                [..., 3] = the MR signal response
                 [..., 4] = time of observation
                 [..., 5] = task during time of observation
                 [..., 6] = block number during time of observation
                 [..., 7] = scan cycle
                 [..., 8] = slice number
 
-        The data in this array is the basis of all model fits.
+        The data in this array are the basis of all model fits.
         """
         self.burn_in = burn_in
 
@@ -298,12 +319,19 @@ class SignalModel:
         missings = none | null
         observations[missings] = np.nan
 
-        if dropna:
-            observations[ np.isnan(observations).any(axis=-1) ] = np.nan
-
         # scan cycles that we do not need to process
         if burn_in:
             observations[:burn_in] = np.nan
+
+        # set all observations no NaN that have any missing data OR drop
+        # all observations that only have missing data in the first five
+        # array dimensions (coordinates, signal, and time).
+        if dropna:
+            invalid = np.isnan(observations).any(axis=-1)
+        else:
+            invalid = np.isnan(observations[...,:5]).any(axis=-1)
+
+        observations[ invalid ] = np.nan
 
         # it is more numerically stable to work with a demeaned time
         # vector. This has also the consequence that the intercept will
@@ -318,8 +346,8 @@ class SignalModel:
         valid = np.isfinite(observations).all(axis=-1)
 
         self.observations = observations
+        self.valid = valid
         self.data = observations[valid]
-
         self.dataframe = DataFrame({
             'x'      : self.data[...,0],
             'y'      : self.data[...,1],
@@ -334,36 +362,68 @@ class SignalModel:
         if verbose:
             if demean:
                 print("""{}:
-            Number of within brain observations: {:>10,d}
-            Number of    non brain observations: {:>10,d}
+            Number of within brain & within task observations: {:>10,d}
+            Number of    non brain | non    task observations: {:>10,d}
             Intercept field refers to time:      {:>10.2f} s""".format(
                 self.name.name(), valid.sum(), (~valid).sum(),
                 self.midpoint))
             else:
                 print("""{}:
-            Number of within brain observations: {:>10,d}
-            Number of    non brain observations: {:>10,d}""".format(
+            Number of within brain & within task observations: {:>10,d}
+            Number of    non brain | non    task observations: {:>10,d}""".format(
                 self.name.name(), valid.sum(), (~valid).sum()))
 
-    def set_design(self, formula='C(task)/C(block, Sum)',
-            parameter=['intercept', 'task']):
+        return
+
+    def set_design(self, design=None, formula=None, parameter=None,
+            dmatrix=False):
         """
-        Create the design matrix
+        Set or create the design matrix
+
+        This will set the attribute, and potentially overwrite the
+        attributes .design, .formula, and .parameter_dict
+
+        Parameters
+        ----------
+        design : ndarray, shape (m,n,x,y,z,p) or (m,n,p) or (m,p)
+            Design matrix for the m scan cycles with n scans per cycle
+            on the grid x, y, z with p number of parameters
+        formula : None or str
+            If X is None, this formula will be used to create the design
+            matrix. If formula is None, the default stored in .formula
+            will be used. Otherwise .formula will be overwritten
+        parameter : list(str)
+            A list of parameter names
+        dmatrix : bool
+            If True, return the design matrix
 
         Returns
         -------
-        DesignMatrix
+        None or DesignMatrix
         """
-        assert hasattr(self, 'dataframe'), 'first run .set_data()'
+        if (self.dataframe is None) or (self.data is None):
+            print('dataframe not found: first run .set_data()')
+            return
+
+        if formula is None:
+            formula = self.formula
+
+        if parameter is None:
+            parameter = self.parameter
 
         dmat = dmatrix(formula, self.dataframe, eval_env=-1)
         names = dmat.design_info.column_names
-        parameter_dict = { p : [p in n.lower() for n in names].index(True) for p in parameter}
+        parameter_dict = { p : [p in n.lower() for n in names].index(True)
+                for p in parameter}
 
         self.design  = np.asarray(dmat)
         self.formula = formula
         self.parameter_dict = parameter_dict
-        return dmat
+
+        if dmatrix:
+            return dmat
+        else:
+            return
 
     ####################################################################
     # Fit at one coordinate
@@ -380,9 +440,13 @@ class SignalModel:
         x : ndarray, shape (3,), dtype: float
             The coordinates at which to fit the model
         """
-        assert hasattr(self, 'scale'), 'first set hyperparameters'
-        assert hasattr(self, 'radius'), 'first set hyperparameters'
-        assert hasattr(self, 'data'), 'first set data'
+        if (self.scale is None) or (self.radius is None):
+            print('first run .set_hyperparameters()')
+            return
+
+        if self.data is None:
+            print('first run .set_data()')
+            return
 
         return data_at(coordinate=x,
                 data=self.data,
@@ -432,9 +496,13 @@ class SignalModel:
         formula : str
             A formula.
         """
-        assert hasattr(self, 'scale'), 'first set hyperparameters'
-        assert hasattr(self, 'radius'), 'first set hyperparameters'
-        assert hasattr(self, 'data'), 'first set data'
+        if (self.scale is None) or (self.radius is None):
+            print('first run .set_hyperparameters()')
+            return
+
+        if self.data is None:
+            print('first run .set_data()')
+            return
 
         return model_at(formula=formula,
                 coordinate=x,
@@ -482,9 +550,13 @@ class SignalModel:
         formula : str
             A formula.
         """
-        assert hasattr(self, 'scale'), 'first set hyperparameters'
-        assert hasattr(self, 'radius'), 'first set hyperparameters'
-        assert hasattr(self, 'data'), 'first set data'
+        if (self.scale is None) or (self.radius is None):
+            print('first run .set_hyperparameters()')
+            return
+
+        if self.data is None:
+            print('first run .set_data()')
+            return
 
         return fit_at(formula=formula,
                 coordinate=x,
@@ -639,27 +711,16 @@ class SignalModel:
         -------
         Result
         """
-        if not hasattr(self, 'scale'):
-            if verbose:
-                print('{}! Set hyperparameters to default'.format(self.name.name()))
-            self.set_hyperparameters()
+        if (self.scale is None) or (self.radius is None):
+            print('first run .set_hyperparameters()')
+            return
 
-        if not hasattr(self, 'radius'):
-            if verbose:
-                print('{}! Set hyperparameters to default'.format(self.name.name()))
-            self.set_hyperparameters()
-
-        if not hasattr(self, 'observations'):
+        if (self.data is None) or (self.observations is None):
             if verbose:
                 print('{}! Set observations to default'.format(self.name.name()))
             self.set_data()
 
-        if not hasattr(self, 'data'):
-            if verbose:
-                print('{}! Set design to default'.format(self.name.name()))
-            self.set_design()
-
-        if not hasattr(self, 'design'):
+        if self.design is None:
             if verbose:
                 print('{}! Set design to default'.format(self.name.name()))
             self.set_design()
@@ -745,23 +806,13 @@ class SignalModel:
     ###################################################################
 
     def hyperparameters(self):
-        if hasattr(self, 'scale_type'):
-            return {
-                    'scale_type':self.scale_type,
-                    'scale':self.scale,
-                    'factor':self.factor,
-                    'mass':self.mass,
-                    'radius':self.radius,
-                    }
-        else:
-            print('Hyperparameters not set!')
-            return {
-                    'scale_type': None,
-                    'scale': None,
-                    'factor': None,
-                    'mass': None,
-                    'radius': None,
-                    }
+        return {
+                'scale_type':self.scale_type,
+                'scale':self.scale,
+                'factor':self.factor,
+                'mass':self.mass,
+                'radius':self.radius,
+                }
 
     def describe(self):
         description = """

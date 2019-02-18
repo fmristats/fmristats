@@ -62,6 +62,17 @@ def define_parser():
         one cycle can be specified, though, and the list will be used as
         fall backs.""")
 
+    specific.add_argument('--transform-type',
+            default='s',
+            help="""transform type
+                t: translation
+                r: rigid
+                a: rigid + affine
+                s: rigid + affine + deformable syn (default)
+                sr: rigid + deformable syn
+                b: rigid + affine + deformable b-spline syn
+                br: rigid + deformable b-spline syn""")
+
     specific.add_argument('--new-diffeomorphism',
             default='ants',
             help="""Name to use for the fitted diffeomorphisms.""")
@@ -220,6 +231,7 @@ def call(args):
     new_diffeomorphism = args.new_diffeomorphism
     cycle              = args.cycle
     ants_cores         = args.ants_cores
+    transform_type     = args.transform_type
 
     ####################################################################
     # Study
@@ -387,6 +399,7 @@ def call(args):
                 nb_name=name,
                 output_prefix = ants_prefix,
                 name=new_diffeomorphism,
+                transform_type = transform_type,
                 j=ants_cores)
 
         if study.vb_background:

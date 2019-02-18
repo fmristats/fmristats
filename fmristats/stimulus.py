@@ -117,24 +117,29 @@ class Block(Stimulus):
 
         return df
 
-    def design(self, slice_timing, s, c, offset=0, preset=0):
+    def design(self, slice_timing, s, c, offset=0, preset=0,
+            baseline=None):
         """
         Defines the stimulus design vector
 
         Parameters
         ----------
         slice_timing : ndarray, shape (n,) or (n,m)
-            times at which slices have been measured during the
+            Times at which slices have been measured during the
             experiment.  First dimension must be the same as the number
             of full scans
         s : str
-            stimulus block of interest
+            Stimulus block of interest
         c : str
-            name of the control block to be used
+            Name of the control block to be used
         offset : float
-            offset to apply at the beginning of an stimulus phase
+            Offset to apply at the beginning of an stimulus phase
         preset : float
-            offset to apply at the end of an stimulus phase
+            Offset to apply at the end of an stimulus phase
+        baseline : bool
+            By default phases of non-stimulus in the design are set to
+            NaN. If baseline is True, the these will be set to -1
+            instead.
 
         Returns
         -------
@@ -147,8 +152,11 @@ class Block(Stimulus):
         assert s in self.names, 'name of stimulus block: {} does not exist'.format(s)
         assert c in self.names, 'name of control block: {} does not exist'.format(c)
 
+        if baseline is None:
+            baseline = np.nan
+
         design = np.empty(slice_timing.shape + (2,) )
-        design[...] = np.nan
+        design[...] = baseline
 
         onsets = self.onsets[c]
         durations = self.durations[c]
@@ -181,9 +189,9 @@ class Block(Stimulus):
     def number_of_onsets(self):
         return {name : len(self.onsets[name]) for name in self.names}
 
-    def irritated_scans(self, slice_time, offset=0, preset=0):
+    def stimulated_scans(self, slice_time, offset=0, preset=0):
         """
-        Test whether blocks have been aquired during blocks of stimulus
+        Test whether a scan has been measured during a task block
 
         Parameters
         ----------
@@ -192,7 +200,7 @@ class Block(Stimulus):
         Returns
         -------
         ndarray, shape_like(slice_time), dtype: bool
-            If True, this scan has been aquired during a block of subject
+            If True, this scan has been acquired during a block of subject
             stimulus.
         """
         onsets = self.onsets.items()
@@ -201,11 +209,11 @@ class Block(Stimulus):
         end = np.hstack([v + irr.durations[k] - preset for k,v in onsets])
         mat = np.vstack((srt, end)).T
 
-        irritated = np.zeros_like(slice_time).astype(bool)
+        stimulated = np.zeros_like(slice_time).astype(bool)
         for x in iter(mat):
-            irritated = irritated | (slice_time > x[0]) & (slice_time < x[1])
+            stimulated = stimulated | (slice_time > x[0]) & (slice_time < x[1])
 
-        return irritated
+        return stimulated
 
     def describe(self):
         """
@@ -215,10 +223,12 @@ class Block(Stimulus):
         Type of stimulus: block design
         Block number: {}
         Block names:  {}
-        Number of onsets per block: {}"""
+        Number of onsets per block: {}
+        Durations:    {}"""
         return description.format(
                 self.number,
                 self.names,
                 self.number_of_onsets(),
+                self.durations
                 )
 

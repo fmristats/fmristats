@@ -277,11 +277,17 @@ class Session:
 
     def describe(self):
         description = """
-        EPI code: {:d}"""
+        EPI code:            {:d}
+        Spatial  resolution: {:.3f}, {:.3f}, {:.3f}
+        Temporal resolution: {:.3f}
+        Acquisition grid:    {}
+        Number of cycles:    {:d}"""
         return description.format(
                 self.epi_code,
-                self.spacial_resolution,
+                *self.spacial_resolution,
                 self.temporal_resolution,
+                self.shape,
+                self.numob
                 )
 
     #######################################################################

@@ -42,7 +42,7 @@ from nipype.interfaces.ants import RegistrationSynQuick, ApplyTransformsToPoints
 from contextlib import contextmanager
 
 def fit_population_map(vb_image, nb_image, nb_name, output_prefix,
-        name='ants', j=4, verbose=True):
+        name='ants', j=4, transform_type='s', verbose=True):
     """
     Fits a diffeomorphism ψ from `vb` (the domain of ψ) to `nb` (the
     image of ψ) using the images `vb_image` and `nb_image` as references
@@ -78,6 +78,8 @@ def fit_population_map(vb_image, nb_image, nb_name, output_prefix,
     reg.inputs.moving_image = nb_file
     reg.inputs.num_threads  = j
     reg.inputs.output_prefix = output_prefix
+
+    reg.inputs.transform_type = transform_type
 
     if verbose:
         print()

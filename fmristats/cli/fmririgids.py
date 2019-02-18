@@ -230,7 +230,8 @@ def call(args):
 
     study_iterator = study.iterate('session', 'reference_maps',
             new=['reference_maps'],
-            integer_index=True)
+            integer_index=True,
+            verbose=args.verbose)
 
     df = study_iterator.df.copy()
 

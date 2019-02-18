@@ -112,7 +112,7 @@ def define_parser():
         study instance.""")
     return parser
 
-from ..api.fmristudy import add_study_arguments
+from ..cli.fmristudy import add_study_arguments
 
 def cmd():
     parser = define_parser()
@@ -282,30 +282,6 @@ def call(args):
         ooo = np.vstack((outlying_cycles, outlying_cycles, outlying_cycles))
 
         #######################################################################
-        # Studenised Semi axis norms
-        #######################################################################
-
-        semi_axis_norms = reference_maps.semi_axis_norms.T
-
-        fig, ax = pt.subplots()
-        qc_plot(
-                semi_axis_norms,
-                ooo, #outlying[:3],
-                slice_times,
-                outlying_cycles,
-                ax, True)
-        ax.set_xlabel('Time (seconds)')
-        ax.set_ylabel('Studenised semi axis length')
-        ax.legend(loc='upper center', bbox_to_anchor=(0.5, 1.15),
-                  ncol=2, fancybox=True, shadow=True)
-        ax.set_ylim((-6,6))
-
-        if verbose:
-            print('{}: Save figure to: {}'.format(name.name(), file1))
-        pt.savefig(file1, dpi=dpi)
-        pt.close()
-
-        #######################################################################
         # Calculate Euler angles for all head movements
         #######################################################################
 
@@ -387,6 +363,33 @@ def call(args):
         if verbose:
             print('{}: Save figure to: {}'.format(name.name(), file5))
         pt.savefig(file5, dpi=dpi)
+        pt.close()
+
+        if not hasattr(reference_maps, 'semi_axis_norms'):
+            return
+
+        #######################################################################
+        # Studenised Semi axis norms
+        #######################################################################
+
+        semi_axis_norms = reference_maps.semi_axis_norms.T
+
+        fig, ax = pt.subplots()
+        qc_plot(
+                semi_axis_norms,
+                ooo, #outlying[:3],
+                slice_times,
+                outlying_cycles,
+                ax, True)
+        ax.set_xlabel('Time (seconds)')
+        ax.set_ylabel('Studenised semi axis length')
+        ax.legend(loc='upper center', bbox_to_anchor=(0.5, 1.15),
+                  ncol=2, fancybox=True, shadow=True)
+        ax.set_ylim((-6,6))
+
+        if verbose:
+            print('{}: Save figure to: {}'.format(name.name(), file1))
+        pt.savefig(file1, dpi=dpi)
         pt.close()
 
     ####################################################################

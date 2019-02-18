@@ -89,12 +89,35 @@ def define_parser():
         default='control',
         help="""Name of the control block""")
 
+    experimental_design.add_argument('--stimulus-background',
+        type=float,
+        help="""By default values in the stimulus background (the blocks
+        in-between the stimuli task blocks) are set to NaN. This has the
+        consequence that observations in the stimulus background are
+        dropped in the analysis. By setting STIMULUS_BACKGROUND to a
+        different value (say -1), you may prevent this. Note that this
+        will have non-trivial consequences on the build of the design
+        matrix. Make sure that you know what you are doing when
+        deviating from the default.""")
+
     experimental_design.add_argument('--acquisition-burn-in',
         default=4,
         type=int,
         help="""Acquisition burn in. Defines the *first* scan cycle that
         should be considered during the fit. Prior scan cycles are
         discarded.""")
+
+    experimental_design.add_argument('--demean',
+        action='store_true',
+        help="""If the formula for your design matrix contains time as a
+        covariate, demeaning the time column may result in more
+        numerically stable results.""")
+
+    experimental_design.add_argument('--include-background',
+        action='store_true',
+        help="""By default only within brain observations will be used
+        during the fit. This will also include the background. You
+        probably don't want to do this option.""")
 
     experimental_design.add_argument('--offset-beginning',
         type=float,
@@ -397,6 +420,8 @@ def call(args):
     window_radius        = args.window_radius
     detect_foreground    = args.detect_foreground
     burn_in              = args.acquisition_burn_in
+    include_background   = args.include_background
+    demean               = args.demean
     formula              = args.formula
     parameter            = args.parameter
 
@@ -497,11 +522,12 @@ def call(args):
         ####################################################################
 
         if verbose:
-            print("""{}:
-            Standard space: {}
-            Diffeomorphism: {}""".format(name.name(),
-                population_map.vb.name,
-                population_map.diffeomorphism.name))
+            if hasattr(population_map, 'vb'):
+                print("""{}:
+                Standard space: {}
+                Diffeomorphism: {}""".format(name.name(),
+                    population_map.vb.name,
+                    population_map.diffeomorphism.name))
 
         ########################################################################
         # Defining the signal model
@@ -527,7 +553,11 @@ def call(args):
                 factor=factor,
                 mass=mass)
 
-        smodel.set_data(burn_in = burn_in, verbose = verbose)
+        smodel.set_data(
+                burn_in = burn_in,
+                demean = demean,
+                include_background = include_background,
+                verbose = verbose)
 
         smodel.set_design(formula = formula, parameter = parameter)
 
