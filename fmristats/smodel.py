@@ -37,7 +37,9 @@ from .pmap import PopulationMap
 
 from .stimulus import Stimulus
 
-from .fit import fit_field, extract_field, model_at, data_at, fit_at
+from .fit import fit_field, extract_field, \
+        fit_at, model_at, data_at, \
+        fit_AT, model_AT, design_AT
 
 import time
 
@@ -343,7 +345,10 @@ class SignalModel:
             self.midpoint = np.nanmean(observations[...,4])
             observations[...,4] = observations[...,4] - self.midpoint
 
-        valid = np.isfinite(observations).all(axis=-1)
+        if dropna:
+            valid = np.isfinite(observations).all(axis=-1)
+        else:
+            valid = np.isfinite(observations[...,:5]).all(axis=-1)
 
         self.observations = observations
         self.valid = valid
@@ -375,13 +380,14 @@ class SignalModel:
 
         return
 
-    def set_design(self, design=None, formula=None, parameter=None,
-            dmatrix=False):
+    def set_design(self, formula=None, parameter=None,
+            return_design_matrix=False):
         """
         Set or create the design matrix
 
-        This will set the attribute, and potentially overwrite the
-        attributes .design, .formula, and .parameter_dict
+        This will set the attribute .design, and it will overwrite the
+        attributes .valid, .data, .dataframe, and potentially .formula,
+        and .parameter_dict.
 
         Parameters
         ----------
@@ -394,16 +400,43 @@ class SignalModel:
             will be used. Otherwise .formula will be overwritten
         parameter : list(str)
             A list of parameter names
-        dmatrix : bool
+        return_design_matrix : bool
             If True, return the design matrix
 
         Returns
         -------
         None or DesignMatrix
         """
-        if (self.dataframe is None) or (self.data is None):
-            print('dataframe not found: first run .set_data()')
-            return
+        observations = self.observations
+        valid = np.isfinite(observations).all(axis=-1)
+
+        self.valid = valid
+        self.data = observations[valid]
+
+        self.dataframe = DataFrame({
+            'x'      : self.data[...,0],
+            'y'      : self.data[...,1],
+            'z'      : self.data[...,2],
+            'signal' : self.data[...,3],
+            'time'   : self.data[...,4],
+            'task'   : self.data[...,5],
+            'block'  : self.data[...,6],
+            'cycle'  : self.data[...,7],
+            'slice'  : self.data[...,8]})
+
+        if verbose:
+            if demean:
+                print("""{}:
+            Number of within brain & within task observations: {:>10,d}
+            Number of    non brain | non    task observations: {:>10,d}
+            Intercept field refers to time:      {:>10.2f} s""".format(
+                self.name.name(), valid.sum(), (~valid).sum(),
+                self.midpoint))
+            else:
+                print("""{}:
+            Number of within brain & within task observations: {:>10,d}
+            Number of    non brain | non    task observations: {:>10,d}""".format(
+                self.name.name(), valid.sum(), (~valid).sum()))
 
         if formula is None:
             formula = self.formula
@@ -420,13 +453,59 @@ class SignalModel:
         self.formula = formula
         self.parameter_dict = parameter_dict
 
-        if dmatrix:
+        if return_design_matrix:
             return dmat
         else:
             return
 
+    def set_design_to(self, design, hasconst, verbose=True):
+        """
+        Set or create the design matrix
+
+        This will set the attribute .design.
+
+        Parameters
+        ----------
+        design : ndarray, shape (m,n,x,y,z,p) or (m,n,p) or (m,p)
+            Design matrix for the m scan cycles with n scans per cycle
+            on the grid x, y, z with p number of parameters
+
+        Returns
+        -------
+        None
+        """
+        assert type(design) is np.ndarray, \
+                'design must be an ndarray'
+
+        assert design.shape[0] == self.session.numob, \
+                'first dimension of design must equal number of scan cycles'
+
+        mat = np.ones(self.observations.shape[:-1] + (design.shape[-1],))
+
+        if len(design.shape) == 2:
+            if verbose:
+                print('Design has one entry per scan cycles')
+            mat[...] = design[:,None,None,None]
+
+        elif len(design.shape) == 3:
+            assert design.shape[1] == self.session.shape [ self.session.ep ], \
+                    'second dimension of design must equal number of scans per cycles'
+            if verbose:
+                print('Design has one entry per scan')
+
+            # TODO: this is not correct, yet!
+            mat[...] = design[:,None,None]
+
+        else:
+            if verbose:
+                print('Design has one entry per acquisition grid voxel')
+            mat[...] = design
+
+        self.design = mat [ self.valid ]
+        self.hasconst = hasconst
+
     ####################################################################
-    # Fit at one coordinate
+    # Fit at one coordinate by formula
     ####################################################################
 
     def data_at_subject_coordinate(self, x):
@@ -482,8 +561,7 @@ class SignalModel:
         x=self.population_map.diffeomorphism.apply(x)
         return self.data_at_subject_coordinate(x)
 
-    def model_at_subject_coordinate(self, x,
-            formula='signal~C(task)/C(block, Sum)'):
+    def model_at_subject_coordinate(self, x, formula=None):
         """
         Fit the signal model to data at specified coordinates given
         with respect to the coordinate system of the subject reference
@@ -503,6 +581,9 @@ class SignalModel:
         if self.data is None:
             print('first run .set_data()')
             return
+
+        if formula is None:
+            formula = 'signal ~ ' + self.formula
 
         return model_at(formula=formula,
                 coordinate=x,
@@ -536,8 +617,7 @@ class SignalModel:
         x=self.population_map.diffeomorphism.apply(x)
         return self.model_at_subject_coordinate(x, **kwargs)
 
-    def fit_at_subject_coordinate(self, x,
-            formula='signal~C(task)/C(block, Sum)'):
+    def fit_at_subject_coordinate(self, x, formula=None):
         """
         Fit the signal model to data at specified coordinates given
         with respect to the coordinate system of the subject reference
@@ -557,6 +637,9 @@ class SignalModel:
         if self.data is None:
             print('first run .set_data()')
             return
+
+        if formula is None:
+            formula = 'signal ~ ' + self.formula
 
         return fit_at(formula=formula,
                 coordinate=x,
@@ -589,6 +672,181 @@ class SignalModel:
         """
         x=self.population_map.diffeomorphism.apply(x)
         return self.fit_at_subject_coordinate(x, **kwargs)
+
+    ####################################################################
+    # Fit at one coordinate by given design matrix
+    ####################################################################
+
+    def design_AT_subject_coordinate(self, x):
+        """
+        Fit the signal model to data at specified coordinates given
+        with respect to the coordinate system of the subject reference
+        space.
+
+        Parameters
+        ----------
+        x : ndarray, shape (3,), dtype: float
+            The coordinates at which to fit the model
+        """
+        if (self.scale is None) or (self.radius is None):
+            print('first run .set_hyperparameters()')
+            return
+
+        if self.data is None:
+            print('first run .set_data()')
+            return
+
+        if self.design is None:
+            print('first set the design using .set_design_to()')
+            return
+
+        return design_AT(coordinate=x,
+                data=self.data,
+                design=self.design,
+                scale=self.scale,
+                radius=self.radius)
+
+    def design_AT_index(self, index):
+        """
+        Fit the signal model to data at specified coordinates given
+        with respect to the coordinate system of the subject reference
+        space.
+
+        Parameters
+        ----------
+        x : ndarray, shape (3,), dtype: float
+            The coordinates at which to fit the model
+        """
+        x=self.population_map.diffeomorphism.apply_to_index(index)
+        return self.design_AT_subject_coordinate(x)
+
+    def design_AT_coordinate(self, x):
+        """
+        Fit the signal model to data at specified coordinates given
+        with respect to the coordinate system of the subject reference
+        space.
+
+        Parameters
+        ----------
+        x : ndarray, shape (3,), dtype: float
+            The coordinates at which to fit the model
+        """
+        x=self.population_map.diffeomorphism.apply(x)
+        return self.data_AT_subject_coordinate(x)
+
+    def model_AT_subject_coordinate(self, x):
+        """
+        Fit the signal model to data at specified coordinates given
+        with respect to the coordinate system of the subject reference
+        space.
+
+        Parameters
+        ----------
+        x : ndarray, shape (3,), dtype: float
+            The coordinates at which to fit the model
+        formula : str
+            A formula.
+        """
+        if (self.scale is None) or (self.radius is None):
+            print('first run .set_hyperparameters()')
+            return
+
+        if self.data is None:
+            print('first run .set_data()')
+            return
+
+        if self.design is None:
+            print('first set the design using .set_design_to()')
+            return
+
+        return model_AT(coordinate=x,
+                data=self.data,
+                design=self.design,
+                scale=self.scale,
+                radius=self.radius,
+                hasconst=self.hasconst)
+
+    def model_AT_index(self, index):
+        """
+        Fit the signal model to data at specified coordinates
+
+        Parameters
+        ----------
+        index : tuple
+            The index at which to fit the model
+        """
+        x=self.population_map.diffeomorphism.apply_to_index(index)
+        return self.model_AT_subject_coordinate(x)
+
+    def model_AT_coordinate(self, x):
+        """
+        Fit the signal model to data at specified coordinates given with
+        respect to the coordinate system of the population space.
+
+        Parameters
+        ----------
+        x : ndarray, shape (3,), dtype: float
+            The coordinates at which to fit the model
+        """
+        x=self.population_map.diffeomorphism.apply(x)
+        return self.model_AT_subject_coordinate(x)
+
+    def fit_AT_subject_coordinate(self, x):
+        """
+        Fit the signal model to data at specified coordinates given
+        with respect to the coordinate system of the subject reference
+        space.
+
+        Parameters
+        ----------
+        x : ndarray, shape (3,), dtype: float
+            The coordinates at which to fit the model
+        formula : str
+            A formula.
+        """
+        if (self.scale is None) or (self.radius is None):
+            print('first run .set_hyperparameters()')
+            return
+
+        if self.data is None:
+            print('first run .set_data()')
+            return
+
+        if self.design is None:
+            print('first set the design using .set_design_to()')
+            return
+
+        return fit_AT(coordinate=x,
+                data=self.data,
+                design=self.design,
+                scale=self.scale,
+                radius=self.radius,
+                hasconst=self.hasconst)
+
+    def fit_AT_index(self, index, **kwargs):
+        """
+        Fit the signal model to data at specified coordinates
+
+        Parameters
+        ----------
+        index : tuple
+            The index at which to fit the model
+        """
+        x=self.population_map.diffeomorphism.apply_to_index(index)
+        return self.fit_AT_subject_coordinate(x, **kwargs)
+
+    def fit_AT_coordinate(self, x, **kwargs):
+        """
+        Fit the signal model to data at specified coordinates given with
+        respect to the coordinate system of the population space.
+
+        Parameters
+        ----------
+        x : ndarray, shape (3,), dtype: float
+            The coordinates at which to fit the model
+        """
+        x=self.population_map.diffeomorphism.apply(x)
+        return self.fit_AT_subject_coordinate(x, **kwargs)
 
     ####################################################################
     # Fit at many coordinates
@@ -739,7 +997,7 @@ class SignalModel:
         old_settings = np.seterr(divide='raise', invalid='raise')
         time0 = time.time()
 
-        statistics, parameter_dict, value_dict = fit_field(
+        params, cov_params, mse = fit_field(
                 coordinates = coordinates,
                 mask        = mask,
                 data        = self.data,
@@ -760,15 +1018,14 @@ class SignalModel:
             print('{}: Time needed for the fit: {:.2f} h'  .format(
                 self.name.name(), time_spend / 60**2))
 
-        parameter_dict.update(self.parameter_dict)
-
-        result = Result(
+        result = SignalFit(
                 coordinates     = coordinates,
-                statistics      = statistics,
+                params          = params,
+                cov_params      = cov_params,
+                mse             = mse,
                 population_map  = self.population_map,
                 hyperparameters = self.hyperparameters(),
-                parameter_dict  = parameter_dict,
-                value_dict      = value_dict)
+                parameter_dict  = self.parameter_dict)
 
         return result
 
@@ -837,6 +1094,289 @@ class SignalModel:
                 hyperparameters['radius'],
                 2*hyperparameters['radius'],
                 )
+
+    def save(self, file, **kwargs):
+        """
+        Save instance to disk
+
+        This will save the current instance to disk for later use.
+
+        Parameters
+        ----------
+        file : str
+            File name.
+        """
+        with open(file, 'wb') as output:
+            pickle.dump(self, output, **kwargs)
+
+#######################################################################
+#######################################################################
+#
+# Store the result of a fit to the data of an FMRI experiment
+#
+#######################################################################
+#######################################################################
+
+class SignalFit:
+    """
+    Result of a FMRI fitting
+
+    Defines a class for the result, i.e., the estimated effect field of
+    an FMRI experiments, fitted by the function attribute of the `FMRI`
+    class.
+    """
+    def __init__(self, coordinates, params, cov_params, mse,
+            population_map, hyperparameters, parameter_dict):
+        assert isinstance(coordinates, np.ndarray), 'coordinates must be ndarray'
+        assert isinstance(params, np.ndarray), 'params must be ndarray'
+        assert isinstance(cov_params, np.ndarray), 'cov_params must be ndarray'
+        assert isinstance(mse, np.ndarray), 'mse must be ndarray'
+        assert isinstance(population_map, PopulationMap), 'population_map must be PopulationMap'
+        assert isinstance(hyperparameters, dict), 'hyperparameters must be dict'
+        assert isinstance(parameter_dict, dict), 'parameter_dict must be dict'
+
+        # TODO: test that shapes in params, cov_params, … match
+        # TODO: test that values in parameter_dict are either int,
+        # list(int) of length p or np.array of length p
+
+        self.coordinates     = coordinates
+        self.params          = params
+        self.cov_params      = cov_params
+        self.mse             = mse
+        self.population_map  = population_map
+        self.hyperparameters = hyperparameters
+        self.parameter_dict  = parameter_dict
+
+        self.reference = self.population_map.diffeomorphism.reference
+        self.name = self.population_map.diffeomorphism.nb
+        self.p = self.params.shape[-1]
+        self.shape = self.params.shape[:-1]
+
+    ####################################################################
+    # Norm to ATI
+    ####################################################################
+
+    def norm_to(self, reference_field):
+        """
+        Norm the part of the statistics field that has a unit, to a
+        reference field.
+
+        Parameters
+        ----------
+        reference_field : Image
+            The reference field for the unit.
+        """
+        # TODO: test that reference_field has same shape as params
+
+        intecept = self.get_field('intercept', 'point').data
+        intensity_correction = reference_field.data / intercept
+        self.params *= intensity_correction
+
+    def norm_to_ati(self):
+        """
+        Norm the part of the statistics field that has a unit, to the
+        ati-reference field that is stored in the PopulationMap.
+        """
+        self.norm_to(self.population_map.vb_ati)
+
+    ####################################################################
+    # Extract summary statistics
+    ####################################################################
+
+    def get_field(self, parameter, value=None):
+        """
+        Return the scalar field for the parameter
+
+        Parameters
+        ----------
+        parameter : int or str or list(int) or np.array
+            Must int or a key in the parameter_dict.
+        value : str
+            The value string can be either point, stderr, or tstatistic.
+
+        Returns
+        -------
+        Image
+            The queried field
+
+        Notes
+        -----
+        The parameter_dict can either contain the position of a
+        parameter in the parameter field or a contrast of parameters in
+        the field. The form can either be a single integer, a list of
+        integers or an arrays. Example: {'intercept' : 0,
+        'bold_contrast' : [0,1,0,-1,0,0,0,0,0]}
+
+        The counting starts at 0, hence 0 is the first parameter (and
+        typically the intercept), 1 is the second parameter in the
+        design matrix (and typically the first non-constant parameter),
+        and so on.
+
+        The value string can be either point, stderr, or tstatistic.
+        """
+        if isinstance(parameter, str):
+            parameter = self.parameter_dict[parameter]
+
+        if isinstance(parameter, int):
+            r = np.zeros(self.p)
+            r[parameter] = 1
+        else:
+            r = np.array(parameter)
+
+        assert len(r) == self.p, \
+                'contrast does not match number of parameter in design'
+
+        assert value in ['point', 'varerr', 'stderr', 'tstatistic', 'all'], \
+                'value must be one of point, stderr, tstatistic'
+
+        if value in ['point', 'tstatistic', 'all']:
+            point = np.zeros(self.shape)
+            a = point.reshape((-1,1))
+            b = self.params.reshape((-1,self.p))
+            for i in range(len(a)):
+                a[i] = r.dot(b[i])
+
+        if value in ['varerr', 'stderr', 'tstatistic', 'all']:
+            varerr = np.zeros(self.shape)
+            a = varerr.reshape((-1,1))
+            b = self.cov_params.reshape((-1,self.p,self.p))
+            for i in range(len(a)):
+                a[i] = r.dot(b[i]).dot(r)
+
+        if value in ['tstatistic', 'all']:
+            tstats = point / np.sqrt(varerr)
+
+        if value == 'point':
+            return Image(reference=self.reference,
+                    data=point,
+                    name=self.name)
+        elif value == 'varerr':
+            return Image(reference=self.reference,
+                    data=varerr,
+                    name=self.name)
+        elif value == 'stderr':
+            return Image(reference=self.reference,
+                    data=np.sqrt(varerr),
+                    name=self.name)
+        elif value == 'tstatistic':
+            return Image(reference=self.reference,
+                    data=tstats,
+                    name=self.name)
+        else:
+            return (Image(reference=self.reference, data=point, name=self.name),
+                       Image(reference=self.reference, data=np.sqrt(varerr), name=self.name),
+                       Image(reference=self.reference, data=tstats, name=self.name))
+
+    def volume(self):
+        return np.isfinite(self.params[0]).sum() * self.reference.volume()
+
+    ###################################################################
+    # Descriptive statistics of this session
+    ###################################################################
+
+    def mask(self, mask=True, verbose=False):
+        """
+        Apply mask to parameter fields
+        """
+        if (mask is None) or (mask is False):
+            mask = None
+            maskname = 'no mask is being applied '
+        elif mask is True:
+            try:
+                mask0 = self.population_map.vb_mask.get_mask()
+                maskname0 = 'template mask (vb_mask)'
+            except AttributeError:
+                mask0 = True
+                maskname0 = 'no vb to apply as mask'
+
+            try:
+                mask1 = self.population_map.vb.get_mask()
+                maskname1 = 'template (vb)'
+            except AttributeError:
+                mask1 = True
+                maskname1 = 'no vb mask to apply'
+
+            mask = mask0 & mask1
+            maskname = maskname0 + ' and ' + maskname1
+
+        elif type(mask) is str:
+            if mask == 'vb':
+                mask = self.population_map.vb.get_mask()
+                maskname = 'template (vb)'
+            elif mask == 'vb_background':
+                mask = self.population_map.vb_background.get_mask()
+                maskname = 'template background (vb_background)'
+            elif mask == 'vb_estimate':
+                mask = self.population_map.vb_estimate.get_mask()
+                maskname = 'template estimate (vb_estimate)'
+            elif mask == 'vb_mask':
+                mask = self.population_map.vb_mask.get_mask()
+                maskname = 'template mask (vb_mask)'
+            else:
+                mask = None
+                maskname = 'no mask to apply'
+        else:
+            maskname = 'user defined'
+
+        if verbose:
+            print('Statistics field is restricted to: {}'.format(maskname))
+
+        if mask is not None:
+            assert isinstance(mask, np.ndarray), 'mask must be an ndarray'
+            assert mask.dtype == bool, 'mask must be of dtype bool'
+            assert mask.shape == self.shape, 'mask shape must match image shape'
+
+            self.params [ ~mask ] = np.nan
+            self.cov_params [ ~mask ] = np.nan
+            self.mse [ ~mask ] = np.nan
+
+        else:
+            if verbose:
+                print('Noting to do')
+
+    def describe(self):
+        description = """
+        Cohort:   {}
+        Subject:  {}
+        Paradigm: {}
+
+        Hyperparameters:
+            Scale type:      {:>6s}
+            Factor:          {:>6.2f}
+
+        Resulting in:
+            Mass:            {:>5.4f}
+            Scale:           {:>6.2f} mm
+            FWHM:            {:>6.2f} mm
+            Radius:          {:>6.2f} mm
+            Diagonal:        {:>6.2f} mm
+
+        Fitted statistics field:
+        Shape:   {}
+        Volume:  {:.2f} mm^3"""
+        return description.format(
+                self.population_map.diffeomorphism.nb.cohort,
+                self.population_map.diffeomorphism.nb.j,
+                self.population_map.diffeomorphism.nb.paradigm,
+
+                self.hyperparameters['scale_type'],
+                self.hyperparameters['factor'],
+
+                self.hyperparameters['mass'],
+                self.hyperparameters['scale'],
+                2*np.sqrt(2*np.log(2)) * self.hyperparameters['scale'],
+                self.hyperparameters['radius'],
+                2*self.hyperparameters['radius'],
+
+                self.shape,
+                self.volume())
+
+    def __str__(self):
+        return self.describe()
+
+    #######################################################################
+    # Save instance to disk
+    #######################################################################
 
     def save(self, file, **kwargs):
         """

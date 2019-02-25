@@ -25,10 +25,8 @@ calculating inverses of affine transformations.
 
 """
 
-from .euler import rotation_matrix_to_euler_angles
-
-# TODO: make importing nibabel obsolete, here!
-import nibabel as ni
+from nibabel.eulerangles import mat2euler
+from nibabel.affines import from_matvec
 
 import pickle
 
@@ -43,7 +41,7 @@ from numpy.linalg import inv, det, norm, svd
 ########################################################################
 
 def cartesian2homogeneous(mat, vec):
-    return ni.affines.from_matvec(mat, vec)
+    return from_matvec(mat, vec)
 
 def from_cartesian(mat, vec):
     return Affine(cartesian2homogeneous(mat, vec))
@@ -245,7 +243,7 @@ class Affine:
         Calculate Euler angles
         """
         assert self.is_rigid, 'does only work if affine is rigid'
-        return rotation_matrix_to_euler_angles(self.affine[:3,:3])
+        return mat2euler(self.affine[:3,:3])
 
     def resolution(self):
         """
@@ -364,7 +362,7 @@ class Affines:
         rigid = np.repeat(False, n)
         for t in range(n):
             rigid[t] = is_rotation_matrix(affines[t,:3,:3])
-        self.rigid = rigid.all()
+        self.are_rigid = rigid.all()
         self.affines = affines
         self.n = n
 
@@ -404,7 +402,7 @@ class Affines:
         -----
         Some basic non-Euclidean statistics is used here.
         """
-        assert self.rigid, 'affines must be rigid'
+        assert self.are_rigid, 'affines must be rigid'
         m = self.mean().affine
         u, s, v = svd(m[:3,:3])
         m[:3,:3] = u.dot(v)
@@ -416,7 +414,7 @@ class Affines:
         transformation within a window of [-r,r] around each
         transformation.
         """
-        assert self.rigid, 'affines must be rigid'
+        assert self.are_rigid, 'affines must be rigid'
         assert r >= 0, 'r must be non-negative'
 
         mean_affines = self.affines.copy()
@@ -446,10 +444,10 @@ class Affines:
         -----
         This only makes sense, if the affine transformations are rigid.
         """
-        assert self.rigid, 'affines must be rigid'
+        assert self.are_rigid, 'affines must be rigid'
         euler = np.zeros((self.n,3))
         for t in range(self.n):
-            euler[t] = rotation_matrix_to_euler_angles(self.affines[t,:3,:3])
+            euler[t] = mat2euler(self.affines[t,:3,:3])
         return euler
 
     def apply(self, x):
@@ -499,7 +497,7 @@ class Affines:
         ------
         The inverse of the affine transformation.
         """
-        if self.rigid:
+        if self.are_rigid:
             u = self.affines[:,:3,:3]
             p = self.affines[:,:3, 3]
             uT = np.moveaxis(u, [1,2], [2,1])

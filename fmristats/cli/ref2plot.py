@@ -144,8 +144,6 @@ from ..study import Study
 
 from ..reference import ReferenceMaps
 
-from ..euler import rotation_matrix_to_euler_angles
-
 import scipy.stats.distributions as dist
 
 import matplotlib.pyplot as pt
@@ -154,7 +152,8 @@ import matplotlib.pyplot as pt
 # Plot quality measures of head movement
 #######################################################################
 
-def qc_plot(x, o, t, outlying_cycles, ax, studenise=False):
+def qc_plot(x, o, t, outlying_cycles, ax, studenise=False,
+        l=['1st', '2nd', '3rd']):
     """
     Parameters
     ----------
@@ -179,13 +178,13 @@ def qc_plot(x, o, t, outlying_cycles, ax, studenise=False):
         else:
             x = (x.T - x[...,~outlying_cycles].mean(axis=1)) / std
         x = x.T
-    ax.plot(t[~o[0]], x[0,~o[0]], '-', label='1st coordinate')#, c=palette[0])
-    ax.plot(t[~o[1]], x[1,~o[1]], '-', label='2nd coordinate')#, c=palette[1])
-    ax.plot(t[~o[2]], x[2,~o[2]], '-', label='3rd coordinate')#, c=palette[2])
+    ax.plot(t[~o[0]], x[0,~o[0]], '-', label=l[0])#, c=palette[0])
+    ax.plot(t[~o[1]], x[1,~o[1]], '-', label=l[1])#, c=palette[1])
+    ax.plot(t[~o[2]], x[2,~o[2]], '-', label=l[2])#, c=palette[2])
     if outlying_cycles.any():
-        ax.plot(t[o[0]], x[0,o[0]], '*', label='1st outlying')#, c=palette[0])
-        ax.plot(t[o[1]], x[1,o[1]], '*', label='2nd outlying')#, c=palette[1])
-        ax.plot(t[o[2]], x[2,o[2]], '*', label='3rd outlying')#, c=palette[2])
+        ax.plot(t[o[0]], x[0,o[0]], '*', label=l[0] +' outlying')#, c=palette[0])
+        ax.plot(t[o[1]], x[1,o[1]], '*', label=l[1] +' outlying')#, c=palette[1])
+        ax.plot(t[o[2]], x[2,o[2]], '*', label=l[2] +' outlying')#, c=palette[2])
     if studenise:
         ax.axhline(0, c='k', ls='-', lw=0.5)
         ax.axhline(dist.norm.ppf(0.025), c='g', ls='--', lw=0.5)
@@ -265,8 +264,8 @@ def call(args):
         method = df.ix[index,'rigids']
 
         file1 = join(directory, name.name() + '-' + method + '-radii.' + args.extension)
-        file2 = join(directory, name.name() + '-' + method + '-euler.' + args.extension)
-        file3 = join(directory, name.name() + '-' + method + '-euler-studenised.' + args.extension)
+        file2 = join(directory, name.name() + '-' + method + '-tilt-degrees.' + args.extension)
+        file3 = join(directory, name.name() + '-' + method + '-tilt-radians.' + args.extension)
         file4 = join(directory, name.name() + '-' + method + '-bary.' + args.extension)
         file5 = join(directory, name.name() + '-' + method + '-bary-studenised.' + args.extension)
 
@@ -293,11 +292,12 @@ def call(args):
                 ooo, #outlying[6:],
                 slice_times,
                 outlying_cycles,
-                ax, False)
+                ax, False,
+                l=['yaw', 'roll', 'pitch'])
         ax.set_xlabel('Time (seconds)')
         ax.set_ylabel('Euler angels (degrees)')
         ax.legend(loc='upper center', bbox_to_anchor=(0.5, 1.15),
-                  ncol=2, fancybox=True, shadow=True)
+                  ncol=3, fancybox=True, shadow=True)
         ax.axhline(0, c='k', ls='--', lw=0.5)
 
         if verbose:
@@ -311,13 +311,13 @@ def call(args):
                 ooo, #outlying[6:],
                 slice_times,
                 outlying_cycles,
-                ax, True)
+                ax, False,
+                l=['yaw', 'roll', 'pitch'])
         ax.set_xlabel('Time (seconds)')
-        ax.set_ylabel('Euler angels (studenised)')
+        ax.set_ylabel('Euler angels (radians)')
         ax.legend(loc='upper center', bbox_to_anchor=(0.5, 1.15),
-                  ncol=2, fancybox=True, shadow=True)
+                  ncol=3, fancybox=True, shadow=True)
         ax.axhline(0, c='k', ls='--', lw=0.5)
-        ax.set_ylim((-6,6))
 
         if verbose:
             print('{}: Save figure to: {}'.format(name.name(), file3))

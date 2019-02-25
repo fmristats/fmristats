@@ -20,7 +20,7 @@
 """
 
 Code for tracking a rigid body which has been sampled at a fixed lattice
-in $ℝ^3$ by the principle axis method.
+in :math:`ℝ^3` by the principle axis method.
 
 """
 

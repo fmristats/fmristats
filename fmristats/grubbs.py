@@ -29,22 +29,26 @@ from scipy.stats.distributions import t
 
 def grubbs_test(xvec, sgnf, null='equal'):
     """
-    The Grubbs' test for outlyer detection
+    The Grubbs' test for outlier detection
 
     Parameters
     ----------
     xvec : ndarray, shape (n,)
+        Array of sample values.
     sgnf : float
+        Level of significance for the test.
     null : str
+        Options.
 
     Notes
     -----
     Specification of the null hypothesis can either be 'equal'
     (default), 'greater', or 'less'. Only 'equal' is implemented.
 
-    Missigs (nan values) are ignored in the test.
+    Missings (i.e. NaN values) are ignored.
     """
-    assert np.not_equal(np.nanvar(xvec), 0), 'variance of observations (xvec) is equal to 0'
+    if np.not_equal(np.nanvar(xvec), 0):
+        return None
 
     n = sum(~np.isnan(xvec))
     m = np.nanmean(xvec)

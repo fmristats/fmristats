@@ -61,8 +61,6 @@ from .grubbs import grubbs
 
 from .tracking import fit_by_pcm
 
-from .euler import rotation_matrix_to_euler_angles
-
 import numpy as np
 
 from numpy.linalg import inv, norm
