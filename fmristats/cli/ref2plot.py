@@ -167,8 +167,8 @@ def qc_plot(x, o, t, outlying_cycles, ax, studenise=False,
         Outlying scans
     ax : Axes
         Axes to which to plot
-    studenise : bool
-        Whether to studenise x first
+    studenised : bool
+        Whether to studenised x first
     """
     #palette = sb.color_palette("muted", n_colors=3)
     if studenise:
