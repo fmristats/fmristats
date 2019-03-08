@@ -1215,7 +1215,16 @@ class SignalFit:
         The value string can be either point, stderr, or tstatistic.
         """
         if isinstance(parameter, str):
-            parameter = self.parameter_dict[parameter]
+            if parameter == 'mse':
+                return Image(reference=self.reference,
+                        data=self.mse[...,0],
+                        name=self.name)
+            elif parameter == 'degrees_of_freedom':
+                return Image(reference=self.reference,
+                        data=self.mse[...,1],
+                        name=self.name)
+            else:
+                parameter = self.parameter_dict[parameter]
 
         if isinstance(parameter, int):
             r = np.zeros(self.p)
