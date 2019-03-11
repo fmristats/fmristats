@@ -196,8 +196,10 @@ class Session:
         self.data = self.raw.astype(float).copy()
         self.thresholds = fit_foreground(self.data, ep=self.ep)
 
-    def set_foreground(self, foreground, is_mask=False):
-        assert foreground.shape == data.shape, 'foreground and data not of equal shape'
+    def set_foreground(self, foreground, is_mask=True):
+        assert foreground.shape == self.data.shape, \
+                'foreground is of shape {} and data is of shape {}'.format(
+                        foreground.shape, self.data.shape)
         assert type(is_mask) is bool, 'is_mask must be bool'
 
         if is_mask:

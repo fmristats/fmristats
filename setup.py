@@ -48,6 +48,10 @@ setup(
             'nii2image     = fmristats.cli.nii2image:cmd',
             'nii2session   = fmristats.cli.nii2session:cmd',
             'ref2plot      = fmristats.cli.ref2plot:cmd',
+            'fsl2design    = fmristats.cli.fsl2design:cmd',
+            'spm2design    = fmristats.cli.spm2design:cmd',
+            'csv2design    = fmristats.cli.csv2design:cmd',
+            'fsl2rigids    = fmristats.cli.fsl2rigids:cmd',
         ],
     },
 )

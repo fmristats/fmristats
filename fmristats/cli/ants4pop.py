@@ -250,7 +250,7 @@ def call(args):
         template using --vb-image or --vb-nii).""")
         return
 
-    study.set_rigids(None)
+    study.set_rigids(args.rigids)
     study.set_diffeomorphism(new_diffeomorphism)
     study.set_standard_space(study.vb.name)
 

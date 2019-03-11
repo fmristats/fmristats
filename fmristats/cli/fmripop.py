@@ -212,6 +212,7 @@ def call(args):
         print('No study found. Nothing to do.')
         return
 
+    study.set_rigids(args.rigids)
     study.set_diffeomorphism(new_diffeomorphism)
     study.set_standard_space('isometric')
 

@@ -37,17 +37,17 @@ import os
 
 from os.path import isdir
 
-def bet(intercept, intercept_file, mask_file, cmd='fsl5.0-bet', variante='R',
+def bet(image, to_file, mask_file, cmd='fsl5.0-bet', variante='R',
         verbose=0):
 
-    dfile = os.path.dirname(intercept_file)
+    dfile = os.path.dirname(to_file)
     if dfile and not isdir(dfile):
        os.makedirs(dfile)
 
-    ni.save(image2nii(intercept), intercept_file)
+    ni.save(image2nii(image), to_file)
 
     command = [cmd]
-    command.append(intercept_file)
+    command.append(to_file)
     command.append(mask_file)
     command.append('-{}'.format(variante))
 

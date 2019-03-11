@@ -381,7 +381,7 @@ class SignalModel:
         return
 
     def set_design(self, formula=None, parameter=None,
-            return_design_matrix=False):
+            return_design_matrix=False, verbose=True):
         """
         Set or create the design matrix
 
@@ -423,20 +423,6 @@ class SignalModel:
             'block'  : self.data[...,6],
             'cycle'  : self.data[...,7],
             'slice'  : self.data[...,8]})
-
-        if verbose:
-            if demean:
-                print("""{}:
-            Number of within brain & within task observations: {:>10,d}
-            Number of    non brain | non    task observations: {:>10,d}
-            Intercept field refers to time:      {:>10.2f} s""".format(
-                self.name.name(), valid.sum(), (~valid).sum(),
-                self.midpoint))
-            else:
-                print("""{}:
-            Number of within brain & within task observations: {:>10,d}
-            Number of    non brain | non    task observations: {:>10,d}""".format(
-                self.name.name(), valid.sum(), (~valid).sum()))
 
         if formula is None:
             formula = self.formula

@@ -65,18 +65,26 @@ def define_parser():
         action='store_true',
         help="""Detect the foreground in the FMRI""")
 
-    foreground_handling.add_argument('--set-foreground',
+    foreground_handling.add_argument('--bet-foreground',
         action='store_true',
-        help="""Set the foreground to the image in FOREGROUND""")
+        help="""Use FSL's bet and apply it to each volume""")
+
+    foreground_handling.add_argument('--get-foreground',
+        action='store_true',
+        help="""Set the foreground to the data in FOREGROUND""")
+
+    foreground_handling.add_argument('--get-foreground-mask',
+        action='store_true',
+        help="""Set the foreground by using the mask in FOREGROUND""")
 
     specific.add_argument('--foreground',
         default='{cohort}-{id:04d}-{paradigm}-{date}-foreground.nii.gz',
         help="""A 4D-image that contains a mask for the foreground in
         the FMRI.""")
 
-    specific.add_argument('--foreground-prefix',
-        default='raw/foreground/{cohort}',
-        help="""Prefix for the path in --foreground.""")
+    specific.add_argument('--foreground-path',
+        default='',
+        help="""Prefix for the path for FOREGROUND.""")
 
     ####################################################################
     # File handling
@@ -185,6 +193,8 @@ from ..study import Study
 
 from ..session import Session, fmrisetup
 
+from ..diffeomorphisms import Image
+
 from ..nifti import nii2session
 
 import nibabel as ni
@@ -197,14 +207,16 @@ def call(args):
     # Options
     ####################################################################
 
-    remove_lock       = args.remove_lock
-    ignore_lock       = args.ignore_lock
-    force             = args.force
-    skip              = args.skip
-    verbose           = args.verbose
+    remove_lock        = args.remove_lock
+    ignore_lock        = args.ignore_lock
+    force              = args.force
+    skip               = args.skip
+    verbose            = args.verbose
 
-    detect_foreground = args.detect_foreground
-    set_foreground    = args.set_foreground
+    detect_foreground  = args.detect_foreground
+    bet_foreground     = args.bet_foreground
+    get_foreground     = args.get_foreground or args.get_foreground_mask
+    is_foreground_mask = args.get_foreground_mask
 
     ####################################################################
     # Study
@@ -218,7 +230,7 @@ def call(args):
 
     study.update_layout({
         'nii' : join(args.nii_prefix, args.nii),
-        'foreground' : join(args.foreground_prefix, args.foreground),
+        'foreground' : join(args.foreground_path, args.foreground),
         })
 
     if not 'epi' in study.protocol.columns:
@@ -320,7 +332,7 @@ def call(args):
                 print('{}: Detect foreground'.format(name.name()))
             session.fit_foreground()
 
-        elif set_foreground:
+        elif get_foreground:
 
             try:
                 foreground_nii = ni.load(file_foreground)
@@ -330,10 +342,35 @@ def call(args):
                     file_nii, e))
 
             if verbose:
-                print('{}: Set foreground: {}'.format(name.name(),
-                    foreground_nii))
+                print('{}: Set foreground to: {}'.format(name.name(), file_foreground))
 
-            session.set_foreground(foreground_nii.get_data())
+            foreground = foreground_nii.get_data()
+            foreground = np.moveaxis(foreground, -1, 0)
+
+            session.set_foreground(foreground, is_mask=is_foreground_mask)
+
+        elif bet_foreground:
+
+            from fmristats.fsl import bet
+
+            foreground_mask = np.zeros_like(session.data)
+
+            for i in range(session.numob):
+                image = bet(image = Image(session.reference, session.data[i]),
+                        to_file='foregrounds/{}/{}-{:d}-input.nii.gz'.format(name.name(), name.name(), i),
+                        mask_file='foregrounds/{}/{}-{:d}-output.nii.gz'.format(name.name(), name.name(), i),
+                        verbose=verbose)
+                foreground_mask[i] = image.data
+
+            if verbose:
+                print('{}: Set foreground to output of bet')
+
+            session.set_foreground(foreground_mask, is_mask=True)
+
+        else:
+            if verbose:
+                print('{}: No foreground / background information. Are you sure, you want to proceed?'.format(
+                    name.name()))
 
         if verbose:
             print('{}: Save: {}'.format(name.name(), file_session))

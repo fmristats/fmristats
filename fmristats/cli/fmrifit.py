@@ -58,10 +58,21 @@ def define_parser():
         default='C(task)/C(block, Sum)',
         help="""A formula defining the design matrix.""")
 
+    signal_model.add_argument('--use-custom-design',
+        action='store_true',
+        help="""Use a custom design file""")
+
+    signal_model.add_argument('--design',
+        help="""Path to design file""")
+
+    signal_model.add_argument('--design-path',
+        default='',
+        help="""Prefix to path to design file""")
+
     signal_model.add_argument('--parameter',
         default=['intercept', 'task'],
         nargs='+',
-        help="""The parameters to keep in the result field.""")
+        help="""Name some of the parameters in the design matrix""")
 
     signal_model.add_argument('--window-radius',
         type=int,
@@ -121,7 +132,7 @@ def define_parser():
 
     experimental_design.add_argument('--offset-beginning',
         type=float,
-        default=5.242,
+        default=0, #5.242,
         help = """The haemodynamic response to stimulus is not
         immediate.  It is usually assumed that the HR-function spikes
         approximately five seconds after the first stimulus.  The value
@@ -131,7 +142,7 @@ def define_parser():
 
     experimental_design.add_argument('--offset-end',
         type=float,
-        default=1.242,
+        default=0, #1.242,
         help = """ Similar to OFFSET_BEGINNING the value OFFSET_END is
         removed from the end of each stimulus phase and not considered
         in the fitting.""")
@@ -156,6 +167,13 @@ def define_parser():
         The parameter SCALE will determine the final curvature of the
         fitted effect field. The larger SCALE, the flatter the fitted
         effect field will appear.""")
+
+    weighting.add_argument('--fwhm',
+        type=float,
+        help = """Standard deviation of a Gaussian kernel that defines
+        the weighting scheme of the underlying WLS regression but not
+        given in standard deviations but in FWHM. It is SCALE = FWHM /
+        (2*math.sqrt(2*math.log(2))).""")
 
     weighting.add_argument('--factor',
         type=float,
@@ -340,9 +358,13 @@ import os
 
 from os.path import isfile, isdir, join
 
+import math
+
 from multiprocessing.dummy import Pool as ThreadPool
 
 import numpy as np
+
+import pandas as pd
 
 from .fmristudy import get_study
 
@@ -411,7 +433,14 @@ def call(args):
 
     stimulus_block       = args.stimulus_block
     control_block        = args.control_block
-    scale                = args.scale
+
+    if args.scale:
+        scale = args.scale
+    elif args.fwhm:
+        scale = args.fwhm / (2*math.sqrt(2*math.log(2)))
+    else:
+        scale = None
+
     factor               = args.factor
     mass                 = args.mass
     offset               = args.offset_beginning
@@ -431,16 +460,22 @@ def call(args):
 
     backend              = args.backend
 
+    design_by_formula    = not args.use_custom_design
+
     ####################################################################
     # Create the iterator
     ####################################################################
+
+    study.update_layout({
+        'design_file' : join(args.design_path, args.design),
+        })
 
     study_iterator = study.iterate(
             'session',
             'reference_maps',
             'result',
             'population_map',
-            new=['result'],
+            new=['result', 'design_file'],
             integer_index=True,
             verbose=verbose)
 
@@ -453,7 +488,7 @@ def call(args):
     ####################################################################
 
     def wm(index, name, session, reference_maps, population_map, result,
-            file_result):
+            file_result, design_file):
 
         if type(result) is Lock:
             if remove_lock or ignore_lock:
@@ -530,16 +565,19 @@ def call(args):
                     population_map.diffeomorphism.name))
 
         ########################################################################
-        # Defining the signal model
+        # Defining the intensity model
         ########################################################################
 
         if verbose:
-            print('{}: Configure signal model'.format(name.name()))
+            print('{}: Configure intensity model'.format(name.name()))
 
         smodel = SignalModel(
             session=session,
             reference_maps=reference_maps,
             population_map=population_map)
+
+        if verbose:
+            print('{}: Create the stimulus design matrix'.format(name.name()))
 
         smodel.set_stimulus_design(
                 s=stimulus_block,
@@ -547,11 +585,9 @@ def call(args):
                 offset=offset,
                 preset=preset)
 
-        smodel.set_hyperparameters(
-                scale_type=scale_type,
-                scale=scale,
-                factor=factor,
-                mass=mass)
+        if verbose:
+            print('{}: Create the observation matrix'.format(
+                name.name()))
 
         smodel.set_data(
                 burn_in = burn_in,
@@ -559,7 +595,28 @@ def call(args):
                 include_background = include_background,
                 verbose = verbose)
 
-        smodel.set_design(formula = formula, parameter = parameter)
+        if design_by_formula:
+            if verbose:
+                print('{}: Create the experimental design matrix'.format(
+                    name.name()))
+            smodel.set_design(formula = formula, parameter = parameter, verbose=verbose)
+
+        else:
+            if verbose:
+                print('{}: Parse the experimental design matrix'.format(
+                    name.name()))
+            design_array = np.asarray(pd.read_pickle(design_file))
+            smodel.set_design_to(design_array, hasconst=True, verbose=verbose)
+
+        if verbose:
+            print('{}: Set the hyperparameter: scale)'.format(
+                        name.name()))
+
+        smodel.set_hyperparameters(
+                scale_type=scale_type,
+                scale=scale,
+                factor=factor,
+                mass=mass)
 
         if verbose > 2:
             print("""{}: {}""".format(name.name(), smodel.describe()))
@@ -631,6 +688,7 @@ def call(args):
                 population_map  = instances['population_map']
                 result          = instances['result']
                 file_result     = files['result']
+                design_file     = files['design_file']
 
                 skip = False
                 if session is None:
@@ -645,7 +703,7 @@ def call(args):
                 if not skip:
                     pool.apply_async(wm, args=(index, name, session,
                         reference_maps, population_map, result,
-                        file_result))
+                        file_result, design_file))
             pool.close()
             pool.join()
         except Exception as e:
@@ -668,6 +726,7 @@ def call(args):
                 population_map  = instances['population_map']
                 result          = instances['result']
                 file_result     = files['result']
+                design_file     = files['design_file']
 
                 skip = False
                 if session is None:
@@ -681,7 +740,8 @@ def call(args):
                     skip = True
                 if not skip:
                     wm(index, name, session, reference_maps,
-                            population_map, result, file_result)
+                            population_map, result, file_result,
+                            design_file)
         finally:
             files = df.ix[df.locked, 'result'].values
             if len(files) > 0:
