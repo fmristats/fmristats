@@ -62,17 +62,16 @@ def define_parser():
         action='store_true',
         help="""Use a custom design file""")
 
-    signal_model.add_argument('--design',
-        help="""Path to design file""")
-
-    signal_model.add_argument('--design-path',
-        default='',
-        help="""Prefix to path to design file""")
-
     signal_model.add_argument('--parameter',
         default=['intercept', 'task'],
         nargs='+',
-        help="""Name some of the parameters in the design matrix""")
+        help="""Name some of the parameters in the design matrix when
+        using the formula interface.""")
+
+    signal_model.add_argument('--parameter-dict',
+        help="""Path to a file containing a description of the design
+        matrix. The file may already contain some contrasts you are
+        interested in.""")
 
     signal_model.add_argument('--window-radius',
         type=int,
@@ -453,6 +452,7 @@ def call(args):
     demean               = args.demean
     formula              = args.formula
     parameter            = args.parameter
+    parameter_dict_file  = args.parameter_dict
 
     mask                 = mask
     fit_at_slice         = fit_at_slice
@@ -462,20 +462,20 @@ def call(args):
 
     design_by_formula    = not args.use_custom_design
 
+    if design_by_formula and not args.design:
+         study.set_design(design_name='formula')
+
     ####################################################################
     # Create the iterator
     ####################################################################
-
-    study.update_layout({
-        'design_file' : join(args.design_path, args.design),
-        })
 
     study_iterator = study.iterate(
             'session',
             'reference_maps',
             'result',
             'population_map',
-            new=['result', 'design_file'],
+            'design',
+            new=['result'],
             integer_index=True,
             verbose=verbose)
 
@@ -488,7 +488,7 @@ def call(args):
     ####################################################################
 
     def wm(index, name, session, reference_maps, population_map, result,
-            file_result, design_file):
+            design, file_result):
 
         if type(result) is Lock:
             if remove_lock or ignore_lock:
@@ -512,7 +512,7 @@ def call(args):
             return
 
         if verbose:
-            print('{}: Lock: {}'.format(name.name(), file_result))
+            print('{}: Lock {}'.format(name.name(), file_result))
 
         lock = Lock(name, 'fmrifit', file_result)
         df.ix[index, 'locked'] = True
@@ -605,11 +605,40 @@ def call(args):
             if verbose:
                 print('{}: Parse the experimental design matrix'.format(
                     name.name()))
-            design_array = np.asarray(pd.read_pickle(design_file))
+
+            design_array = np.asarray(design)
             smodel.set_design_to(design_array, hasconst=True, verbose=verbose)
 
+            if verbose:
+                print('{}: Parse the description of the design matrix'.format(
+                    name.name()))
+
+            p = design_array.shape[1]
+            commands = {}
+            with open(parameter_dict_file) as fh:
+                for line in fh:
+                    line = line.strip()
+                    if line == '' or line[0] in '#':
+                        continue
+                    command, description = line.split(':', 1)
+                    command = command.strip()
+                    try:
+                        description = [int(p) for p in description.split(',')]
+                    except:
+                        print('Not a valid entry: {}: {}'.format(
+                            command, description))
+                        continue
+                    if len(description) == 1:
+                        contrast = description[0]
+                    else:
+                        contrast = np.zeros(p, dtype=int)
+                        contrast[:len(description)] = description
+                    commands[command] = contrast
+
+            smodel.parameter_dict = commands
+
         if verbose:
-            print('{}: Set the hyperparameter: scale)'.format(
+            print('{}: Set the hyperparameter: scale'.format(
                         name.name()))
 
         smodel.set_hyperparameters(
@@ -687,8 +716,8 @@ def call(args):
                 reference_maps  = instances['reference_maps']
                 population_map  = instances['population_map']
                 result          = instances['result']
+                design          = instances['design']
                 file_result     = files['result']
-                design_file     = files['design_file']
 
                 skip = False
                 if session is None:
@@ -702,8 +731,8 @@ def call(args):
                     skip = True
                 if not skip:
                     pool.apply_async(wm, args=(index, name, session,
-                        reference_maps, population_map, result,
-                        file_result, design_file))
+                        reference_maps, population_map, result, design,
+                        file_result))
             pool.close()
             pool.join()
         except Exception as e:
@@ -725,8 +754,8 @@ def call(args):
                 reference_maps  = instances['reference_maps']
                 population_map  = instances['population_map']
                 result          = instances['result']
+                design          = instances['design']
                 file_result     = files['result']
-                design_file     = files['design_file']
 
                 skip = False
                 if session is None:
@@ -740,8 +769,7 @@ def call(args):
                     skip = True
                 if not skip:
                     wm(index, name, session, reference_maps,
-                            population_map, result, file_result,
-                            design_file)
+                            population_map, result, design, file_result)
         finally:
             files = df.ix[df.locked, 'result'].values
             if len(files) > 0:

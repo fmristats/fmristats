@@ -82,9 +82,7 @@ from ..reference import ReferenceMaps
 
 from ..pmap import PopulationMap
 
-from ..smodel import SignalModel, Result
-
-from ..study import Study
+from ..smodel import SignalModel, Result, SignalFit
 
 from .. import load
 
@@ -139,7 +137,7 @@ def print_info(x, f, verbose=False):
         print(x.diffeomorphism.describe())
         print(x.describe())
 
-    if type(x) is Result:
+    if (type(x) is Result) or isinstance(x, SignalFit):
         print('{}: fit of a signal model'.format(f))
         print(x.describe())
         print(x.population_map.diffeomorphism.describe())

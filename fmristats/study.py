@@ -25,8 +25,7 @@ Study Layout
 
 from .name import Identifier
 
-from .load import load, load_block_stimulus, load_session, \
-        load_refmaps, load_population_map, load_result
+from .load import load
 
 import pandas as pd
 
@@ -45,7 +44,7 @@ def load_verbose(f, verbose=0, name=None):
             print('{}: Read {}'.format(name.name(), f))
         return instance
     except Exception as e:
-        if verbose > 2:
+        if verbose > 1:
             print('{}: Unable to read {}, {}'.format(name.name(), f, e))
         return None
 
@@ -159,21 +158,25 @@ class Study:
                 'session'        : '{cohort}-{id:04d}-{paradigm}-{date}.session',
                 'reference_maps' : '{cohort}-{id:04d}-{paradigm}-{date}-{rigids}.rigids',
                 'population_map' : '{cohort}-{id:04d}-{paradigm}-{date}-{space}-{psi}.popmap',
-                'result'         : '{cohort}-{id:04d}-{paradigm}-{date}-{space}-{psi}-{rigids}.fit'}
+                'result'         : '{cohort}-{id:04d}-{paradigm}-{date}-{space}-{psi}-{rigids}.fit',
+                'design'         : '{cohort}-{id:04d}-{paradigm}-{date}-{space}-{design}.design'}
         elif type(single_subject) is str:
             self.file_layout = {
                 'stimulus'       : single_subject + '.stimulus',
                 'session'        : single_subject + '.session',
                 'reference_maps' : single_subject + '.rigids',
                 'population_map' : single_subject + '.popmap',
-                'result'         : single_subject + '.fit'}
+                'result'         : single_subject + '.fit',
+                'design'         : single_subject + '.design'}
         else:
             self.file_layout = {
                 'stimulus'       : '{study}/{paradigm}/{cohort}/{id:04d}/{cohort}-{id:04d}-{paradigm}-{date}.stimulus',
                 'session'        : '{study}/{paradigm}/{cohort}/{id:04d}/{cohort}-{id:04d}-{paradigm}-{date}.session',
                 'reference_maps' : '{study}/{paradigm}/{cohort}/{id:04d}/{cohort}-{id:04d}-{paradigm}-{date}-{rigids}.rigids',
                 'population_map' : '{study}/{paradigm}/{cohort}/{id:04d}/{cohort}-{id:04d}-{paradigm}-{date}-{space}-{psi}.popmap',
-                'result'         : '{study}/{paradigm}/{cohort}/{id:04d}/{cohort}-{id:04d}-{paradigm}-{date}-{space}-{psi}-{rigids}.fit'}
+                'result'         : '{study}/{paradigm}/{cohort}/{id:04d}/{cohort}-{id:04d}-{paradigm}-{date}-{space}-{psi}-{rigids}-{design}.fit',
+                'design'         : '{study}/{paradigm}/{cohort}/{id:04d}/{cohort}-{id:04d}-{paradigm}-{date}-{design}.design'}
+
 
         if file_layout is not None:
             self.update_layout(file_layout)
@@ -182,11 +185,10 @@ class Study:
         self.set_scale_type(scale_type)
         self.set_name(name)
 
-    def set_name(self, name):
-        if name is None:
-            self.name = 'results'
-        else:
-            self.name = name
+        self.set_rigids()
+        self.set_standard_space()
+        self.set_diffeomorphism()
+        self.set_design()
 
     def set_strftime(self, strftime=None):
         if strftime is None:
@@ -202,6 +204,11 @@ class Study:
         else:
             self.scale_type = scale_type
 
+    def set_name(self, name):
+        if name is None:
+            self.name = 'results'
+        else:
+            self.name = name
 
     def set_rigids(self, rigids_name=None):
         """
@@ -250,7 +257,7 @@ class Study:
 
         Parameters
         ----------
-        space : str
+        vb_name : str
             Name of the standard space.
 
         Note
@@ -262,6 +269,25 @@ class Study:
                 self.protocol['standard_space'] = 'undefined'
         else:
             self.protocol['standard_space'] = vb_name
+
+    def set_design(self, design_name=None):
+        """
+        Set a name for the design matrix
+
+        Parameters
+        ----------
+        design_name : str
+            Name of the design matrix
+
+        Note
+        ----
+        This will overwrite all entries in the protocol! Use with care.
+        """
+        if design_name is None:
+            if 'design' not in self.protocol.columns:
+                self.protocol['design'] = 'undefined'
+        else:
+            self.protocol['design'] = design_name
 
     def update_layout(self, file_layout):
         """
@@ -311,7 +337,7 @@ class Study:
 
     def iterate(self, *keys, new=None, lookup=None, vb_name=None,
             diffeomorphism_name=None, rigids_name=None,
-            integer_index=False, verbose=0):
+            design_name=None, integer_index=False, verbose=0):
         """
         If covariates in not None, then only subjects in the protocol are
         going to be processed which are also marked as valid in the
@@ -363,6 +389,7 @@ class Study:
                         space = r.standard_space,
                         psi = r.diffeomorphism,
                         rigids = r.rigids,
+                        design = r.design,
                         )) for r in df.itertuples()],
                     index = df.index)
 
@@ -408,6 +435,7 @@ class Study:
                     space = r.standard_space,
                     psi = r.diffeomorphism,
                     rigids = r.rigids,
+                    design = r.design,
                     )) for r in df.itertuples()],
                 index = df.index)
 
@@ -424,6 +452,7 @@ class Study:
                             space = r.standard_space,
                             psi = r.diffeomorphism,
                             rigids = r.rigids,
+                            design = r.design,
                             )) for r in df.itertuples()],
                         index = df.index)
 

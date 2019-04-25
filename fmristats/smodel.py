@@ -1222,7 +1222,7 @@ class SignalFit:
                 'contrast does not match number of parameter in design'
 
         assert value in ['point', 'varerr', 'stderr', 'tstatistic', 'all'], \
-                'value must be one of point, stderr, tstatistic'
+                'value must be one of point, stderr, tstatistic, or all'
 
         if value in ['point', 'tstatistic', 'all']:
             point = np.zeros(self.shape)
@@ -1263,7 +1263,7 @@ class SignalFit:
                        Image(reference=self.reference, data=tstats, name=self.name))
 
     def volume(self):
-        return np.isfinite(self.params[0]).sum() * self.reference.volume()
+        return np.isfinite(self.params).all(axis=-1).sum() * self.reference.volume()
 
     ###################################################################
     # Descriptive statistics of this session
@@ -1316,11 +1316,9 @@ class SignalFit:
         if verbose:
             print('Statistics field is restricted to: {}'.format(maskname))
 
-        if mask is not None:
-            assert isinstance(mask, np.ndarray), 'mask must be an ndarray'
+        if isinstance(mask, np.ndarray):
             assert mask.dtype == bool, 'mask must be of dtype bool'
             assert mask.shape == self.shape, 'mask shape must match image shape'
-
             self.params [ ~mask ] = np.nan
             self.cov_params [ ~mask ] = np.nan
             self.mse [ ~mask ] = np.nan

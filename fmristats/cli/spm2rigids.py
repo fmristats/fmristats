@@ -19,7 +19,7 @@
 
 """
 
-Takes the *.par file from FSL as input and outputs the respective
+Takes the rp*.txt file from SPM as input and outputs the respective
 reference maps instance for fmristats.
 
 """
@@ -41,22 +41,11 @@ def define_parser():
         """Arguments controlling the parsing""")
 
     specific.add_argument('--par',
-            help="""Path to the par files""")
+            help="""Path to the the rp*.txt files""")
 
     specific.add_argument('--par-path',
             default='',
-            help="""Prefix path to the par files""")
-
-    specific.add_argument('--par-cycle',
-            type=int,
-            help="""The realignment parameters (Euler angles and
-            transformations) saved by McFLIRT are given with respect to
-            the centre of mass of the reference scan cycle (Why do you
-            have to make just *everything* so complicated, FSL?!). We
-            need to apply a translation from the centre of mass of the
-            reference cycle to the coordinate system of the session. It
-            is for you to find out which scan cycle that is. By default
-            it will be some cycle in the middle of the session.""")
+            help="""Prefix path to the rp*.txt files""")
 
     specific = parser.add_argument_group(
         """Arguments for the subject reference space""")
@@ -100,7 +89,7 @@ def define_parser():
         weighted averaging of rigid transformations.""")
 
     specific.add_argument('--new-rigids',
-            default='fsl',
+            default='spm',
             help="""Name of the rigid transformations.""")
 
     ####################################################################
@@ -220,40 +209,24 @@ from ..affines import Affine, Affines
 
 ########################################################################
 
-def par2referenceFSL (par_file, session, par_cycle):
+def par2referenceSPM (par_file, session):
     rigids_euler = np.array(pd.read_csv(par_file, header=None, delimiter='\s+'))
     number_of_cycles = rigids_euler.shape[0]
     rigids = np.empty((number_of_cycles, 4, 4))
     for i in range(number_of_cycles):
         mat = euler2mat(
-            -rigids_euler[i,0], # gieren / yaw   / z
-            -rigids_euler[i,1], # rollen / roll  / y
-            rigids_euler[i,2]) # nicken / pitch / x
-        vec = rigids_euler[i,3:]
+            -rigids_euler[i,3], # gieren / yaw   / z
+            -rigids_euler[i,4], # rollen / roll  / y
+            -rigids_euler[i,5]) # nicken / pitch / x
+        vec = rigids_euler[i,:3]
         rigids[i] = from_matvec(
             matrix=mat,
-            vector=np.array((-vec[1], vec[0], -vec[2])))
+            vector=np.array((-vec[1], -vec[0], -vec[2])))
     reference_maps = ReferenceMaps(session.name)
     reference_maps.temporal_resolution = session.temporal_resolution
     reference_maps.slice_timing = session.slice_timing
     reference_maps.set_acquisition_maps(Affines(rigids))
     reference_maps.shape = (session.numob, session.shape[session.ep])
-
-    # The realignment parameters (Euler angles and transformations)
-    # saved by McFLIRT are given with respect to the centre of mass of
-    # the reference scan cycle (Why do you have to make *everything* so
-    # complicated, FSL?!). We need to apply a translation from the
-    # centre of mass of the reference cycle to the coordinate system of
-    # the session.
-
-    n,x,y,z = session.data.shape
-    indices = ((slice(0,x), slice(0,y), slice(0,z)))
-    lattice = session.reference.apply_to_indices(indices)
-    lattice = np.moveaxis(lattice, -1 ,0)
-    com = (session.raw[par_cycle] * lattice).sum(axis=(1,2,3)) / session.raw[par_cycle].sum()
-
-    translation_from_com = Affine(from_matvec(np.eye(3), -com))
-    reference_maps.reset_reference_space(x=translation_from_com)
     return reference_maps
 
 def call(args):
@@ -268,7 +241,6 @@ def call(args):
     skip              = args.skip
     verbose           = args.verbose
 
-    par_cycle     = args.par_cycle
     cycle         = args.cycle
     grubbs        = args.grubbs
     window_radius = args.window_radius
@@ -353,7 +325,7 @@ def call(args):
         if verbose:
             print('{}: Read rigid body transformations'.format(name.name()))
 
-        reference_maps = par2referenceFSL(par_file, session, par_cycle)
+        reference_maps = par2referenceSPM(par_file, session)
 
         ####################################################################
         # Detect outlying scan cycles
@@ -498,3 +470,4 @@ def call(args):
         if args.verbose:
             print('Save: {}'.format(args.study))
         study.save(args.study)
+

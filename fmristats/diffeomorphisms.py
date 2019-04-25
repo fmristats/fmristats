@@ -158,10 +158,12 @@ class Diffeomorphism:
         -----------------------
         Cohort:   {}
         Subject:  {}
-        Paradigm: {}""".format(
+        Paradigm: {}
+        Name:     {}""".format(
                 self.nb.cohort,
                 self.nb.j,
                 self.nb.paradigm,
+                self.name,
                 )
         else:
             describe_subject_space = """

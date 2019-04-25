@@ -105,7 +105,13 @@ def add_study_arguments(parser):
         file""")
 
     study_parser.add_argument('--fit',
-        help="""Path to a result file or template for such a file""")
+        help="""Path to a result file or template for such files""")
+
+    study_parser.add_argument('--design',
+        help="""Name of the design""")
+
+    study_parser.add_argument('--design-matrix',
+        help="""Path to a design file or template for such files""")
 
     study_parser.add_argument('--strftime',
         help="""Format string of date and time. Convert time to string
@@ -505,6 +511,7 @@ def get_study(args):
         'reference_maps':args.reference_maps,
         'population_map':args.population_map,
         'result':args.fit,
+        'design':args.design_matrix,
         }
 
     # if single_subject and (study is not None):
@@ -527,7 +534,33 @@ def get_study(args):
                 scale_type = args.scale_type,
                 name = args.study_name,
                 )
+
         args.study = study.name
+
+        if args.diffeomorphism is not None:
+            if args.verbose > 1:
+                print('Set diffeomorphism to: {}'.format(
+                    args.diffeomorphism))
+            study.set_diffeomorphism(args.diffeomorphism)
+
+        if args.rigids is not None:
+            if args.verbose > 1:
+                print('Set rigid transformations to: {}'.format(
+                    args.rigids))
+            study.set_rigids(args.rigids)
+
+        if args.design is not None:
+            if args.verbose > 1:
+                print('Set design to: {}'.format(
+                    args.design))
+            study.set_design(args.design)
+
+        if args.vb_name is not None:
+            if args.verbose > 1:
+                print('Set standard space to: {}'.format(
+                    args.vb_name))
+            study.set_standard_space(args.vb_name)
+
     else:
         study.update_layout(file_layout)
 
@@ -580,6 +613,12 @@ def get_study(args):
                 print('Set (or reset) rigid transformations to: {}'.format(
                     args.rigids))
             study.set_rigids(args.rigids)
+
+        if args.design is not None:
+            if args.verbose > 1:
+                print('Set name of design to: {}'.format(
+                    args.design))
+            study.set_design(args.design)
 
         if args.study_name is not None:
             if args.verbose > 1:

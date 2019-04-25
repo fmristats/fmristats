@@ -175,8 +175,8 @@ def call(args):
             print('{}: Fit brain mask'.format(name.name()))
 
         template = bet(
-                intercept = intercept,
-                intercept_file = vb_file,
+                image = intercept,
+                to_file = vb_file,
                 mask_file = vb_mask,
                 cmd = cmd_bet,
                 variante = variante,

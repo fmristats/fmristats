@@ -52,7 +52,6 @@ def define_parser():
         help="""Image space of diffeomorphism.""")
 
     specific.add_argument('--new-diffeomorphism',
-        default='scanner',
         help="""Name to use for the fitted diffeomorphisms.""")
 
     specific.add_argument('--resolution',
@@ -196,8 +195,12 @@ def call(args):
 
     scan_cycle         = args.cycle
     resolution         = args.resolution
-    new_diffeomorphism = args.new_diffeomorphism
     diffeomorphism_nb  = args.diffeomorphism_nb
+
+    if args.new_diffeomorphism is None:
+        new_diffeomorphism = diffeomorphism_nb
+    else:
+        new_diffeomorphism = args.new_diffeomorphism
 
     if (resolution is None) or (resolution == 'native') or np.isclose(resolution, 0):
         resolution = None
@@ -214,7 +217,7 @@ def call(args):
 
     study.set_rigids(args.rigids)
     study.set_diffeomorphism(new_diffeomorphism)
-    study.set_standard_space('isometric')
+    #study.set_standard_space('isometric')
 
     ####################################################################
     # Create iterator
@@ -225,7 +228,8 @@ def call(args):
             'reference_maps',
             'result',
             'population_map', new=['population_map'],
-            integer_index=True)
+            integer_index=True,
+            verbose=args.verbose)
 
     df = study_iterator.df.copy()
 
